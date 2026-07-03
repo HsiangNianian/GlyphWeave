@@ -18,7 +18,14 @@ export function useCanvas() {
   const tileSize = useMapStore((s) => s.tileSize)
 
   const pointerToTile = useCallback((pointer: { x: number; y: number }): [number, number] => {
-    return [Math.floor(pointer.x / tileSize), Math.floor(pointer.y / tileSize)]
+    const stage = stageRef.current
+    if (!stage) return [0, 0]
+    const pos = stage.position()
+    const scale = stage.scaleX()
+    return [
+      Math.floor((pointer.x - pos.x) / scale / tileSize),
+      Math.floor((pointer.y - pos.y) / scale / tileSize),
+    ]
   }, [tileSize])
 
   const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
