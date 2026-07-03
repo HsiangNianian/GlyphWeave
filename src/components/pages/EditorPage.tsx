@@ -10,6 +10,7 @@ import { Toolbar } from '@/components/toolbar/Toolbar'
 import { TilePalette } from '@/components/panels/TilePalette'
 import { PresetsPanel } from '@/components/panels/PresetsPanel'
 import { LayersPanel } from '@/components/panels/LayersPanel'
+import { SettingsPanel } from '@/components/panels/SettingsPanel'
 import { ExportPanel } from '@/components/panels/ExportPanel'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -26,6 +27,7 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
   const toggleSidePanel = useUiStore((s) => s.toggleSidePanel)
   const sidePanelTab = useUiStore((s) => s.sidePanelTab)
   const setSidePanelTab = useUiStore((s) => s.setSidePanelTab)
+  const showMinimap = useUiStore((s) => s.showMinimap)
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Konva.Stage | null>(null)
@@ -55,9 +57,11 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
           </div>
         </div>
 
-        <div className="absolute top-3 right-3 pointer-events-none">
-          <Minimap stageRef={stageRef} />
-        </div>
+        {showMinimap && (
+          <div className="absolute top-3 right-3 pointer-events-none">
+            <Minimap stageRef={stageRef} />
+          </div>
+        )}
 
         <div className="absolute bottom-3 right-3 pointer-events-none">
           <div className="pointer-events-auto">
@@ -81,6 +85,7 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
               <TabsTrigger value="presets" className="text-xs h-8 px-2.5 data-[state=active]:bg-zinc-800 rounded-none">Presets</TabsTrigger>
               <TabsTrigger value="layers" className="text-xs h-8 px-2.5 data-[state=active]:bg-zinc-800 rounded-none">Layers</TabsTrigger>
               <TabsTrigger value="export" className="text-xs h-8 px-2.5 data-[state=active]:bg-zinc-800 rounded-none">📦</TabsTrigger>
+              <TabsTrigger value="settings" className="text-xs h-8 px-2.5 data-[state=active]:bg-zinc-800 rounded-none">⚙️</TabsTrigger>
             </TabsList>
             <TabsContent value="tiles" className="flex-1 mt-0 data-[state=inactive]:hidden flex flex-col">
               <TilePalette />
@@ -93,6 +98,9 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
             </TabsContent>
             <TabsContent value="export" className="mt-0 data-[state=inactive]:hidden">
               <ExportPanel />
+            </TabsContent>
+            <TabsContent value="settings" className="flex-1 mt-0 data-[state=inactive]:hidden flex flex-col">
+              <SettingsPanel />
             </TabsContent>
           </Tabs>
         </div>

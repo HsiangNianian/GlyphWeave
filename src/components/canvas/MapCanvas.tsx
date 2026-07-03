@@ -8,7 +8,7 @@ import { useUiStore } from '@/stores/ui-store'
 import { THEMES } from '@/constants/themes'
 import type { MutableRefObject } from 'react'
 
-function getVisibleRange(stage: Konva.Stage | null, tileSize: number, w: number, h: number) {
+function getVisibleRange(stage: Konva.Stage | null, tileSize: number, w: number, h: number, padding: number) {
   if (!stage) return { minX: -10, minY: -10, maxX: 10, maxY: 10 }
   const pos = stage.position()
   const s = stage.scaleX()
@@ -16,12 +16,11 @@ function getVisibleRange(stage: Konva.Stage | null, tileSize: number, w: number,
   const wy = -pos.y / s
   const ww = w / s
   const wh = h / s
-  const p = 2
   return {
-    minX: Math.floor(wx / tileSize) - p,
-    minY: Math.floor(wy / tileSize) - p,
-    maxX: Math.ceil((wx + ww) / tileSize) + p,
-    maxY: Math.ceil((wy + wh) / tileSize) + p,
+    minX: Math.floor(wx / tileSize) - padding,
+    minY: Math.floor(wy / tileSize) - padding,
+    maxX: Math.ceil((wx + ww) / tileSize) + padding,
+    maxY: Math.ceil((wy + wh) / tileSize) + padding,
   }
 }
 
@@ -34,6 +33,7 @@ export function MapCanvas({ containerRef, stageRef }: MapCanvasProps) {
   const tiles = useMapStore((s) => s.tiles)
   const layers = useMapStore((s) => s.layers)
   const showGrid = useUiStore((s) => s.showGrid)
+  const viewDistance = useUiStore((s) => s.viewDistance)
   const currentTool = useMapStore((s) => s.currentTool)
   const themeId = useMapStore((s) => s.themeId)
   const theme = THEMES[themeId]
@@ -54,8 +54,8 @@ export function MapCanvas({ containerRef, stageRef }: MapCanvasProps) {
   }, [containerRef])
 
   const visibleRange = useMemo(
-    () => getVisibleRange(stageRef.current, tileSize, size.width, size.height),
-    [size, tileSize, tiles],
+    () => getVisibleRange(stageRef.current, tileSize, size.width, size.height, viewDistance),
+    [size, tileSize, tiles, viewDistance, stageRef.current],
   )
 
   const visibleTiles = useMemo(() => {
