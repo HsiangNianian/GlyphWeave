@@ -6,6 +6,7 @@ import { useCanvas } from '@/hooks/useCanvas'
 import { useMapStore } from '@/stores/map-store'
 import { useUiStore } from '@/stores/ui-store'
 import { THEMES } from '@/constants/themes'
+import type { MutableRefObject } from 'react'
 
 function getVisibleRange(stage: Konva.Stage | null, tileSize: number, w: number, h: number) {
   if (!stage) return { minX: -10, minY: -10, maxX: 10, maxY: 10 }
@@ -26,16 +27,17 @@ function getVisibleRange(stage: Konva.Stage | null, tileSize: number, w: number,
 
 interface MapCanvasProps {
   containerRef: RefObject<HTMLDivElement | null>
+  stageRef: MutableRefObject<Konva.Stage | null>
 }
 
-export function MapCanvas({ containerRef }: MapCanvasProps) {
+export function MapCanvas({ containerRef, stageRef }: MapCanvasProps) {
   const tiles = useMapStore((s) => s.tiles)
   const layers = useMapStore((s) => s.layers)
   const showGrid = useUiStore((s) => s.showGrid)
   const currentTool = useMapStore((s) => s.currentTool)
   const themeId = useMapStore((s) => s.themeId)
   const theme = THEMES[themeId]
-  const { stageRef, tileSize, handleWheel, handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave } = useCanvas()
+  const { tileSize, handleWheel, handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave } = useCanvas(stageRef)
 
   const [size, setSize] = useState({ width: 800, height: 600 })
 

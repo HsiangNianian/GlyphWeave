@@ -1,9 +1,8 @@
-import { useRef, useCallback } from 'react'
+import { useRef, useCallback, type MutableRefObject } from 'react'
 import Konva from 'konva'
 import { useMapStore } from '@/stores/map-store'
 
-export function useCanvas() {
-  const stageRef = useRef<Konva.Stage>(null)
+export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
   const isPanning = useRef(false)
   const lastMousePos = useRef({ x: 0, y: 0 })
   const isDrawing = useRef(false)

@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
+import Konva from 'konva'
 import type { WorldConfig } from '@/types'
 import { useMapStore } from '@/stores/map-store'
 import { useUiStore } from '@/stores/ui-store'
 import { useKeyboard } from '@/hooks/useKeyboard'
 import { MapCanvas } from '@/components/canvas/MapCanvas'
+import { Minimap } from '@/components/canvas/Minimap'
 import { Toolbar } from '@/components/toolbar/Toolbar'
 import { TilePalette } from '@/components/panels/TilePalette'
 import { PresetsPanel } from '@/components/panels/PresetsPanel'
@@ -26,6 +28,7 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
   const setSidePanelTab = useUiStore((s) => s.setSidePanelTab)
 
   const canvasRef = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<Konva.Stage | null>(null)
   useKeyboard()
 
   useEffect(() => {
@@ -37,7 +40,7 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
       <Toolbar />
 
       <div ref={canvasRef} className="flex-1 relative overflow-hidden">
-        <MapCanvas containerRef={canvasRef} />
+        <MapCanvas containerRef={canvasRef} stageRef={stageRef} />
 
         <div className="absolute top-3 left-3 flex items-center gap-2 pointer-events-none">
           <div className="flex items-center gap-2 pointer-events-auto">
@@ -50,6 +53,10 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
               ← Home
             </Button>
           </div>
+        </div>
+
+        <div className="absolute top-3 right-3 pointer-events-none">
+          <Minimap stageRef={stageRef} />
         </div>
 
         <div className="absolute bottom-3 right-3 pointer-events-none">
