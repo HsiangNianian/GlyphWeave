@@ -1,3 +1,4 @@
+'use client'
 import { useMapStore } from '@/stores/map-store'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'

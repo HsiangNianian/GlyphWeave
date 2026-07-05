@@ -1,3 +1,4 @@
+'use client'
 import { useMapStore } from '@/stores/map-store'
 import type { ToolType } from '@/types'
 import { Brush, Eraser, Hand, PaintBucket, MousePointer2, Undo2, Redo2 } from 'lucide-react'

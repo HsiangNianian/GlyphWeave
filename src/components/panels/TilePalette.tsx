@@ -1,3 +1,4 @@
+'use client'
 import { useMapStore } from '@/stores/map-store'
 import { TILE_TYPE_LIST, TILE_CATEGORIES } from '@/constants/tiles'
 import { THEMES } from '@/constants/themes'

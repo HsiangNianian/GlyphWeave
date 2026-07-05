@@ -1,3 +1,4 @@
+'use client'
 import { useEffect, useState, useMemo, type RefObject } from 'react'
 import { Stage, Layer, Rect, Line } from 'react-konva'
 import Konva from 'konva'

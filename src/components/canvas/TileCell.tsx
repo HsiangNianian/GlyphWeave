@@ -1,3 +1,4 @@
+'use client'
 import { memo } from 'react'
 import { Rect, Text } from 'react-konva'
 import { TILE_TYPES } from '@/constants/tiles'

@@ -1,3 +1,4 @@
+'use client'
 import { useCallback, useRef } from 'react'
 import { useMapStore } from '@/stores/map-store'
 import { Button } from '@/components/ui/button'

@@ -1,3 +1,4 @@
+'use client'
 import { useState } from 'react'
 import { useMapStore } from '@/stores/map-store'
 import { PRESETS, PRESET_CATEGORIES } from '@/constants/presets'

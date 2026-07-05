@@ -1,3 +1,4 @@
+'use client'
 import { useEffect, useRef } from 'react'
 import Konva from 'konva'
 import type { WorldConfig } from '@/types'

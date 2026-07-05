@@ -4,14 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev": "next dev",
+    "build": "next build",
     "lint": "oxlint",
     "preview": "pnpm run build && wrangler dev",
     "render-server": "node server/index.mjs",
     "doc-tree": "node scripts/generate-tree.mjs",
     "doc-tree:check": "node scripts/generate-tree.mjs --check",
-    "deploy": "pnpm run build && wrangler deploy"
+    "deploy": "pnpm run build && wrangler deploy",
+    "start": "next start"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",
@@ -23,6 +24,7 @@
     "konva": "^10.3.0",
     "lucide-react": "^1.23.0",
     "nanoid": "^5.1.16",
+    "next": "^16.2.10",
     "radix-ui": "^1.6.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
@@ -34,6 +36,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.43.0",
+    "@tailwindcss/postcss": "^4.3.2",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",

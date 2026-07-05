@@ -1,3 +1,4 @@
+'use client'
 import { useState, useRef, useCallback } from 'react'
 import type { WorldConfig } from '@/types'
 import { THEME_LIST } from '@/constants/themes'

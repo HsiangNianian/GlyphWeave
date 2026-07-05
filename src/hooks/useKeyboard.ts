@@ -1,3 +1,4 @@
+'use client'
 import { useEffect } from 'react'
 import { useMapStore } from '@/stores/map-store'
 import { useUiStore } from '@/stores/ui-store'

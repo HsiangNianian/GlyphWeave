@@ -1,3 +1,4 @@
+'use client'
 import { useRef, useEffect, useCallback } from 'react'
 import Konva from 'konva'
 import { useMapStore } from '@/stores/map-store'
