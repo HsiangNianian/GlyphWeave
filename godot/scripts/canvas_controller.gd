@@ -1,18 +1,17 @@
 extends Node2D
 ## CanvasController — Manages the tilemap canvas, input, and rendering.
-## Replaces src/hooks/useCanvas.ts + src/components/canvas/MapCanvas.tsx + TileCell.tsx
 
 @onready var _camera: Camera2D = %Camera2D
 @onready var _tile_map_layers: Node2D = %TileMapLayers
 @onready var _grid_overlay: Node2D = %GridOverlay
 
-var _is_panning := false
-var _is_drawing := false
-var _last_mouse_pos := Vector2.ZERO
-var _last_drawn_tile_key := ""
-var _dragging := false
-var _drag_threshold := 4.0
-var _drag_start := Vector2.ZERO
+var _is_panning: bool = false
+var _is_drawing: bool = false
+var _last_mouse_pos: Vector2 = Vector2.ZERO
+var _last_drawn_tile_key: String = ""
+var _dragging: bool = false
+var _drag_threshold: float = 4.0
+var _drag_start: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
@@ -25,11 +24,9 @@ func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	# Only handle if mouse is inside the SubViewport area
 	if not _is_mouse_inside_viewport():
 		return
 
-	# ── Zoom (mouse wheel) ──
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			_handle_zoom(event)
@@ -43,7 +40,6 @@ func _input(event: InputEvent) -> void:
 				_is_panning = false
 			return
 
-	# ── Keyboard shortcuts ──
 	if event is InputEventKey and event.pressed:
 		if _handle_shortcut(event):
 			return
@@ -77,10 +73,9 @@ func _unhandled_input(event: InputEvent) -> void:
 					_is_panning = false
 				return
 
-	# Mouse motion
 	if event is InputEventMouseMotion:
 		if _is_panning:
-			var delta := event.position - _last_mouse_pos
+			var delta: Vector2 = event.position - _last_mouse_pos
 			_camera.position -= delta / _camera.zoom
 			_last_mouse_pos = event.position
 			return
@@ -100,25 +95,23 @@ func _is_mouse_inside_viewport() -> bool:
 
 
 func _process(_delta: float) -> void:
-	# Continuously rebuild grid since camera can move
 	if UiState.show_grid:
 		_rebuild_grid()
 
 
 func _handle_zoom(event: InputEventMouseButton) -> void:
-	var zoom_factor := 1.0
+	var zoom_factor: float = 1.0
 	if event.button_index == MOUSE_BUTTON_WHEEL_UP:
 		zoom_factor = 1.0 / 1.08
 	else:
 		zoom_factor = 1.08
 
 	var old_zoom := _camera.zoom.x
-	var new_zoom := clampi(old_zoom * zoom_factor * 100, 10, 1000) / 100.0
+	var new_zoom: float = clampf(old_zoom * zoom_factor, 0.1, 10.0)
 	zoom_factor = new_zoom / old_zoom
 
 	_camera.zoom = Vector2(new_zoom, new_zoom)
-	# Zoom towards mouse position
-	var mouse_pos := event.position
+	var mouse_pos: Vector2 = event.position
 	_camera.position += (mouse_pos - _camera.position) * (1.0 / old_zoom) - (mouse_pos - _camera.position) * (1.0 / new_zoom)
 
 
@@ -168,7 +161,7 @@ func _place_tile_at(screen_pos: Vector2) -> void:
 		return
 	_last_drawn_tile_key = tile_key
 
-	var tile_id := ""
+	var tile_id: String = ""
 	if MapData.current_tool == MapData.Tool.ERASE:
 		tile_id = ""
 	elif MapData.current_tool == MapData.Tool.BRUSH:
@@ -186,7 +179,7 @@ func _on_fill_at(screen_pos: Vector2) -> void:
 
 
 func _place_preset_at(origin: Vector2i) -> void:
-	var presets_data := load("res://resources/presets/presets_data.gd")
+	var presets_data: RefCounted = load("res://resources/presets/presets_data.gd").new()
 	for p in presets_data.all():
 		if p.id == MapData.active_preset_id:
 			MapData.place_preset(p.grid, origin.x, origin.y)
@@ -201,14 +194,14 @@ func _rebuild_tiles() -> void:
 	var ts := float(MapData.tile_size)
 
 	for li in range(MapData.layers.size()):
-		var layer := MapData.layers[li]
+		var layer: MapData.LayerInfo = MapData.layers[li]
 		if not layer.visible:
 			continue
-		var lt := MapData.tiles.get(layer.id, {})
+		var lt: Dictionary = MapData.tiles.get(layer.id, {})
 		if lt.is_empty():
 			continue
 
-		var layer_node := Node2D.new()
+		var layer_node: Node2D = Node2D.new()
 		layer_node.name = layer.id
 		layer_node.z_index = li
 		_tile_map_layers.add_child(layer_node)
@@ -217,23 +210,21 @@ func _rebuild_tiles() -> void:
 			var tile_id: String = lt[k]
 			if tile_id == "" or tile_id == "void":
 				continue
-			var parts := k.split(",")
+			var parts: PackedStringArray = k.split(",")
 			var x := int(parts[0])
 			var y := int(parts[1])
 
-			# Background rect
-			var bg := ColorRect.new()
+			var bg: ColorRect = ColorRect.new()
 			bg.position = Vector2(x * ts, y * ts)
 			bg.size = Vector2(ts, ts)
 			var colors: Dictionary = theme_res.get_colors(tile_id) if theme_res else {}
 			bg.color = Color(colors.get("bgColor", "#000000"))
 			layer_node.add_child(bg)
 
-			# Character label
-			var tile_defs := load("res://resources/tile_types.gd")
+			var tile_defs: RefCounted = load("res://resources/tile_types.gd").new()
 			var tile_def = tile_defs.all().get(tile_id)
 			if tile_def and tile_def.char != " ":
-				var label := Label.new()
+				var label: Label = Label.new()
 				label.position = Vector2(x * ts, y * ts)
 				label.size = Vector2(ts, ts)
 				label.text = tile_def.char
@@ -262,22 +253,20 @@ func _rebuild_grid() -> void:
 	var max_y := ceili((_camera.position.y + half_h) / ts)
 
 	var grid_color := Color(0.1333, 0.1333, 0.1333, 0.5)
-	var gsx := min_x * ts
-	var gsy := min_y * ts
-	var gex := max_x * ts
-	var gey := max_y * ts
+	var gsx: float = min_x * ts
+	var gsy: float = min_y * ts
+	var gex: float = max_x * ts
+	var gey: float = max_y * ts
 
-	# Vertical lines
 	for gx in range(min_x, max_x + 1):
-		var line := Line2D.new()
+		var line: Line2D = Line2D.new()
 		line.points = PackedVector2Array([Vector2(gx * ts, gsy), Vector2(gx * ts, gey)])
 		line.width = 0.5
 		line.default_color = grid_color
 		_grid_overlay.add_child(line)
 
-	# Horizontal lines
 	for gy in range(min_y, max_y + 1):
-		var line := Line2D.new()
+		var line: Line2D = Line2D.new()
 		line.points = PackedVector2Array([Vector2(gsx, gy * ts), Vector2(gex, gy * ts)])
 		line.width = 0.5
 		line.default_color = grid_color

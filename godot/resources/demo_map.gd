@@ -119,7 +119,7 @@ static func generate() -> Dictionary:
 	var tiles: Dictionary = {}
 	for y in H:
 		for x in W:
-			var tid := grid[y][x]
+			var tid: String = grid[y][x]
 			if tid != "void":
 				tiles["%d,%d" % [x, y]] = tid
 	return tiles
@@ -137,12 +137,12 @@ static func _fill_rect(grid: Array, x: int, y: int, w: int, h: int, tid: String,
 
 
 static func _place_preset(grid: Array, preset_id: String, ox: int, oy: int, W: int, H: int) -> void:
-	var presets_data := load("res://resources/presets/presets_data.gd")
+	var presets_data: RefCounted = load("res://resources/presets/presets_data.gd")
 	for p in presets_data.all():
 		if p.id == preset_id:
 			for py in p.grid.size():
 				for px in p.grid[py].size():
-					var cell := p.grid[py][px]
+					var cell: String = p.grid[py][px]
 					if cell != "void":
 						_set_cell(grid, ox + px, oy + py, cell, W, H)
 			return

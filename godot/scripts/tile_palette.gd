@@ -13,20 +13,20 @@ func _refresh() -> void:
 	for child in get_children():
 		child.queue_free()
 
-	var scroll := ScrollContainer.new()
+	var scroll: ScrollContainer = ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_FILL
 	scroll.size_flags_vertical = Control.SIZE_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	add_child(scroll)
 
-	var vbox := VBoxContainer.new()
+	var vbox: VBoxContainer = VBoxContainer.new()
 	vbox.size_flags_horizontal = Control.SIZE_FILL
 	vbox.add_theme_constant_override("separation", 12)
 	scroll.add_child(vbox)
 
-	var tile_defs := load("res://resources/tile_types.gd")
-	var theme_res := _load_theme()
-	var all_tiles := tile_defs.sorted_list()
+	var tile_defs: RefCounted = load("res://resources/tile_types.gd").new()
+	var theme_res: Resource = _load_theme()
+	var all_tiles: Array = tile_defs.sorted_list()
 
 	for cat in tile_defs.CATEGORIES:
 		var tiles_in_cat: Array = []
@@ -36,15 +36,13 @@ func _refresh() -> void:
 		if tiles_in_cat.is_empty():
 			continue
 
-		# Category header
-		var header := Label.new()
+		var header: Label = Label.new()
 		header.text = cat.label
 		header.add_theme_color_override("font_color", Color(0.443, 0.443, 0.443))
 		header.add_theme_font_size_override("font_size", 10)
 		vbox.add_child(header)
 
-		# Grid of tiles (4 columns)
-		var grid := GridContainer.new()
+		var grid: GridContainer = GridContainer.new()
 		grid.columns = 4
 		grid.size_flags_horizontal = Control.SIZE_FILL
 		grid.add_theme_constant_override("h_separation", 2)
@@ -52,36 +50,29 @@ func _refresh() -> void:
 		vbox.add_child(grid)
 
 		for tile_def in tiles_in_cat:
-			var colors := {}
+			var colors: Dictionary = {}
 			if theme_res:
 				colors = theme_res.get_colors(tile_def.id)
 
-			var btn := Button.new()
+			var btn: Button = Button.new()
 			btn.custom_minimum_size = Vector2(48, 40)
 			btn.pressed.connect(_on_tile_selected.bind(tile_def.id))
 
-			var is_active := (MapData.active_tile_type == tile_def.id)
+			var is_active: bool = (MapData.active_tile_type == tile_def.id)
 			if is_active:
-				btn.add_theme_color_override("font_color", Color(1, 1, 1))
 				btn.modulate = Color(0.4, 0.4, 0.4)
 
-			# Make it flat
-			var sbf := StyleBoxFlat.new()
-			sbf.bg_color = Color(0.09, 0.09, 0.09)
-			sbf.set_corner_radius_all(4)
-			btn.add_theme_stylebox_override("normal", sbf)
-
-			var inner := VBoxContainer.new()
+			var inner: VBoxContainer = VBoxContainer.new()
 			inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-			var char_label := Label.new()
+			var char_label: Label = Label.new()
 			char_label.text = tile_def.char
 			char_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			char_label.add_theme_font_size_override("font_size", 13)
 			char_label.add_theme_color_override("font_color", Color(colors.get("fgColor", "#ffffff")))
 			char_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-			var name_label := Label.new()
+			var name_label: Label = Label.new()
 			name_label.text = tile_def.name
 			name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			name_label.add_theme_color_override("font_color", Color(0.443, 0.443, 0.443))
@@ -103,5 +94,5 @@ func _on_tile_selected(id: String) -> void:
 
 
 func _load_theme() -> Resource:
-	var path := "res://resources/themes/" + MapData.theme_id.replace("-", "_") + ".tres"
+	var path: String = "res://resources/themes/" + MapData.theme_id.replace("-", "_") + ".tres"
 	return load(path)

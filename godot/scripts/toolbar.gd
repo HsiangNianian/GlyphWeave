@@ -11,7 +11,7 @@ func _refresh() -> void:
 	for child in get_children():
 		child.queue_free()
 
-	var vbox := VBoxContainer.new()
+	var vbox: VBoxContainer = VBoxContainer.new()
 	vbox.size_flags_vertical = Control.SIZE_FILL
 	vbox.add_theme_constant_override("separation", 4)
 	add_child(vbox)
@@ -32,7 +32,7 @@ func _refresh() -> void:
 		var shortcut: String = t[1]
 		var label: String = t[2]
 
-		var is_active := false
+		var is_active: bool = false
 		match tool_id:
 			"brush": is_active = (MapData.current_tool == MapData.Tool.BRUSH)
 			"erase": is_active = (MapData.current_tool == MapData.Tool.ERASE)
@@ -40,7 +40,7 @@ func _refresh() -> void:
 			"pan": is_active = (MapData.current_tool == MapData.Tool.PAN)
 			"select": is_active = (MapData.current_tool == MapData.Tool.SELECT)
 
-		var btn := Button.new()
+		var btn: Button = Button.new()
 		btn.text = shortcut
 		btn.tooltip_text = "%s [%s]" % [label, shortcut]
 		btn.custom_minimum_size = Vector2(36, 36)
@@ -59,7 +59,7 @@ func _refresh() -> void:
 	vbox.add_child(_make_separator())
 
 	# Undo
-	var undo_btn := Button.new()
+	var undo_btn: Button = Button.new()
 	undo_btn.text = "↩"
 	undo_btn.tooltip_text = "Undo [Ctrl+Z]"
 	undo_btn.custom_minimum_size = Vector2(36, 36)
@@ -67,7 +67,7 @@ func _refresh() -> void:
 	vbox.add_child(undo_btn)
 
 	# Redo
-	var redo_btn := Button.new()
+	var redo_btn: Button = Button.new()
 	redo_btn.text = "↪"
 	redo_btn.tooltip_text = "Redo [Ctrl+Shift+Z]"
 	redo_btn.custom_minimum_size = Vector2(36, 36)
@@ -98,6 +98,6 @@ func _make_spacer(height: int) -> Control:
 
 
 func _make_separator() -> Control:
-	var sep := HSeparator.new()
+	var sep: HSeparator = HSeparator.new()
 	sep.custom_minimum_size = Vector2(36, 2)
 	return sep

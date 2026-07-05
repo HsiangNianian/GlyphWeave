@@ -176,8 +176,8 @@ func flood_fill(start_x: int, start_y: int, fill_id: String) -> void:
 		entries.append([cx, cy, fill_id])
 
 		for d in dirs:
-			var nx := cx + d[0]
-			var ny := cy + d[1]
+			var nx: int = cx + d[0]
+			var ny: int = cy + d[1]
 			var nk := _key(nx, ny)
 			if nk not in visited:
 				queue.append([nx, ny])
@@ -201,7 +201,7 @@ func place_preset(preset_grid: Array, origin_x: int, origin_y: int) -> void:
 	for py in range(preset_grid.size()):
 		var row = preset_grid[py]
 		for px in range(row.size()):
-			var cell := row[px]
+			var cell: String = row[px]
 			if cell != "void":
 				entries.append([origin_x + px, origin_y + py, cell])
 	if entries.size() > 0:
@@ -344,19 +344,19 @@ func _serialize_layers() -> Array:
 # ── map bounds ──
 
 func compute_bounds() -> Dictionary:
-	var min_x := 0; var min_y := 0; var max_x := 0; var max_y := 0
-	var has_tiles := false
+	var min_x: int = 0; var min_y: int = 0; var max_x: int = 0; var max_y: int = 0
+	var has_tiles: bool = false
 	for l in layers:
 		if not l.visible:
 			continue
-		var lt := tiles.get(l.id, {})
+		var lt: Dictionary = tiles.get(l.id, {})
 		if lt.is_empty():
 			continue
 		for k in lt:
 			var tile_id = lt[k]
 			if not tile_id or tile_id == "":
 				continue
-			var parts := k.split(",")
+			var parts: PackedStringArray = k.split(",")
 			var x := int(parts[0]); var y := int(parts[1])
 			if not has_tiles:
 				min_x = x; min_y = y; max_x = x; max_y = y

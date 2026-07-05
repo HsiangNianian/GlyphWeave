@@ -33,12 +33,12 @@ func _ready() -> void:
 	_attach_script(_minimap, preload("res://scripts/minimap.gd"))
 
 	# Add file dialogs for export panel
-	var file_dialog := FileDialog.new()
+	var file_dialog: FileDialog = FileDialog.new()
 	file_dialog.name = "FileDialog"
 	file_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	add_child(file_dialog)
 
-	var save_dialog := FileDialog.new()
+	var save_dialog: FileDialog = FileDialog.new()
 	save_dialog.name = "SaveDialog"
 	save_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	add_child(save_dialog)
@@ -74,7 +74,7 @@ func _setup_tab_buttons() -> void:
 		["settings", "Settings"],
 	]
 	for t in tabs:
-		var btn := Button.new()
+		var btn: Button = Button.new()
 		btn.text = t[1]
 		btn.custom_minimum_size = Vector2(0, 28)
 		btn.add_theme_font_size_override("font_size", 11)

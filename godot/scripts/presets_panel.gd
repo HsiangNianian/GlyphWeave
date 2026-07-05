@@ -11,18 +11,18 @@ func _refresh() -> void:
 	for child in get_children():
 		child.queue_free()
 
-	var scroll := ScrollContainer.new()
+	var scroll: ScrollContainer = ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_FILL
 	scroll.size_flags_vertical = Control.SIZE_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	add_child(scroll)
 
-	var vbox := VBoxContainer.new()
+	var vbox: VBoxContainer = VBoxContainer.new()
 	vbox.size_flags_horizontal = Control.SIZE_FILL
 	vbox.add_theme_constant_override("separation", 10)
 	scroll.add_child(vbox)
 
-	var presets_data := load("res://resources/presets/presets_data.gd")
+	var presets_data: RefCounted = load("res://resources/presets/presets_data.gd")
 	var categories := [
 		["rooms", "Rooms"],
 		["corridors", "Corridors"],
@@ -42,14 +42,14 @@ func _refresh() -> void:
 		if presets_in_cat.is_empty():
 			continue
 
-		var header := Label.new()
+		var header: Label = Label.new()
 		header.text = cat_label
 		header.add_theme_color_override("font_color", Color(0.443, 0.443, 0.443))
 		header.add_theme_font_size_override("font_size", 10)
 		vbox.add_child(header)
 
 		for preset in presets_in_cat:
-			var btn := Button.new()
+			var btn: Button = Button.new()
 			btn.text = preset.name
 			btn.tooltip_text = preset.description
 			btn.custom_minimum_size = Vector2(0, 32)

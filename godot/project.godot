@@ -8,12 +8,16 @@
 
 config_version=5
 
+[animation]
+
+compatibility/default_parent_skeleton_in_mesh_instance_3d=true
+
 [application]
 
 config/name="GlyphWeave"
 config/version="0.1.0"
 run/main_scene="res://scenes/main.tscn"
-config/features=PackedStringArray("4.5")
+config/features=PackedStringArray("4.7")
 config/icon="res://assets/icon.svg"
 
 [autoload]
@@ -25,13 +29,7 @@ UiState="*res://scripts/autoload/ui_state.gd"
 
 window/size/viewport_width=1280
 window/size/viewport_height=800
-window/size/resizable=true
-
-[input_devices]
-
-pointing/emulate_touch_from_mouse=false
 
 [rendering]
 
-renderer/rendering_method="forward_plus"
 textures/canvas_textures/default_texture_filter=0
