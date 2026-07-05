@@ -26,9 +26,33 @@
  */
 
 import http from 'http'
+import fs from 'node:fs'
+import path from 'node:path'
 import { renderMap } from './map-render.mjs'
 
 const PORT = parseInt(process.argv[2], 10) || 3001
+const AGENTS_DIR = path.resolve(process.env.HOME || '/home/hsiangnianian', '.agents')
+
+/**
+ * Resolve a relative path within the agents directory.
+ * Returns null on traversal attempts.
+ */
+function safeAgentPath(relPath) {
+  const resolved = path.resolve(AGENTS_DIR, relPath || '')
+  if (!resolved.startsWith(AGENTS_DIR)) return null
+  return resolved
+}
+
+const MIME_MAP = {
+  '.md': 'text/markdown', '.json': 'application/json',
+  '.js': 'text/javascript', '.mjs': 'text/javascript',
+  '.ts': 'text/typescript', '.tsx': 'text/typescript',
+  '.html': 'text/html', '.css': 'text/css',
+  '.yaml': 'text/yaml', '.yml': 'text/yaml', '.toml': 'text/toml',
+  '.sh': 'text/x-shellscript', '.bash': 'text/x-shellscript',
+  '.py': 'text/x-python', '.rb': 'text/x-ruby',
+  '.go': 'text/x-go', '.rs': 'text/x-rust', '.java': 'text/x-java',
+}
 
 function sendJSON(res, status, data) {
   const body = JSON.stringify(data)
@@ -154,6 +178,55 @@ const server = http.createServer(async (req, res) => {
       res.end(pngBuffer)
     } catch (err) {
       sendError(res, 400, `Error: ${err.message}`)
+    }
+    return
+  }
+
+  // ── Agent Skills Directory: list ──
+  if (url.pathname === '/api/agents/list') {
+    try {
+      const relPath = query.path || ''
+      const resolved = safeAgentPath(relPath)
+      if (!resolved) { sendError(res, 403, 'Forbidden'); return }
+      if (!fs.existsSync(resolved)) { sendError(res, 404, 'Not found'); return }
+      const entries = fs.readdirSync(resolved, { withFileTypes: true })
+        .filter(e => !e.name.startsWith('.'))
+        .map(e => ({
+          name: e.name,
+          path: relPath ? `${relPath}/${e.name}` : e.name,
+          type: e.isDirectory() ? 'directory' : 'file',
+        }))
+        .sort((a, b) => {
+          if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
+          return a.name.localeCompare(b.name)
+        })
+      sendJSON(res, 200, { entries })
+    } catch (err) {
+      sendError(res, 500, err.message)
+    }
+    return
+  }
+
+  // ── Agent Skills Directory: read file ──
+  if (url.pathname === '/api/agents/read') {
+    try {
+      const relPath = query.path
+      if (!relPath) { sendError(res, 400, 'Missing "path" parameter'); return }
+      const resolved = safeAgentPath(relPath)
+      if (!resolved || !fs.existsSync(resolved)) { sendError(res, 404, 'Not found'); return }
+      const stat = fs.statSync(resolved)
+      if (!stat.isFile()) { sendError(res, 400, 'Not a file'); return }
+      if (stat.size > 1024 * 1024) { sendError(res, 413, 'File too large (max 1MB)'); return }
+      const buffer = fs.readFileSync(resolved)
+      if (buffer.includes(0)) { sendError(res, 400, 'Cannot preview binary files'); return }
+      const ext = path.extname(relPath).toLowerCase()
+      sendJSON(res, 200, {
+        content: buffer.toString('utf-8'),
+        size: stat.size,
+        mime: MIME_MAP[ext] || 'text/plain',
+      })
+    } catch (err) {
+      sendError(res, 500, err.message)
     }
     return
   }
