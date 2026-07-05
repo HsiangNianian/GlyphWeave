@@ -87,7 +87,7 @@ async function handleRender(query, body) {
     const json = body.toString('utf-8')
     const parsed = JSON.parse(json)
     data = parsed
-    themeId = query.theme || parsed.theme || 'ansi-16'
+    themeId = query.theme || parsed.theme || parsed.themeId || 'ansi-16'
     padding = parseInt(query.padding, 10) || parseInt(parsed.padding, 10) || 1
     scale = query.scale ? parseFloat(query.scale) : (parsed.scale ? parseFloat(parsed.scale) : undefined)
   } else {
