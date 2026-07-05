@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="ThemeBase" load_steps=2 format=3 uid="uid://ansitheme001"]
+
+[ext_resource type="Script" path="res://resources/themes/theme_base.gd" id="1_theme"]
+
+[resource]
+script = ExtResource("1_theme")
+id = "ansi-16"
+name = "ANSI 16"
+description = "Classic ANSI terminal 16-color palette — bold, vibrant, iconic."
+colors = {
+  "void":       { "fgColor": "#000000", "bgColor": "#000000" },
+  "wall":       { "fgColor": "#a0a0a0", "bgColor": "#000000" },
+  "floor":      { "fgColor": "#808080", "bgColor": "#1a1a1a" },
+  "floorAlt":   { "fgColor": "#606060", "bgColor": "#151515" },
+  "door":       { "fgColor": "#ffff00", "bgColor": "#1a1a00" },
+  "doorOpen":   { "fgColor": "#c0c000", "bgColor": "#151500" },
+  "water":      { "fgColor": "#0000ff", "bgColor": "#00001a" },
+  "deepWater":  { "fgColor": "#0000aa", "bgColor": "#00000a" },
+  "lava":       { "fgColor": "#ff5500", "bgColor": "#1a0500" },
+  "tree":       { "fgColor": "#00ff00", "bgColor": "#001a00" },
+  "grass":      { "fgColor": "#00aa00", "bgColor": "#000a00" },
+  "bridge":     { "fgColor": "#8b7355", "bgColor": "#1a1410" },
+  "stairsDown": { "fgColor": "#ffffff", "bgColor": "#1a1a1a" },
+  "stairsUp":   { "fgColor": "#ffffff", "bgColor": "#1a1a1a" },
+  "altar":      { "fgColor": "#ff00ff", "bgColor": "#1a001a" },
+  "fountain":   { "fgColor": "#00ffff", "bgColor": "#001a1a" },
+  "grave":      { "fgColor": "#808080", "bgColor": "#0a0a0a" },
+  "trap":       { "fgColor": "#ff0000", "bgColor": "#1a0000" },
+  "pillar":     { "fgColor": "#a0a0a0", "bgColor": "#050505" },
+  "treasure":   { "fgColor": "#ffff00", "bgColor": "#1a1a00" },
+  "shop":       { "fgColor": "#ffff55", "bgColor": "#1a1a0a" },
+  "table":      { "fgColor": "#8b4513", "bgColor": "#1a0a00" },
+  "throne":     { "fgColor": "#ffd700", "bgColor": "#1a1400" },
+  "cage":       { "fgColor": "#c0c0c0", "bgColor": "#050505" },
+  "blood":      { "fgColor": "#aa0000", "bgColor": "#0a0000" },
+  "bar":        { "fgColor": "#8b7355", "bgColor": "#000000" }
+}
