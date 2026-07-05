@@ -69,7 +69,7 @@ pnpm dev
 
 Open `http://localhost:5173` — choose a world name, tile size, and theme, then start painting. Or click **Load Demo Map** to explore a pre-built dungeon.
 
-> The **Render API** is automatically available on the same port under `/api/` — `GET /api/render?data=<base64>` or `POST /api/render` with a JSON body. See the [render server docs](server/index.mjs) for details.
+> The **Render API** is automatically available on the same port under `/api/` during development. In production, `pnpm start` serves both the frontend and API on port 3001. Deployed to Cloudflare Workers + Assets at [glyphweave.hydroroll.team](https://glyphweave.hydroroll.team).
 
 ## Keyboard Shortcuts
 
@@ -88,17 +88,23 @@ Open `http://localhost:5173` — choose a world name, tile size, and theme, then
 
 ## Render API
 
-GlyphWeave ships with a standalone render server that converts tilemaps to PNG images.
+The Render API converts tilemaps to images. It's available in three environments:
 
-```bash
-# Start the render server (optional, already available in dev mode)
-pnpm render-server
-```
+| Environment | Command | URL | Output |
+|---|---|---|---|
+| Development | `pnpm dev` | `http://localhost:5173/api/render` | PNG (`@napi-rs/canvas`) |
+| Production (Node) | `pnpm build && pnpm start` | `http://localhost:3001/api/render` | PNG (`@napi-rs/canvas`) |
+| Production (Cloudflare) | `pnpm deploy` | `https://glyphweave.hydroroll.team/api/render` | SVG (default) or PNG (`?format=png`) |
 
 ### POST (recommended for large maps)
 
 ```bash
-curl -X POST http://localhost:3001/api/render \
+curl -X POST https://glyphweave.hydroroll.team/api/render \
+  -H "Content-Type: application/json" \
+  -d @my-map.gemap > map.svg
+
+# Get PNG output
+curl -X POST "https://glyphweave.hydroroll.team/api/render?format=png" \
   -H "Content-Type: application/json" \
   -d @my-map.gemap > map.png
 ```
@@ -107,7 +113,8 @@ curl -X POST http://localhost:3001/api/render \
 
 ```bash
 DATA=$(echo -n '{"tiles":{"0,0":"wall"}}' | base64)
-curl "http://localhost:3001/api/render?data=$DATA" > map.png
+curl "https://glyphweave.hydroroll.team/api/render?data=$DATA" > map.svg
+curl "https://glyphweave.hydroroll.team/api/render?data=$DATA&format=png" > map.png
 ```
 
 Parameters:
@@ -115,6 +122,18 @@ Parameters:
 - `theme` — `ansi-16` (default) or `cogmind`
 - `padding` — extra tiles around bounds (default: `1`)
 - `scale` — pixels per tile (default: auto-fit ≤ 4096px)
+- `format` — `svg` (default) or `png` (Cloudflare only)
+
+### Local / Self-hosted
+
+```bash
+pnpm dev                           # dev server, http://localhost:5173
+pnpm build && pnpm start           # production, http://localhost:3001
+
+curl -X POST http://localhost:3001/api/render \
+  -H "Content-Type: application/json" \
+  -d @my-map.gemap > map.png
+```
 
 ---
 

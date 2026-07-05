@@ -48,7 +48,7 @@
 - **エクスポート / インポート** `.gemap` JSON 形式 — レイヤー、テーマ、ワールド名を保持。
 - **ミニマップ** — ビューポート矩形付きのリアルタイム概要。クリックでジャンプ。
 - **視距離** — スムーズなパンのための設定可能なレンダリング余白。
-- **レンダリングAPI** — `GET /render` または `POST /render` で地図をPNG画像に変換。
+- **レンダリングAPI** — `GET /api/render` または `POST /api/render` で地図をSVGまたはPNG画像に変換。
 - **キーボードショートカット** — `B` ブラシ、`E` 消しゴム、`F` 塗りつぶし、`P` パン、`S` 選択、`G` グリッド切替。
 - **デモマップ** — 「忘れられしカタコンベ」または「グランドレルム・オブ・エイスラ」を探索。
 
@@ -69,21 +69,28 @@ pnpm dev
 
 `http://localhost:5173` を開き、ワールド名、タイルサイズ、テーマを選択して描き始めましょう。
 
-> **レンダリングAPI** は開発モードで自動的に同一ポートで利用可能です——`GET /render?data=<base64>` または `POST /render`（JSON body）。詳細は[サーバードキュメント](server/index.mjs)を参照。
+> **レンダリングAPI** は開発モードで自動的に同一ポートで利用可能です——`GET /api/render?data=<base64>` または `POST /api/render`（JSON body）。
 
 ## Render API
 
-GlyphWeave には、タイルマップを PNG 画像に変換するスタンドアロンのレンダリングサーバーが付属しています。
+タイルマップを画像に変換するAPIです。3つの動作環境に対応しています：
 
-```bash
-# レンダリングサーバーを起動（開発モードでは自動統合済み）
-pnpm render-server
-```
+| 環境 | コマンド | URL | 出力 |
+|---|---|---|---|
+| 開発 | `pnpm dev` | `http://localhost:5173/api/render` | PNG (`@napi-rs/canvas`) |
+| 本番 (Node) | `pnpm build && pnpm start` | `http://localhost:3001/api/render` | PNG (`@napi-rs/canvas`) |
+| 本番 (Cloudflare) | `pnpm deploy` | `https://glyphweave.hydroroll.team/api/render` | SVG（デフォルト）または PNG（`?format=png`） |
 
 ### POST（大きなマップに推奨）
 
 ```bash
-curl -X POST http://localhost:3001/render \
+# SVG出力（デフォルト）
+curl -X POST https://glyphweave.hydroroll.team/api/render \
+  -H "Content-Type: application/json" \
+  -d @my-map.gemap > map.svg
+
+# PNG出力
+curl -X POST "https://glyphweave.hydroroll.team/api/render?format=png" \
   -H "Content-Type: application/json" \
   -d @my-map.gemap > map.png
 ```
@@ -92,7 +99,7 @@ curl -X POST http://localhost:3001/render \
 
 ```bash
 DATA=$(echo -n '{"tiles":{"0,0":"wall"}}' | base64)
-curl "http://localhost:3001/render?data=$DATA" > map.png
+curl "https://glyphweave.hydroroll.team/api/render?data=$DATA&format=png" > map.png
 ```
 
 パラメータ：
@@ -100,6 +107,18 @@ curl "http://localhost:3001/render?data=$DATA" > map.png
 - `theme` — `ansi-16`（デフォルト）または `cogmind`
 - `padding` — 境界外の余分タイル数（デフォルト `1`）
 - `scale` — タイルあたりのピクセル数（デフォルトは自動フィット ≤ 4096px）
+- `format` — `svg`（デフォルト）または `png`（Cloudflare）
+
+### セルフホスト
+
+```bash
+pnpm dev                           # 開発サーバー, http://localhost:5173
+pnpm build && pnpm start           # 本番サーバー, http://localhost:3001
+
+curl -X POST http://localhost:3001/api/render \
+  -H "Content-Type: application/json" \
+  -d @my-map.gemap > map.png
+```
 
 ---
 
