@@ -728,8 +728,9 @@ Source: <a href="https://github.com/HsiangNianian/GlyphWeave">github.com/HsiangN
           })
           res.end(pngBuffer)
         } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
           res.statusCode = 400
-          res.end(`Error: ${err.message}`)
+          res.end(`Error: ${msg}`)
         }
       })
 
