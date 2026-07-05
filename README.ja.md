@@ -11,6 +11,7 @@
 <p align="center">
   <a href="https://github.com/HsiangNianian/GlyphWeave"><img src="https://img.shields.io/github/stars/HsiangNianian/GlyphWeave?logo=github" alt="GitHub stars"></a>
   <a href="https://github.com/HsiangNianian/GlyphWeave/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-65a30d?style=flat" alt="MIT license"></a>
+  <a href="https://glyphweave.hydroroll.team"><img src="https://img.shields.io/badge/demo-glyphweave.hydroroll.team-000?style=flat&logo=cloudflare" alt="Demo"></a>
   <br>
   <img src="https://img.shields.io/badge/React_19-000?style=flat&logo=react" alt="React 19">
   <img src="https://img.shields.io/badge/Konva-000?style=flat&logo=canvas" alt="Konva">
@@ -70,7 +71,6 @@ pnpm dev
 
 > **レンダリングAPI** は開発モードで自動的に同一ポートで利用可能です——`GET /render?data=<base64>` または `POST /render`（JSON body）。詳細は[サーバードキュメント](server/index.mjs)を参照。
 
-
 ## Render API
 
 GlyphWeave には、タイルマップを PNG 画像に変換するスタンドアロンのレンダリングサーバーが付属しています。
@@ -96,6 +96,7 @@ curl "http://localhost:3001/render?data=$DATA" > map.png
 ```
 
 パラメータ：
+
 - `theme` — `ansi-16`（デフォルト）または `cogmind`
 - `padding` — 境界外の余分タイル数（デフォルト `1`）
 - `scale` — タイルあたりのピクセル数（デフォルトは自動フィット ≤ 4096px）
@@ -104,9 +105,9 @@ curl "http://localhost:3001/render?data=$DATA" > map.png
 
 ## デモマップ
 
-| マップ                   | サイズ   | 説明                                           |
-| ------------------------ | -------- | ---------------------------------------------- |
-| 忘れられしカタコンベ     | 80×48    | 25のプリセットルームで構成された厳選ダンジョン   |
+| マップ                         | サイズ | 説明                                                                                          |
+| ------------------------------ | ------ | --------------------------------------------------------------------------------------------- |
+| 忘れられしカタコンベ           | 80×48  | 25のプリセットルームで構成された厳選ダンジョン                                                |
 | グランドレルム・オブ・エイスラ | 120×80 | 山脈、湖、川、溶岩割れ目、火山、森、村、城塞都市、公園、ダンジョンに及ぶ3レイヤーの広大な世界 |
 
 ---

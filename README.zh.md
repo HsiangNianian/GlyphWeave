@@ -11,6 +11,7 @@
 <p align="center">
   <a href="https://github.com/HsiangNianian/GlyphWeave"><img src="https://img.shields.io/github/stars/HsiangNianian/GlyphWeave?logo=github" alt="GitHub stars"></a>
   <a href="https://github.com/HsiangNianian/GlyphWeave/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-65a30d?style=flat" alt="MIT license"></a>
+  <a href="https://glyphweave.hydroroll.team"><img src="https://img.shields.io/badge/demo-glyphweave.hydroroll.team-000?style=flat&logo=cloudflare" alt="Demo"></a>
   <br>
   <img src="https://img.shields.io/badge/React_19-000?style=flat&logo=react" alt="React 19">
   <img src="https://img.shields.io/badge/Konva-000?style=flat&logo=canvas" alt="Konva">
@@ -70,19 +71,18 @@ pnpm dev
 
 > **渲染 API** 在开发模式下自动同端口可用——`GET /render?data=<base64>` 或 `POST /render`（JSON body）。详情见[服务器文档](server/index.mjs)。
 
-
 ## 键盘快捷键
 
-| 键               | 功能         |
-| ---------------- | ------------ |
-| `B`              | 笔刷工具     |
-| `E`              | 橡皮工具     |
-| `F`              | 填充工具     |
-| `P`              | 平移工具     |
-| `S`              | 选择工具     |
-| `Ctrl+Z`         | 撤销         |
-| `Ctrl+Shift+Z`   | 重做         |
-| `G`              | 切换网格     |
+| 键             | 功能     |
+| -------------- | -------- |
+| `B`            | 笔刷工具 |
+| `E`            | 橡皮工具 |
+| `F`            | 填充工具 |
+| `P`            | 平移工具 |
+| `S`            | 选择工具 |
+| `Ctrl+Z`       | 撤销     |
+| `Ctrl+Shift+Z` | 重做     |
+| `G`            | 切换网格 |
 
 ---
 
@@ -111,6 +111,7 @@ curl "http://localhost:3001/render?data=$DATA" > map.png
 ```
 
 参数：
+
 - `theme` — `ansi-16`（默认）或 `cogmind`
 - `padding` — 边界外额外格子数（默认 `1`）
 - `scale` — 每格像素（默认自适应 ≤ 4096px）
@@ -119,10 +120,10 @@ curl "http://localhost:3001/render?data=$DATA" > map.png
 
 ## 示例地图
 
-| 地图                | 尺寸    | 描述                                        |
-| ------------------- | ------- | ------------------------------------------- |
-| 被遗忘的地下墓穴     | 80×48   | 精心编排的迷宫，包含 25 个预设房间            |
-| 艾瑟拉宏大王国       | 120×80  | 横跨三层的宏大世界：山脉、湖泊、河流、熔岩裂隙、火山、森林、村庄、城池、公园和地牢 |
+| 地图             | 尺寸   | 描述                                                                               |
+| ---------------- | ------ | ---------------------------------------------------------------------------------- |
+| 被遗忘的地下墓穴 | 80×48  | 精心编排的迷宫，包含 25 个预设房间                                                 |
+| 艾瑟拉宏大王国   | 120×80 | 横跨三层的宏大世界：山脉、湖泊、河流、熔岩裂隙、火山、森林、村庄、城池、公园和地牢 |
 
 ---
 

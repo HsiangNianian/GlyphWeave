@@ -11,6 +11,7 @@
 <p align="center">
   <a href="https://github.com/HsiangNianian/GlyphWeave"><img src="https://img.shields.io/github/stars/HsiangNianian/GlyphWeave?logo=github" alt="GitHub stars"></a>
   <a href="https://github.com/HsiangNianian/GlyphWeave/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-65a30d?style=flat" alt="MIT license"></a>
+  <a href="https://glyphweave.hydroroll.team"><img src="https://img.shields.io/badge/demo-glyphweave.hydroroll.team-000?style=flat&logo=cloudflare" alt="Demo"></a>
   <br>
   <img src="https://img.shields.io/badge/React_19-000?style=flat&logo=react" alt="React 19">
   <img src="https://img.shields.io/badge/Konva-000?style=flat&logo=canvas" alt="Konva">
@@ -70,19 +71,18 @@ Open `http://localhost:5173` — choose a world name, tile size, and theme, then
 
 > The **Render API** is automatically available on the same port under `/api/` — `GET /api/render?data=<base64>` or `POST /api/render` with a JSON body. See the [render server docs](server/index.mjs) for details.
 
-
 ## Keyboard Shortcuts
 
-| Key               | Action          |
-| ----------------- | --------------- |
-| `B`               | Brush tool      |
-| `E`               | Eraser tool     |
-| `F`               | Flood fill      |
-| `P`               | Pan tool        |
-| `S`               | Select tool     |
-| `Ctrl+Z`          | Undo            |
-| `Ctrl+Shift+Z`    | Redo            |
-| `G`               | Toggle grid     |
+| Key            | Action      |
+| -------------- | ----------- |
+| `B`            | Brush tool  |
+| `E`            | Eraser tool |
+| `F`            | Flood fill  |
+| `P`            | Pan tool    |
+| `S`            | Select tool |
+| `Ctrl+Z`       | Undo        |
+| `Ctrl+Shift+Z` | Redo        |
+| `G`            | Toggle grid |
 
 ---
 
@@ -111,6 +111,7 @@ curl "http://localhost:3001/api/render?data=$DATA" > map.png
 ```
 
 Parameters:
+
 - `theme` — `ansi-16` (default) or `cogmind`
 - `padding` — extra tiles around bounds (default: `1`)
 - `scale` — pixels per tile (default: auto-fit ≤ 4096px)
@@ -119,10 +120,10 @@ Parameters:
 
 ## Demo Maps
 
-| Map                    | Size    | Description                                    |
-| ---------------------- | ------- | ---------------------------------------------- |
-| The Forgotten Catacombs | 80×48  | Hand-curated dungeon with 25 preset rooms       |
-| Grand Realm of Aethra  | 120×80  | A sprawling 3-layer realm with mountains, lake, river, lava fissure, volcano, forest, village, walled city, park, and dungeon |
+| Map                     | Size   | Description                                                                                                                   |
+| ----------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| The Forgotten Catacombs | 80×48  | Hand-curated dungeon with 25 preset rooms                                                                                     |
+| Grand Realm of Aethra   | 120×80 | A sprawling 3-layer realm with mountains, lake, river, lava fissure, volcano, forest, village, walled city, park, and dungeon |
 
 ---
 
