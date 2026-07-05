@@ -3,7 +3,7 @@
  */
 
 export function apiDocPage(baseUrl) {
-  const origin = baseUrl || 'http://localhost:3001'
+  const origin = baseUrl || 'https://glyphweave.hydroroll.team'
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -34,52 +34,84 @@ tr:nth-child(even){background:#161616}
 .tag-string{color:#8f8}
 .tag-number{color:#8cf}
 .tag-object{color:#fc8}
+#agents-browser{display:flex;gap:0;border:1px solid #333;border-radius:6px;margin:1em 0;min-height:480px;max-height:70vh;background:#1a1a1a;overflow:hidden}
+#agents-tree{width:300px;min-width:300px;overflow-y:auto;border-right:1px solid #333;padding:8px 0;font-size:.85em;background:#161616}
+#agents-viewer{flex:1;overflow-y:auto;padding:0}
+.tree-node{display:flex;align-items:center;gap:6px;padding:3px 12px;cursor:pointer;color:#ccc;white-space:nowrap;user-select:none}
+.tree-node:hover{background:#2a2a2a}
+.tree-node.selected{background:#2a3a5a;color:#fff}
+.tree-node .arrow{display:inline-block;width:14px;text-align:center;color:#666;font-size:.75em;flex-shrink:0}
+.tree-node .arrow.empty{visibility:hidden}
+.tree-node .icon{flex-shrink:0;font-size:1em;width:18px;text-align:center}
+.tree-node .label{overflow:hidden;text-overflow:ellipsis}
+.tree-children{display:none}
+.tree-children.open{display:block}
+.viewer-header{display:flex;align-items:center;gap:8px;padding:8px 16px;background:#1a1a1a;border-bottom:1px solid #333;font-size:.82em;color:#888;position:sticky;top:0;z-index:1}
+.viewer-header .file-path{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.viewer-header .file-size{color:#555;flex-shrink:0}
+.viewer-content{padding:0;margin:0;overflow-x:auto}
+.viewer-content pre{margin:0;padding:12px 16px;background:#111;font-size:.82em;line-height:1.5;tab-size:2}
+.viewer-content pre code{background:transparent;padding:0;font-family:'Cascadia Code','Fira Code','JetBrains Mono','Consolas',monospace}
+.viewer-empty{display:flex;align-items:center;justify-content:center;height:100%;color:#555;font-size:.9em;padding:2em;text-align:center}
+.tree-loading{padding:12px;color:#555;text-align:center;font-size:.85em}
+.badge{display:inline-block;background:#2a2a2a;color:#888;padding:0 .4em;border-radius:3px;font-size:.8em;margin-left:6px}
+.badge-md{background:#2a3a2a;color:#8f8}.badge-json{background:#3a3a2a;color:#ff8}.badge-js{background:#3a2a2a;color:#fa8}.badge-ts{background:#2a2a3a;color:#8af}.badge-img{background:#3a2a3a;color:#f8f}
+.viewer-content .hl-kw{color:#ff79c6}.viewer-content .hl-str{color:#f1fa8c}.viewer-content .hl-com{color:#6272a4}
+.viewer-content .hl-num{color:#bd93f9}.viewer-content .hl-section{color:#ffb86c;font-weight:bold}
+.viewer-content .hl-link{color:#8be9fd;text-decoration:underline}
 </style>
 </head>
 <body>
 
 <h1>GlyphWeave Render API &amp; Map Format</h1>
 
-<p>This page documents the GlyphWeave tilemap format (<strong>.gemap</strong>) and the Render API endpoint.</p>
+<p>This page documents the GlyphWeave tilemap format (<strong>.gemap</strong>) and the Render API endpoint.
+It is designed for both humans and LLMs (AI agents) to read and understand how to generate valid maps.</p>
 
 <!-- ============================================================ -->
 <h2>1. Map Data Format (.gemap JSON)</h2>
 
-<p>A GlyphWeave map is a JSON object with the following structure.</p>
+<p>A GlyphWeave map is a JSON object with the following structure. The only strictly required field is <code>tiles</code> or <code>layerTiles</code>.</p>
 
 <h3>Top-level Schema</h3>
 <pre><code>{
   "tiles":       {&lt;coord&gt;: &lt;tileId&gt;|null, ...},   // Flat tile map (required unless layerTiles used)
-  "layerTiles":  {&lt;layerId&gt;: {&lt;coord&gt;: &lt;tileId&gt;|null, ...}, ...},
-  "layers":      [{&lt;layer&gt;}, ...],
-  "worldName":   "My Dungeon",
-  "tileSize":    24,
-  "themeId":     "ansi-16",
-  "version":     2
+  "layerTiles":  {&lt;layerId&gt;: {&lt;coord&gt;: &lt;tileId&gt;|null, ...}, ...},  // Per-layer tiles
+  "layers":      [{&lt;layer&gt;}, ...],               // Layer definitions
+  "worldName":   "My Dungeon",                     // Map name (optional)
+  "tileSize":    24,                               // Pixels per tile (optional, default 24)
+  "themeId":     "ansi-16",                         // Theme ID (optional, default "ansi-16")
+  "version":     2                                  // Format version (optional)
 }</code></pre>
 
 <div class="note">
-<strong>Note:</strong> The simplest valid map only needs a <code>tiles</code> object.
-Coordinates not present in <code>tiles</code> are treated as void (empty space).
+<strong>LLM Note:</strong> The simplest valid map only needs a <code>tiles</code> object.
+Omitted/void tiles render as empty space. All coordinates not present in <code>tiles</code> are treated as void.
 </div>
 
 <h3>Coordinate System</h3>
 <pre><code>"{x},{y}": "{tileId}"
 
 Examples:
-"0,0": "wall"       // Top-left corner
-"5,3": "floor"      // Column 5, row 3
+"0,0": "wall"       // Top-left corner, a wall tile
+"5,3": "floor"      // Column 5, row 3, a floor tile
 "10,7": "door"      // A door at (10, 7)
-"2,4": null          // Erase tile at (2, 4)</code></pre>
+"2,4": null          // Erase tile at (2, 4) — set to void</code></pre>
 
 <ul>
-  <li>Coordinates are 0-indexed from top-left, format <code>"{x},{y}"</code></li>
-  <li>Negative coordinates are valid — bounds auto-detect</li>
-  <li>Setting a tile to <code>null</code> explicitly removes it</li>
+  <li>Coordinates are integer grid positions, <strong>0-indexed</strong> from the top-left</li>
+  <li>Key format: <code>"{x},{y}"</code> (no spaces)</li>
+  <li>Negative coordinates are valid — the map bounds auto-detect from min/max keys</li>
+  <li>The <code>tiles</code> object is sparse: only non-void tiles need to be listed</li>
+  <li>Setting a tile to <code>null</code> explicitly removes it (same as omitting it)</li>
 </ul>
 
 <!-- ============================================================ -->
 <h2>2. Tile Type Reference</h2>
+
+<p>Each tile in the map references a <strong>tile type ID</strong>. Below is the complete list.
+The <code>char</code> column shows the glyph rendered on the map.
+The <code>category</code> groups tiles by function.</p>
 
 <div class="category-label">Walls</div>
 <div class="map-legend">
@@ -143,21 +175,76 @@ Examples:
 <div class="legend-item"><span class="char" style="color:#ffffff">&lt;</span><span>stairs up</span><span class="id">stairsUp</span></div>
 </div>
 
+<h3>Tile ID Quick Reference (for LLMs)</h3>
+
+<pre><code>// ── Walls ──
+"wall"       // #  — Standard dungeon wall
+"door"       // +  — Closed door
+"doorOpen"   // '  — Open doorway
+"pillar"     // 0  — Support pillar
+"bar"        // │  — Tavern bar / fence
+
+// ── Floors ──
+"floor"      // .  — Standard floor
+"floorAlt"   // ,  — Alternate floor (variation)
+"bridge"     // ═  — Bridge over water/lava
+
+// ── Water ──
+"water"      // ~  — Shallow water
+"deepWater"  // ≈  — Deep water
+
+// ── Terrain ──
+"lava"       // ~  — Lava (rendered in orange/red)
+"void"       //    — Empty space (omit from tiles to use)
+
+// ── Vegetation ──
+"tree"       // ♣  — Tree
+"grass"      // "  — Grass / undergrowth
+
+// ── Furniture ──
+"altar"      // ≡  — Ritual altar
+"fountain"   // ♦  — Fountain
+"shop"       // Σ  — Merchant shop
+"table"      // ▤  — Table
+"throne"     // Ψ  — Throne
+"cage"       // █  — Prison cage
+
+// ── Items ──
+"treasure"   // $  — Treasure pile
+
+// ── Decorations ──
+"grave"      // ☠  — Grave / tombstone
+"trap"       // ^  — Floor trap
+"blood"      // ;  — Bloodstain
+
+// ── Special ──
+"stairsDown" // >  — Stairs leading down
+"stairsUp"   // <  — Stairs leading up</code></pre>
+
 <!-- ============================================================ -->
 <h2>3. Layer System (Multi-layer Maps)</h2>
 
+<p>Maps can have multiple layers. When layers are used, the renderer flattens them:
+visible layers are composited top-to-bottom, with later layers overwriting earlier ones at the same coordinates.</p>
+
 <pre><code>{
   "layerTiles": {
-    "ground": { "0,0": "wall", "1,0": "floor" },
-    "decor":  { "1,0": "blood" }
+    "ground-layer": {
+      "0,0": "wall",
+      "1,0": "floor",
+      "0,1": "floor"
+    },
+    "decor-layer": {
+      "1,0": "blood"     // Blood on top of the floor
+    }
   },
   "layers": [
-    { "id": "ground", "name": "Ground", "visible": true, "locked": false },
-    { "id": "decor",  "name": "Decor",  "visible": true, "locked": false }
+    { "id": "ground-layer", "name": "Ground",  "visible": true, "locked": false },
+    { "id": "decor-layer",  "name": "Decor",   "visible": true, "locked": false }
   ]
 }</code></pre>
 
-<p>Layer order determines render order (first = bottom). Flat <code>tiles</code> can be used instead for single-layer maps.</p>
+<p>For simple single-layer maps, just use the flat <code>tiles</code> field.</p>
 
 <!-- ============================================================ -->
 <h2>4. API Endpoints</h2>
@@ -165,13 +252,15 @@ Examples:
 <table>
 <thead><tr><th>Path</th><th>Methods</th><th>Description</th></tr></thead>
 <tbody>
-<tr><td><code>/api/render</code></td><td>GET, POST</td><td>Render a tilemap to SVG (default) or PNG (<code>?format=png</code>)</td></tr>
+<tr><td><code>/api/render</code></td><td>GET, POST</td><td>Render a tilemap to SVG</td></tr>
 <tr><td><code>/api/health</code></td><td>GET</td><td><code>{"ok":true,"version":1}</code></td></tr>
+<tr><td><code>/api/agents/list</code></td><td>GET</td><td>List files in <code>~/.agents/</code> directory (dev/self-hosted only)</td></tr>
+<tr><td><code>/api/agents/read</code></td><td>GET</td><td>Read a file from <code>~/.agents/</code> (dev/self-hosted only)</td></tr>
 <tr><td><code>/api</code></td><td>GET</td><td>This documentation page</td></tr>
 </tbody>
 </table>
 
-<h3>POST /api/render (any size)</h3>
+<h3>POST /api/render (recommended, any size map)</h3>
 <pre><code>POST ${origin}/api/render
 Content-Type: application/json
 
@@ -182,35 +271,70 @@ Content-Type: application/json
   "scale": 24
 }</code></pre>
 
-<h3>GET /api/render (small maps, base64)</h3>
-<pre><code>GET ${origin}/api/render?data=&lt;base64&gt;&amp;theme=ansi-16</code></pre>
-
-<h3>Parameters</h3>
+<p>Query parameters override JSON body fields:</p>
 <table>
 <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
 <tbody>
-<tr><td><code>theme</code></td><td>string</td><td><code>ansi-16</code></td><td>Theme ID (<code>ansi-16</code> or <code>cogmind</code>)</td></tr>
-<tr><td><code>padding</code></td><td>number</td><td><code>1</code></td><td>Extra tile border</td></tr>
-<tr><td><code>scale</code></td><td>number</td><td>auto</td><td>Pixels per tile (auto-fit ≤4096px)</td></tr>
-<tr><td><code>format</code></td><td>string</td><td><code>svg</code></td><td>Output format (<code>svg</code> or <code>png</code>)</td></tr>
+<tr><td><code>theme</code></td><td>string</td><td><code>ansi-16</code></td><td>Theme ID for rendering colors</td></tr>
+<tr><td><code>padding</code></td><td>number</td><td><code>1</code></td><td>Extra tile-width border around the map bounds</td></tr>
+<tr><td><code>scale</code></td><td>number</td><td>auto</td><td>Pixels per tile (auto-fits to ≤4096px output)</td></tr>
 </tbody>
 </table>
 
-<h3>Examples</h3>
-<pre><code># Render to SVG (default)
-curl -X POST ${origin}/api/render \\
-  -H "Content-Type: application/json" \\
-  -d @my-map.gemap > map.svg
+<h3>GET /api/render (small maps, via base64)</h3>
+<pre><code>GET ${origin}/api/render?data=&lt;base64-urlencoded-json&gt;&amp;theme=ansi-16</code></pre>
 
-# Render to PNG
-curl -X POST "${origin}/api/render?format=png" \\
-  -H "Content-Type: application/json" \\
-  -d @my-map.gemap > map.png</code></pre>
+<p>The <code>data</code> parameter is the entire map JSON, base64-encoded and URL-encoded.
+Best for small maps; use POST for larger maps.</p>
+
+<h3>GET /api/health</h3>
+<pre><code>GET ${origin}/api/health</code></pre>
+
+<p>Returns <code>{"ok":true,"version":1}</code>.</p>
+
+<h3>GET /api</h3>
+<p>This page.</p>
 
 <!-- ============================================================ -->
-<h2>5. Complete Map Examples</h2>
+<h2>5. curl Examples</h2>
 
-<h3>Minimal: 3×3 Room</h3>
+<h3>Render a map from a .gemap file</h3>
+<pre><code>curl -X POST ${origin}/api/render \\
+  -H "Content-Type: application/json" \\
+  -d @my-map.gemap > my-map.svg</code></pre>
+
+<h3>Render with theme override</h3>
+<pre><code>curl -X POST "${origin}/api/render?theme=cogmind" \\
+  -H "Content-Type: application/json" \\
+  -d @my-map.gemap > my-map-cogmind.svg</code></pre>
+
+<h3>Render a small inline map (GET)</h3>
+<pre><code># Generate the base64 data first:
+echo -n '{"tiles":{"0,0":"wall"}}' | base64 -w0
+
+curl "${origin}/api/render?data=eyJ0aWxlcyI6eyIwLDAiOiJ3YWxsIn19&theme=ansi-16" > tiny.svg</code></pre>
+
+<h3>Render inline JSON (POST)</h3>
+<pre><code>curl -X POST ${origin}/api/render \\
+  -H "Content-Type: application/json" \\
+  -d '{"tiles":{"0,0":"wall","1,0":"floor","0,1":"floor","1,1":"floor"},"themeId":"ansi-16"}' \\
+  > 2x2.svg</code></pre>
+
+<h3>Using with pipes (convert to PNG on the client)</h3>
+<pre><code># With rsvg-convert (Linux)
+curl -s -X POST ${origin}/api/render \\
+  -H "Content-Type: application/json" \\
+  -d @map.gemap | rsvg-convert > map.png
+
+# With Inkscape
+curl -s -X POST ${origin}/api/render \\
+  -H "Content-Type: application/json" \\
+  -d @map.gemap | inkscape --pipe --export-type=png -o map.png</code></pre>
+
+<!-- ============================================================ -->
+<h2>6. Complete Map Examples</h2>
+
+<h3>Minimal: A 3×3 Room</h3>
 <pre><code>{
   "tiles": {
     "0,0": "wall", "1,0": "wall", "2,0": "wall",
@@ -235,8 +359,16 @@ curl -X POST "${origin}/api/render?format=png" \\
 <h3>Lava Cave with Bridge (multi-layer)</h3>
 <pre><code>{
   "layerTiles": {
-    "terrain": { "0,0": "wall", "1,1": "lava", "1,2": "lava", ... },
-    "structures": { "1,1": "bridge", "1,2": "bridge", "1,3": "bridge" }
+    "terrain": {
+      "0,0": "wall", "1,0": "wall", "2,0": "wall", "3,0": "wall", "4,0": "wall",
+      "0,1": "wall", "1,1": "lava", "2,1": "lava", "3,1": "lava", "4,1": "wall",
+      "0,2": "wall", "1,2": "lava", "2,2": "lava", "3,2": "lava", "4,2": "wall",
+      "0,3": "wall", "1,3": "lava", "2,3": "lava", "3,3": "lava", "4,3": "wall",
+      "0,4": "wall", "1,4": "wall", "2,4": "wall", "3,4": "wall", "4,4": "wall"
+    },
+    "structures": {
+      "1,1": "bridge", "1,2": "bridge", "1,3": "bridge"
+    }
   },
   "layers": [
     { "id": "terrain",    "name": "Terrain",    "visible": true, "locked": false },
@@ -245,7 +377,22 @@ curl -X POST "${origin}/api/render?format=png" \\
   "themeId": "ansi-16"
 }</code></pre>
 
-<h3>Forest Clearing (negative coords)</h3>
+<h3>Throne Room (medium dungeon room)</h3>
+<pre><code>{
+  "tiles": {
+    "0,0": "wall", "1,0": "wall", "2,0": "wall", "3,0": "wall", "4,0": "wall", "5,0": "wall", "6,0": "wall", "7,0": "wall",
+    "0,1": "wall", "1,1": "floor", "2,1": "floor", "3,1": "floor", "4,1": "floor", "5,1": "floor", "6,1": "floor", "7,1": "wall",
+    "0,2": "wall", "1,2": "floor", "2,2": "floor", "3,2": "floor", "4,2": "floor", "5,2": "floor", "6,2": "floor", "7,2": "wall",
+    "0,3": "wall", "1,3": "floor", "2,3": "floor", "3,3": "throne", "4,3": "throne", "5,3": "floor", "6,3": "floor", "7,3": "wall",
+    "0,4": "wall", "1,4": "floor", "2,4": "floor", "3,4": "throne", "4,4": "throne", "5,4": "floor", "6,4": "floor", "7,4": "wall",
+    "0,5": "wall", "1,5": "floor", "2,5": "floor", "3,5": "floor", "4,5": "floor", "5,5": "floor", "6,5": "floor", "7,5": "wall",
+    "0,6": "wall", "1,6": "floor", "2,6": "floor", "3,6": "floor", "4,6": "floor", "5,6": "floor", "6,6": "floor", "7,6": "wall",
+    "0,7": "wall", "1,7": "wall", "2,7": "wall", "3,7": "wall", "4,7": "wall", "5,7": "wall", "6,7": "wall", "7,7": "wall"
+  },
+  "themeId": "ansi-16"
+}</code></pre>
+
+<h3>Forest Clearing (using negative coords)</h3>
 <pre><code>{
   "tiles": {
     "-2,-2": "tree", "-1,-2": "tree", "0,-2": "tree",
@@ -258,51 +405,249 @@ curl -X POST "${origin}/api/render?format=png" \\
 }</code></pre>
 
 <!-- ============================================================ -->
-<h2>6. Themes</h2>
+<h2>7. Themes</h2>
 
 <table>
 <thead><tr><th>Theme ID</th><th>Name</th><th>Description</th></tr></thead>
 <tbody>
-<tr><td><code>ansi-16</code></td><td>ANSI 16</td><td>Classic ANSI terminal 16-color palette</td></tr>
-<tr><td><code>cogmind</code></td><td>Cogmind Dark</td><td>Low-light cyberpunk terminal</td></tr>
+<tr><td><code>ansi-16</code></td><td>ANSI 16</td><td>Classic ANSI terminal 16-color palette — bold, vibrant, iconic.</td></tr>
+<tr><td><code>cogmind</code></td><td>Cogmind Dark</td><td>Low-light cyberpunk terminal — muted, cold, atmospheric.</td></tr>
 </tbody>
 </table>
 
-<h2>7. LLM Authoring Guide</h2>
+<p>Each theme defines foreground and background colors for every tile type.
+The theme ID is passed as a top-level field in the map JSON or as a query parameter.</p>
+
+<!-- ============================================================ -->
+<h2>8. LLM Authoring Guide</h2>
 
 <div class="note">
-<strong>For AI agents generating maps:</strong>
+<strong>For AI agents generating maps:</strong> Follow these guidelines to produce valid, visually coherent maps.
 </div>
 
 <h3>Design Principles</h3>
 <ul>
-  <li><strong>Enclose rooms with walls</strong> — every room needs a complete wall border</li>
-  <li><strong>Use floors for walkable areas</strong> — <code>floor</code> (.) / <code>floorAlt</code> (,)</li>
-  <li><strong>Doors connect spaces</strong> — place <code>door</code> (+) in wall openings</li>
-  <li><strong>Corridors are 1-2 tiles wide</strong> — walls on both sides</li>
-  <li><strong>Decorations add atmosphere</strong> — <code>blood</code>, <code>grave</code>, <code>trap</code></li>
-  <li><strong>Stairs connect levels</strong> — <code>stairsDown</code> / <code>stairsUp</code></li>
+  <li><strong>Enclose rooms with walls</strong> — every room should have a complete wall border</li>
+  <li><strong>Use floors for walkable areas</strong> — <code>floor</code> (.) for standard, <code>floorAlt</code> (,) for variety</li>
+  <li><strong>Doors connect spaces</strong> — place <code>door</code> (+) in wall openings between rooms and corridors</li>
+  <li><strong>Corridors are 1-2 tiles wide</strong> — with walls on both sides flanking the floor</li>
+  <li><strong>Decorations add atmosphere</strong> — <code>blood</code>, <code>grave</code>, <code>trap</code>, <code>grass</code> on top of floors</li>
+  <li><strong>Stairs connect levels</strong> — entrance halls have <code>stairsDown</code> deeper floors have <code>stairsUp</code></li>
 </ul>
 
 <h3>Common Room Patterns</h3>
 <ul>
-  <li><strong>Small room:</strong> 5×5 (3×3 interior)</li>
-  <li><strong>Medium room:</strong> 7×7 (5×5 interior)</li>
-  <li><strong>Large hall:</strong> 11×11 (9×9 interior)</li>
+  <li><strong>Small room:</strong> 5×5 tiles (walls + 3×3 floor interior)</li>
+  <li><strong>Medium room:</strong> 7×7 tiles (walls + 5×5 floor interior)</li>
+  <li><strong>Large hall:</strong> 11×11 tiles (walls + 9×9 floor interior)</li>
+  <li><strong>Corridor:</strong> 3 tiles wide (wall | floor | wall), any length</li>
 </ul>
 
 <h3>Coordinate Mathematics</h3>
-<pre><code># Room at (ox, oy), interior w×h
+<pre><code># Room: top-left corner at (ox, oy), interior width w, height h
+# Generate wall border and floor interior:
+
 for y from oy to oy+h+1:
   for x from ox to ox+w+1:
-    if border: tiles["{x},{y}"] = "wall"
-    else:      tiles["{x},{y}"] = "floor"
-# Door at south wall midpoint:
-tiles["{ox+floor((w+1)/2)},{oy+h+1}"] = "door"</code></pre>
+    if x==ox or x==ox+w+1 or y==oy or y==oy+h+1:
+      tiles["{x},{y}"] = "wall"
+    else:
+      tiles["{x},{y}"] = "floor"
+
+# Add a door at the south wall midpoint:
+doorX = ox + floor((w+1)/2)
+tiles["{doorX},{oy+h+1}"] = "door"</code></pre>
+
+<h3>Map Scale Guidelines</h3>
+<ul>
+  <li>Small dungeon: ~20×20 tiles, 3-5 rooms with corridors</li>
+  <li>Medium dungeon: ~40×30 tiles, 6-10 rooms with varied features</li>
+  <li>Large dungeon: ~80×48 tiles, 10-20 rooms with multiple themes</li>
+  <li>Render output auto-scales to fit within 4096×4096px</li>
+  <li>For detail, set <code>scale: 24</code> (1 tile = 24px in output)</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2>9. Preset Building Blocks</h2>
+
+<p>Below are some common grid patterns (W=wall, F=floor, _=void):</p>
+
+<pre><code>// Small Room (5×5, interior 3×3)
+//   0 1 2 3 4
+// 0 W W W W W
+// 1 W F F F W
+// 2 W F F F W
+// 3 W F F F W
+// 4 W W W W W
+
+// T-Junction Corridor
+//   _ W F W _
+//   _ W F W _
+//   F F F F F F
+//   _ W F W _
+//   _ W F W _
+
+// Treasure Vault
+//   W W W W W
+//   W F F F W
+//   W F $ F W
+//   W F F F W
+//   W W W W W</code></pre>
+
+<!-- ============================================================ -->
+<h2>10. Agent Skills Directory</h2>
+
+<p>Browse the <code>~/.agents/</code> directory tree below. Click a folder to expand, click a file to preview its contents.</p>
+
+<div id="agents-browser">
+  <div id="agents-tree"><div class="tree-loading">Loading...</div></div>
+  <div id="agents-viewer">
+    <div class="viewer-empty">Select a file to preview</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var API = (location.pathname.startsWith('/api') ? '' : '/api') + '/agents';
+  var expanded = {};
+  var selectedPath = null;
+  var treeEl = document.getElementById('agents-tree');
+  var viewerEl = document.getElementById('agents-viewer');
+
+  function listDir(relPath, cb) {
+    var x = new XMLHttpRequest();
+    x.open('GET', API + '/list?path=' + encodeURIComponent(relPath), true);
+    x.onload = function() { if (x.status===200) cb(null, JSON.parse(x.responseText).entries); else cb(new Error(String(x.status))); };
+    x.onerror = function() { cb(new Error('Network error')); };
+    x.send();
+  }
+  function readFile(relPath, cb) {
+    var x = new XMLHttpRequest();
+    x.open('GET', API + '/read?path=' + encodeURIComponent(relPath), true);
+    x.onload = function() { if (x.status===200) cb(null, JSON.parse(x.responseText)); else cb(new Error(String(x.status))); };
+    x.onerror = function() { cb(new Error('Network error')); };
+    x.send();
+  }
+
+  function fileIcon(name) {
+    var ext = name.split('.').pop().toLowerCase();
+    if (['md','markdown'].includes(ext)) return '\\uD83D\\uDCC4';
+    if (['json'].includes(ext)) return '\\uD83D\\uDCCB';
+    if (['js','mjs','cjs'].includes(ext)) return '\\uD83D\\uDCDC';
+    if (['ts','tsx'].includes(ext)) return '\\uD83D\\uDCD8';
+    if (['yml','yaml','toml'].includes(ext)) return '\\u2699\\uFE0F';
+    if (['html','css','scss'].includes(ext)) return '\\uD83C\\uDFA8';
+    if (['png','jpg','jpeg','gif','svg','webp'].includes(ext)) return '\\uD83D\\uDDBC\\uFE0F';
+    if (['sh','bash','zsh'].includes(ext)) return '\\uD83D\\uDCBB';
+    if (['py','rb','go','rs','java'].includes(ext)) return '\\uD83D\\uDD27';
+    if (['txt','log'].includes(ext)) return '\\uD83D\\uDCDD';
+    return '\\uD83D\\uDCC4';
+  }
+
+  function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function highlightCode(s) {
+    return escapeHtml(s)
+      .replace(/\\b(const|let|var|function|return|import|export|if|else|for|while|class|async|await|new|throw|try|catch|typeof|interface|type|enum|extends|implements|private|public|static|abstract|package|module)\\b/g,'<span class="hl-kw">$1</span>')
+      .replace(/("(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*')/g,'<span class="hl-str">$1</span>')
+      .replace(/\\b(\\d+\\.?\\d*)\\b/g,'<span class="hl-num">$1</span>')
+      .replace(/\\/\\/[^\\n]*/g,'<span class="hl-com">$&</span>');
+  }
+
+  function highlightMD(s) {
+    return escapeHtml(s)
+      .replace(/^#{1,6}\\s+.+$/gm,'<span class="hl-section">$&</span>')
+      .replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g,'<span class="hl-link">[$1]($2)</span>')
+      .replace(/\`\`\`[\\s\\S]*?\`\`\`/g,function(m){return '<span class="hl-com">'+m+'</span>';})
+      .replace(/\`[^\`]+\`/g,'<span class="hl-str">$&</span>');
+  }
+
+  function renderViewer(filePath) {
+    viewerEl.innerHTML = '<div class="tree-loading">Loading...</div>';
+    readFile(filePath, function(err, data) {
+      if (err || !data) { viewerEl.innerHTML = '<div class="viewer-empty">Failed to load</div>'; return; }
+      var ext = filePath.split('.').pop().toLowerCase();
+      var hl = (['md','markdown'].includes(ext)) ? highlightMD(data.content) : highlightCode(data.content);
+      var sizeStr = data.size < 1024 ? data.size + ' B' : (data.size / 1024).toFixed(1) + ' KB';
+      var h = '<div class="viewer-header"><span class="file-path">' + fileIcon(filePath) + ' ' + escapeHtml(filePath) + '</span><span class="file-size">' + sizeStr + '</span></div>';
+      h += '<div class="viewer-content"><pre><code>' + hl + '</code></pre></div>';
+      viewerEl.innerHTML = h;
+    });
+  }
+
+  function renderTree(relPath, parentEl) {
+    parentEl.innerHTML = '<div class="tree-loading">Loading...</div>';
+    listDir(relPath, function(err, entries) {
+      if (err) { parentEl.innerHTML = ''; return; }
+      parentEl.innerHTML = '';
+      var depth = relPath ? relPath.split('/').length : 0;
+      for (var i = 0; i < entries.length; i++) {
+        var e = entries[i];
+        var isDir = e.type === 'directory';
+        var isExp = expanded[e.path] === true;
+        (function(entry, dir, exp) {
+          var node = document.createElement('div');
+          node.className = 'tree-node';
+          if (selectedPath === entry.path) node.classList.add('selected');
+          node.style.paddingLeft = (12 + depth * 16) + 'px';
+          var arrow = document.createElement('span');
+          arrow.className = 'arrow' + (dir ? '' : ' empty');
+          if (dir) arrow.textContent = exp ? '\\u25BC' : '\\u25B6';
+          node.appendChild(arrow);
+          var icon = document.createElement('span');
+          icon.className = 'icon';
+          icon.textContent = dir ? '\\uD83D\\uDCC1' : fileIcon(entry.name);
+          node.appendChild(icon);
+          var label = document.createElement('span');
+          label.className = 'label';
+          label.textContent = entry.name;
+          node.appendChild(label);
+          parentEl.appendChild(node);
+
+          if (dir) {
+            var ch = document.createElement('div');
+            ch.className = 'tree-children' + (exp ? ' open' : '');
+            parentEl.appendChild(ch);
+            if (exp) renderTree(entry.path, ch);
+            node.addEventListener('click', function(ev) {
+              ev.stopPropagation();
+              selectedPath = entry.path;
+              document.querySelectorAll('.tree-node.selected').forEach(function(n){n.classList.remove('selected')});
+              node.classList.add('selected');
+              if (expanded[entry.path]) {
+                expanded[entry.path] = false;
+                ch.classList.remove('open');
+                arrow.textContent = '\\u25B6';
+              } else {
+                expanded[entry.path] = true;
+                ch.classList.add('open');
+                arrow.textContent = '\\u25BC';
+                if (ch.children.length === 0 || (ch.children.length === 1 && ch.children[0].className === 'tree-loading')) {
+                  renderTree(entry.path, ch);
+                }
+              }
+            });
+          } else {
+            node.addEventListener('click', function(ev) {
+              ev.stopPropagation();
+              selectedPath = entry.path;
+              document.querySelectorAll('.tree-node.selected').forEach(function(n){n.classList.remove('selected')});
+              node.classList.add('selected');
+              renderViewer(entry.path);
+            });
+          }
+        })(e, isDir, isExp);
+      }
+    });
+  }
+
+  renderTree('', treeEl);
+})();
+</script>
 
 <hr>
 <footer style="color:#555;font-size:.85em;margin-top:3em">
-GlyphWeave &mdash; Tilemap editor and renderer.
+GlyphWeave — Tilemap editor and renderer.
 Source: <a href="https://github.com/HsiangNianian/GlyphWeave">github.com/HsiangNianian/GlyphWeave</a>
 </footer>
 
