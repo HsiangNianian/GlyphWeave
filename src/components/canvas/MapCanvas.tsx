@@ -118,8 +118,8 @@ export function MapCanvas({ containerRef, stageRef }: MapCanvasProps) {
         {visibleTiles.map(({ key, gridX, gridY, tileTypeId }) => (
           <TileCell
             key={key}
-            x={gridX}
-            y={gridY}
+            x={gridX / blockSize}
+            y={gridY / blockSize}
             tileTypeId={tileTypeId}
             tileSize={tileSize * blockSize}
             colors={theme.colors[tileTypeId] || { fgColor: '#fff', bgColor: '#000' }}
