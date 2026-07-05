@@ -1,6 +1,7 @@
 import { useRef, useCallback, type MutableRefObject } from 'react'
 import Konva from 'konva'
 import { useMapStore } from '@/stores/map-store'
+import { useUiStore, PYRAMID_LEVELS } from '@/stores/ui-store'
 
 export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
   const isPanning = useRef(false)
@@ -32,15 +33,36 @@ export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
     e.evt.preventDefault()
     const stage = stageRef.current
     if (!stage) return
-    const oldScale = stage.scaleX()
     const pointer = stage.getPointerPosition()
+    const zoomScale = useUiStore.getState().zoomScale
     if (!pointer) return
-    const scaleBy = 1.08
-    const newScale = e.evt.deltaY > 0 ? oldScale / scaleBy : oldScale * scaleBy
-    const clampedScale = Math.max(0.1, Math.min(10, newScale))
+
+    // Determine next pyramid level based on scroll direction
+    let nextLevel: number | undefined
+    if (e.evt.deltaY > 0) {
+      // Zoom out — find next lower level
+      for (let i = PYRAMID_LEVELS.length - 1; i >= 0; i--) {
+        if (PYRAMID_LEVELS[i] < zoomScale - 0.001) {
+          nextLevel = PYRAMID_LEVELS[i]
+          break
+        }
+      }
+    } else {
+      // Zoom in — find next higher level
+      for (let i = 0; i < PYRAMID_LEVELS.length; i++) {
+        if (PYRAMID_LEVELS[i] > zoomScale + 0.001) {
+          nextLevel = PYRAMID_LEVELS[i]
+          break
+        }
+      }
+    }
+
+    if (nextLevel === undefined) return // already at min/max
+    const clampedScale = nextLevel
+
     const mousePointTo = {
-      x: (pointer.x - stage.x()) / oldScale,
-      y: (pointer.y - stage.y()) / oldScale,
+      x: (pointer.x - stage.x()) / zoomScale,
+      y: (pointer.y - stage.y()) / zoomScale,
     }
     stage.position({
       x: pointer.x - mousePointTo.x * clampedScale,
@@ -48,6 +70,7 @@ export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
     })
     stage.scale({ x: clampedScale, y: clampedScale })
     stage.batchDraw()
+    useUiStore.getState().setZoomScale(clampedScale)
   }, [])
 
   const handleMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {

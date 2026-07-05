@@ -14,7 +14,7 @@ import { SettingsPanel } from '@/components/panels/SettingsPanel'
 import { ExportPanel } from '@/components/panels/ExportPanel'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { Download, PanelRightClose, PanelRightOpen, Settings } from 'lucide-react'
+import { Download, PanelRightClose, PanelRightOpen, Settings, Plus, Minus } from 'lucide-react'
 
 interface EditorPageProps {
   worldConfig: WorldConfig
@@ -28,10 +28,42 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
   const sidePanelTab = useUiStore((s) => s.sidePanelTab)
   const setSidePanelTab = useUiStore((s) => s.setSidePanelTab)
   const showMinimap = useUiStore((s) => s.showMinimap)
+  const zoomScale = useUiStore((s) => s.zoomScale)
+  const zoomIn = useUiStore((s) => s.zoomIn)
+  const zoomOut = useUiStore((s) => s.zoomOut)
+  const resetZoom = useUiStore((s) => s.resetZoom)
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Konva.Stage | null>(null)
   useKeyboard()
+
+  // Sync zoomScale changes to the Konva Stage when triggered from buttons/keyboard
+  const prevZoomScale = useRef(zoomScale)
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage) return
+    const oldScale = prevZoomScale.current
+    if (oldScale === zoomScale) return
+    prevZoomScale.current = zoomScale
+
+    // Skip if the wheel handler already applied this scale
+    const currentStageScale = stage.scaleX()
+    if (Math.abs(currentStageScale - zoomScale) < 0.001) return
+
+    // Zoom from viewport center
+    const cx = stage.width() / 2
+    const cy = stage.height() / 2
+    const mousePointTo = {
+      x: (cx - stage.x()) / currentStageScale,
+      y: (cy - stage.y()) / currentStageScale,
+    }
+    stage.position({
+      x: cx - mousePointTo.x * zoomScale,
+      y: cy - mousePointTo.y * zoomScale,
+    })
+    stage.scale({ x: zoomScale, y: zoomScale })
+    stage.batchDraw()
+  }, [zoomScale])
 
   useEffect(() => {
     initWorld(worldConfig)
@@ -62,6 +94,37 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
             <Minimap stageRef={stageRef} />
           </div>
         )}
+
+        {/* ── Zoom Pyramid Controls ── */}
+        <div className="absolute bottom-3 left-3 pointer-events-none z-10">
+          <div className="pointer-events-auto flex items-center gap-1 bg-black/70 backdrop-blur-sm border border-zinc-800 rounded-md px-1.5 py-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-6 h-6 text-zinc-400 hover:text-zinc-200"
+              title="Zoom Out"
+              onClick={zoomOut}
+            >
+              <Minus className="w-3 h-3" />
+            </Button>
+            <button
+              className="text-[11px] font-mono text-zinc-400 hover:text-zinc-200 px-1.5 min-w-[48px] text-center cursor-pointer select-none"
+              title="Reset zoom to 100%"
+              onClick={resetZoom}
+            >
+              {Math.round(zoomScale * 100)}%
+            </button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-6 h-6 text-zinc-400 hover:text-zinc-200"
+              title="Zoom In"
+              onClick={zoomIn}
+            >
+              <Plus className="w-3 h-3" />
+            </Button>
+          </div>
+        </div>
 
         <div className="absolute bottom-3 right-3 pointer-events-none">
           <div className="pointer-events-auto">

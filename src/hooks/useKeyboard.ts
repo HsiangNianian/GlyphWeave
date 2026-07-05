@@ -9,11 +9,31 @@ export function useKeyboard() {
   const setCurrentTool = useMapStore((s) => s.setCurrentTool)
   const setShowGrid = useUiStore((s) => s.setShowGrid)
   const showGrid = useUiStore((s) => s.showGrid)
+  const zoomIn = useUiStore((s) => s.zoomIn)
+  const zoomOut = useUiStore((s) => s.zoomOut)
+  const resetZoom = useUiStore((s) => s.resetZoom)
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return
+
+      // Zoom shortcuts (Ctrl +/-/0)
+      if (e.ctrlKey && (e.key === '=' || e.key === '+')) {
+        e.preventDefault()
+        zoomIn()
+        return
+      }
+      if (e.ctrlKey && e.key === '-') {
+        e.preventDefault()
+        zoomOut()
+        return
+      }
+      if (e.ctrlKey && e.key === '0') {
+        e.preventDefault()
+        resetZoom()
+        return
+      }
 
       if (e.ctrlKey && e.shiftKey && e.key === 'Z') {
         e.preventDefault()
@@ -47,5 +67,5 @@ export function useKeyboard() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [undo, redo, setCurrentTool, setShowGrid, showGrid])
+  }, [undo, redo, setCurrentTool, setShowGrid, showGrid, zoomIn, zoomOut, resetZoom])
 }
