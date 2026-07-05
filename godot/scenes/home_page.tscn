@@ -1,0 +1,144 @@
+[gd_scene load_steps=2 format=3 uid="uid://homepage001"]
+
+[ext_resource type="Script" path="res://scripts/home_page.gd" id="1_script"]
+
+[node name="HomePage" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 1)
+
+[node name="CenterCard" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -256.0
+offset_top = -320.0
+offset_right = 256.0
+offset_bottom = 320.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CardBG" type="StyleBoxFlat" parent="CenterCard"]
+bg_color = Color(0.05882353, 0.05882353, 0.05882353, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.1529412, 0.1529412, 0.1529412, 1)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
+[node name="Margin" type="MarginContainer" parent="CenterCard"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 24
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 24
+
+[node name="VBox" type="VBoxContainer" parent="CenterCard/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Title" type="Label" parent="CenterCard/Margin/VBox"]
+layout_mode = 2
+text = "GlyphWeave"
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(0.9411765, 0.9411765, 0.9411765, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_fonts/font = null  # Uses default; ideally load JetBrains Mono
+
+[node name="Subtitle" type="Label" parent="CenterCard/Margin/VBox"]
+layout_mode = 2
+text = "ASCII Roguelike Tilemap Editor"
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(0.4431373, 0.4431373, 0.4431373, 1)
+theme_override_font_sizes/font_size = 12
+
+[node name="Spacer1" type="Control" parent="CenterCard/Margin/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 4)
+
+[node name="WorldNameLabel" type="Label" parent="CenterCard/Margin/VBox"]
+layout_mode = 2
+text = "World Name"
+theme_override_colors/font_color = Color(0.6352941, 0.6352941, 0.6352941, 1)
+theme_override_font_sizes/font_size = 11
+
+[node name="WorldNameInput" type="LineEdit" parent="CenterCard/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "My Roguelike World"
+placeholder_text = "Enter world name..."
+custom_minimum_size = Vector2(0, 36)
+
+[node name="TileSizeLabel" type="Label" parent="CenterCard/Margin/VBox"]
+layout_mode = 2
+text = "Tile Size"
+theme_override_colors/font_color = Color(0.6352941, 0.6352941, 0.6352941, 1)
+theme_override_font_sizes/font_size = 11
+
+[node name="TileSizeContainer" type="HBoxContainer" parent="CenterCard/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TileSizeGroup" type="ButtonGroup" parent="CenterCard/Margin/VBox/TileSizeContainer"]
+unique_name_in_owner = true
+
+[node name="ThemeLabel" type="Label" parent="CenterCard/Margin/VBox"]
+layout_mode = 2
+text = "Color Theme"
+theme_override_colors/font_color = Color(0.6352941, 0.6352941, 0.6352941, 1)
+theme_override_font_sizes/font_size = 11
+
+[node name="ThemeOptions" type="VBoxContainer" parent="CenterCard/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="CreateButton" type="Button" parent="CenterCard/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Create World & Enter Editor"
+custom_minimum_size = Vector2(0, 40)
+
+[node name="ButtonRow" type="HBoxContainer" parent="CenterCard/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ImportButton" type="Button" parent="CenterCard/Margin/VBox/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Import Map"
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 40)
+
+[node name="DemoButton" type="Button" parent="CenterCard/Margin/VBox/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Demo Map"
+size_flags_horizontal = 3
+custom_minimum_size = Vector2(0, 40)
+
+[node name="FileDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Import Map"
+access = 2  # ACCESS_FILESYSTEM
