@@ -376,6 +376,7 @@ Content-Type: application/json
 <tr><td><code>theme</code></td><td>string</td><td><code>ansi-16</code></td><td>Theme ID for rendering colors</td></tr>
 <tr><td><code>padding</code></td><td>number</td><td><code>1</code></td><td>Extra tile-width border around the map bounds</td></tr>
 <tr><td><code>scale</code></td><td>number</td><td>auto</td><td>Pixels per tile (auto-fits to ≤4096px output)</td></tr>
+<tr><td><code>format</code></td><td>string</td><td><code>svg</code></td><td>Output format: <code>svg</code> or <code>png</code> (Cloudflare only; dev/local always return PNG)</td></tr>
 </tbody>
 </table>
 
