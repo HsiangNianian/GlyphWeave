@@ -72,7 +72,7 @@ It is designed for both humans and LLMs (AI agents) to read and understand how t
 }</code></pre>
 
 <div class="note">
-<strong>💡 LLM Note:</strong> The simplest valid map only needs a <code>tiles</code> object.
+<strong>LLM Note:</strong> The simplest valid map only needs a <code>tiles</code> object.
 Omitted/void tiles render as empty space. All coordinates not present in <code>tiles</code> are treated as void.
 </div>
 
@@ -101,7 +101,7 @@ The <code>char</code> column shows the glyph rendered on the map.
 The <code>category</code> groups tiles by function.</p>
 
 <!-- wall -->
-<div class="category-label">🧱 Walls</div>
+<div class="category-label">Walls</div>
 <div class="map-legend">
 <div class="legend-item"><span class="char" style="color:#a0a0a0">#</span><span>wall</span><span class="id">wall</span></div>
 <div class="legend-item"><span class="char" style="color:#ffff00">+</span><span>door</span><span class="id">door</span></div>
@@ -110,32 +110,32 @@ The <code>category</code> groups tiles by function.</p>
 <div class="legend-item"><span class="char" style="color:#8b7355">│</span><span>bar</span><span class="id">bar</span></div>
 </div>
 
-<div class="category-label">⬜ Floors</div>
+<div class="category-label">Floors</div>
 <div class="map-legend">
 <div class="legend-item"><span class="char" style="color:#808080">.</span><span>floor</span><span class="id">floor</span></div>
 <div class="legend-item"><span class="char" style="color:#606060">,</span><span>floor (alt)</span><span class="id">floorAlt</span></div>
 <div class="legend-item"><span class="char" style="color:#8b7355">═</span><span>bridge</span><span class="id">bridge</span></div>
 </div>
 
-<div class="category-label">💧 Water</div>
+<div class="category-label">Water</div>
 <div class="map-legend">
 <div class="legend-item"><span class="char" style="color:#0000ff">~</span><span>water</span><span class="id">water</span></div>
 <div class="legend-item"><span class="char" style="color:#0000aa">≈</span><span>deep water</span><span class="id">deepWater</span></div>
 </div>
 
-<div class="category-label">🌋 Terrain</div>
+<div class="category-label">Terrain</div>
 <div class="map-legend">
 <div class="legend-item"><span class="char" style="color:#ff5500">~</span><span>lava</span><span class="id">lava</span></div>
 <div class="legend-item"><span class="char" style="color:#000"> </span><span>void (empty)</span><span class="id">void</span></div>
 </div>
 
-<div class="category-label">🌿 Vegetation</div>
+<div class="category-label">Vegetation</div>
 <div class="map-legend">
 <div class="legend-item"><span class="char" style="color:#00ff00">♣</span><span>tree</span><span class="id">tree</span></div>
 <div class="legend-item"><span class="char" style="color:#00aa00">"</span><span>grass</span><span class="id">grass</span></div>
 </div>
 
-<div class="category-label">🪑 Furniture</div>
+<div class="category-label">Furniture</div>
 <div class="map-legend">
 <div class="legend-item"><span class="char" style="color:#ff00ff">≡</span><span>altar</span><span class="id">altar</span></div>
 <div class="legend-item"><span class="char" style="color:#00ffff">♦</span><span>fountain</span><span class="id">fountain</span></div>
@@ -145,19 +145,19 @@ The <code>category</code> groups tiles by function.</p>
 <div class="legend-item"><span class="char" style="color:#c0c0c0">█</span><span>cage</span><span class="id">cage</span></div>
 </div>
 
-<div class="category-label">💰 Items</div>
+<div class="category-label">Items</div>
 <div class="map-legend">
 <div class="legend-item"><span class="char" style="color:#ffff00">$</span><span>treasure</span><span class="id">treasure</span></div>
 </div>
 
-<div class="category-label">🎨 Decorations</div>
+<div class="category-label">Decorations</div>
 <div class="map-legend">
 <div class="legend-item"><span class="char" style="color:#808080">☠</span><span>grave</span><span class="id">grave</span></div>
 <div class="legend-item"><span class="char" style="color:#ff0000">^</span><span>trap</span><span class="id">trap</span></div>
 <div class="legend-item"><span class="char" style="color:#aa0000">;</span><span>blood</span><span class="id">blood</span></div>
 </div>
 
-<div class="category-label">⬆️ Special</div>
+<div class="category-label">Special</div>
 <div class="map-legend">
 <div class="legend-item"><span class="char" style="color:#ffffff">&gt;</span><span>stairs down</span><span class="id">stairsDown</span></div>
 <div class="legend-item"><span class="char" style="color:#ffffff">&lt;</span><span>stairs up</span><span class="id">stairsUp</span></div>
@@ -403,7 +403,7 @@ curl "${baseUrl}/api/render?data=eyJ0aWxlcyI6eyIwLDAiOiJ3YWxsIn19&theme=ansi-16"
 <h2>9. LLM Authoring Guide</h2>
 
 <div class="note">
-<strong>🧠 For AI agents generating maps:</strong> Follow these guidelines to produce valid, visually coherent maps.
+<strong>For AI agents generating maps:</strong> Follow these guidelines to produce valid, visually coherent maps.
 </div>
 
 <h3>Design Principles</h3>
@@ -477,6 +477,15 @@ Below are some common grid patterns (W=wall, F=floor, _=void):</p>
 //   W F $ F W
 //   W F F F W
 //   W W W W W</code></pre>
+
+<!-- ============================================================ -->
+<h2>11. Agent Skill</h2>
+
+<p>A dedicated <strong>GlyphWeave Map Generator</strong> Agent Skill is available for Pi coding agent.
+It provides step-by-step generation workflows, coordinate math, design patterns, and working-with-existing-maps guidance.
+The skill auto-triggers when you ask to generate or modify a map.</p>
+
+<p>Location: <code>~/.agents/skills/glyphweave-map-generator/</code></p>
 
 <hr>
 <footer style="color:#555;font-size:.85em;margin-top:3em">
