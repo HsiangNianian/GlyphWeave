@@ -20,16 +20,22 @@ const CATEGORIES = [
   { key: 'special', label: 'Special' },
 ] as const
 
+// Demo map that uses every tile type so the preview shows all colors at once
+const TILE_IDS = Object.keys(TILE_TYPES).filter((id) => id !== 'void')
+const ITEMS_PER_ROW = 9
+
+const DEMO_TILES: Record<string, string> = {}
+TILE_IDS.forEach((id, i) => {
+  const x = i % ITEMS_PER_ROW
+  const y = Math.floor(i / ITEMS_PER_ROW)
+  DEMO_TILES[`${x},${y}`] = id
+})
+
 const DEMO_MAP = {
-  tiles: {
-    "0,0": "wall", "1,0": "wall",  "2,0": "wall",  "3,0": "wall",  "4,0": "wall",
-    "0,1": "wall", "1,1": "floor", "2,1": "floor", "3,1": "floor", "4,1": "wall",
-    "0,2": "wall", "1,2": "floor", "2,2": "stairsDown", "3,2": "floor", "4,2": "wall",
-    "0,3": "wall", "1,3": "floor", "2,3": "floor", "3,3": "floor", "4,3": "wall",
-    "0,4": "wall", "1,4": "door",  "2,4": "wall",  "3,4": "wall",  "4,4": "wall",
-  },
+  tiles: DEMO_TILES,
   themeId: 'preview-theme',
   padding: 1,
+  scale: 32,
 }
 
 interface ThemeWorkshopProps {
