@@ -189,6 +189,30 @@ Parameters:
 
 ---
 
+## Gallery
+
+<p align="center">
+  <img src="media/aethra-mega-hd-compressed.png" alt="Grand Realm of Aethra — mega HD render" width="720">
+</p>
+<p align="center"><em>Grand Realm of Aethra</em></p>
+
+<p align="center">
+  <img src="media/badlands-wadi-hd-compressed.png" alt="Badlands Wadi — HD render" width="720">
+</p>
+<p align="center"><em>Badlands Wadi</em></p>
+
+### Show Off Your Maps
+
+Built a dungeon, town, or wilderness you're proud of? Contributions are welcome — landscapes, themed vignettes, and unusual palettes are all fair game.
+
+1. Render it via `/api/render` (SVG from Cloudflare, PNG from a Node server) or export straight from the editor.
+2. Drop the image under `media/` (compress large renders — aim for under ~2 MB).
+3. Open a PR adding it to the `## Gallery` section above with a one-line caption.
+
+See [`AGENTS.md`](AGENTS.md) for repo conventions and the PR workflow.
+
+---
+
 ## Why the Name?
 
 **Glyph** — each tile is an ASCII glyph (`#`, `.`, `~`, `♣`, …).  

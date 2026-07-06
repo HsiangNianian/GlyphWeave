@@ -131,6 +131,30 @@ curl -X POST http://localhost:3001/api/render \
 
 ---
 
+## ギャラリー
+
+<p align="center">
+  <img src="media/aethra-mega-hd-compressed.png" alt="グランドレルム・オブ・エイスラ — mega HD レンダリング" width="720">
+</p>
+<p align="center"><em>グランドレルム・オブ・エイスラ</em></p>
+
+<p align="center">
+  <img src="media/badlands-wadi-hd-compressed.png" alt="Badlands Wadi — HD レンダリング" width="720">
+</p>
+<p align="center"><em>Badlands Wadi</em></p>
+
+### マップを自慢しよう
+
+ダンジョン、町、荒野をデザインしたなら、ギャラリーへの投稿を歓迎します。風景マップ、テーマ別ビネット、奇妙なパレットも大歓迎。
+
+1. `/api/render`（Cloudflare は SVG、Node サーバーは PNG）でレンダリングするか、エディタから直接エクスポート。
+2. 画像を `media/` に配置（大きいものは圧縮して 2 MB 未満を目安に）。
+3. PR を開き、上の `## ギャラリー` セクションに 1 行のキャプションを追加。
+
+リポジトリの慣習と PR の流れは [`AGENTS.md`](AGENTS.md) を参照してください。
+
+---
+
 ## 名前の由来
 
 **Glyph** — 各タイルはASCIIグリフ（`#`、`.`、`~`、`♣`……）です。  
