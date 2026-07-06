@@ -41,9 +41,17 @@ fn main() {
         .add_message::<EditEvent>()
         .init_resource::<CursorTile>()
         .insert_resource(ActiveBrush(TileKind::Floor))
+        .init_resource::<render::tilemap::TileEntities>()
+        .register_type::<render::tilemap::TilemapLayer>()
         .add_systems(
             Startup,
-            (spawn_camera, render::atlas::load_atlas, load_initial_world).chain(),
+            (
+                spawn_camera,
+                render::atlas::load_atlas,
+                load_initial_world,
+                render::tilemap::spawn_tilemaps,
+            )
+                .chain(),
         )
         .add_systems(EguiPrimaryContextPass, fps_overlay)
         .run();
