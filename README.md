@@ -49,7 +49,8 @@ Each tile is an ASCII glyph (`#`, `.`, `~`, `♣`, …). **Weave** them into a c
 - **Minimap** — real-time overview with viewport rectangle. Click to jump.
 - **View Distance** — configurable render padding for smooth panning.
 - **Render API** — generate PNG/SVG images from any map via `GET /api/render` or `POST /api/render`.
-- **Convert API** — convert PNG/JPEG/WebP images into theme-matched GlyphWeave maps and SVG output.
+- **Image import** — convert browser-decodable images into theme-matched GlyphWeave maps directly in the app.
+- **Convert API** — convert PNG/JPEG/WebP images into theme-matched GlyphWeave maps and SVG output on Node-backed servers.
 - **Keyboard shortcuts** — `B` brush, `E` eraser, `F` flood fill, `P` pan, `S` select, `G` grid toggle.
 - **Demo maps** — load "The Forgotten Catacombs" or "Grand Realm of Aethra" to explore.
 
@@ -70,7 +71,7 @@ pnpm dev
 
 Open `http://localhost:5173` — choose a world name, tile size, and theme, then start painting. Or click **Load Demo Map** to explore a pre-built dungeon.
 
-> The **Render API** and **Convert API** are available on the same port under `/api/` during development. In production, `pnpm start` serves the frontend plus Node-backed APIs on port 3001. Deployed rendering is available on Cloudflare Workers + Assets at [glyphweave.hydroroll.team](https://glyphweave.hydroroll.team).
+> The **Render API** and **Convert API** are available on the same port under `/api/` during development. In production, `pnpm start` serves the frontend plus Node-backed APIs on port 3001. Cloudflare Workers + Assets deployments support rendering and app-side browser image import; direct `/api/convert` remains Node-only.
 
 ## Keyboard Shortcuts
 
@@ -140,6 +141,10 @@ curl -X POST "http://localhost:3001/api/render?format=svg" \
 
 The Convert API samples an uploaded image into a GlyphWeave map by matching
 each output cell to the nearest tile color in the supplied theme.
+
+Cloudflare deployments still support image import in the app and `/api`
+Playground by converting in the browser. Direct `/api/convert` requests require
+the Node image renderer.
 
 | Environment | Command | URL | Output |
 |---|---|---|---|

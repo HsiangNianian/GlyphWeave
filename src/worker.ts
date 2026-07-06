@@ -103,7 +103,7 @@ export default {
     }
 
     if (url.pathname === '/api/convert') {
-      return new Response('Convert API requires the Node image renderer', {
+      return new Response('Direct Convert API requires the Node image renderer. Use app-side image import on Cloudflare deployments or run a Node-backed server.', {
         status: 501,
         headers: corsHeaders,
       })
