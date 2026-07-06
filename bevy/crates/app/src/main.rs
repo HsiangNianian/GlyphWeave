@@ -1,3 +1,4 @@
+mod render;
 mod resource;
 
 use bevy::asset::AssetPlugin;
@@ -40,7 +41,10 @@ fn main() {
         .add_message::<EditEvent>()
         .init_resource::<CursorTile>()
         .insert_resource(ActiveBrush(TileKind::Floor))
-        .add_systems(Startup, (spawn_camera, load_initial_world).chain())
+        .add_systems(
+            Startup,
+            (spawn_camera, render::atlas::load_atlas, load_initial_world).chain(),
+        )
         .add_systems(EguiPrimaryContextPass, fps_overlay)
         .run();
 }
