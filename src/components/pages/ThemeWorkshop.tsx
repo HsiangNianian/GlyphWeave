@@ -1,11 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import type { Theme, TileColors } from '@/types'
 import { TILE_TYPES } from '@/constants/tiles'
-import { THEMES, THEME_LIST } from '@/constants/themes'
+import { THEMES } from '@/constants/themes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card } from '@/components/ui/card'
 import { ArrowLeft, Download, Upload, Eye } from 'lucide-react'
 
 const CATEGORIES = [
@@ -50,10 +49,20 @@ export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
     colors: { ...THEMES['ansi-16'].colors },
   }))
   const [selectedTile, setSelectedTile] = useState('wall')
-  const [previewSvg, setPreviewSvg] = useState('')
+  const [previewUrl, setPreviewUrl] = useState('')
   const [previewLoading, setPreviewLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>()
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const previewUrlRef = useRef<string | null>(null)
+
+  const setPreviewBlob = useCallback((blob: Blob) => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current)
+    }
+    const nextUrl = URL.createObjectURL(blob)
+    previewUrlRef.current = nextUrl
+    setPreviewUrl(nextUrl)
+  }, [])
 
   const updateColor = useCallback((type: 'fgColor' | 'bgColor', value: string) => {
     setTheme((prev) => ({
@@ -66,26 +75,36 @@ export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
     setTheme((prev) => ({ ...prev, [field]: value }))
   }, [])
 
-  // POST to render API for preview
-  const renderPreview = useCallback((t: Theme) => {
+  const renderPreview = useCallback(async (t: Theme) => {
     setPreviewLoading(true)
-    fetch('/api/render', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...DEMO_MAP, themeId: t.id, theme: { colors: t.colors } }),
-    })
-      .then((r) => r.text())
-      .then((svg) => setPreviewSvg(svg))
-      .catch(() => setPreviewSvg('<svg><text x="10" y="20" fill="#f88" font-size="14">Preview failed</text></svg>'))
-      .finally(() => setPreviewLoading(false))
-  }, [])
+    try {
+      const response = await fetch('/api/render?format=svg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...DEMO_MAP, themeId: t.id, theme: { colors: t.colors }, format: 'svg' }),
+      })
+      if (!response.ok) throw new Error(`API returned ${response.status}`)
+      setPreviewBlob(await response.blob())
+    } catch {
+      setPreviewBlob(new Blob([
+        '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="40"><text x="10" y="24" fill="#f88" font-size="14">Preview failed</text></svg>',
+      ], { type: 'image/svg+xml' }))
+    } finally {
+      setPreviewLoading(false)
+    }
+  }, [setPreviewBlob])
 
-  // Debounce preview on theme change
   useEffect(() => {
-    clearTimeout(debounceRef.current)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => renderPreview(theme), 200)
-    return () => clearTimeout(debounceRef.current)
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
   }, [theme, renderPreview])
+
+  useEffect(() => () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
+  }, [])
 
   const handleExport = useCallback(() => {
     const data = JSON.stringify({ glyphweaveTheme: 1, theme }, null, 2)
@@ -228,9 +247,9 @@ export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
           <div className="flex-1 flex items-center justify-center p-4 bg-black">
             {previewLoading ? (
               <span className="text-xs text-zinc-600">Rendering preview...</span>
-            ) : previewSvg ? (
+            ) : previewUrl ? (
               <img
-                src={`data:image/svg+xml,${encodeURIComponent(previewSvg)}`}
+                src={previewUrl}
                 alt="theme preview"
                 className="max-w-full max-h-full rounded"
               />

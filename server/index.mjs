@@ -5,17 +5,67 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { renderMap } from './map-render.mjs'
+import { renderMapSVG } from './map-render-svg.mjs'
 import { apiDocPage } from './api-doc.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const PORT = parseInt(process.argv[2], 10) || 3001
+const PORT = parsePortArg(process.argv.slice(2))
 const DIST_DIR = path.resolve(__dirname, '../dist')
+const AGENTS_DIR = path.resolve(__dirname, '../.agents')
 
 const MIME_MAP = {
   '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript',
   '.mjs': 'text/javascript', '.json': 'application/json', '.png': 'image/png',
   '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2',
   '.woff': 'font/woff', '.ttf': 'font/ttf',
+}
+
+function parsePortArg(args) {
+  const value = args.find(arg => /^\d+$/.test(arg))
+  return value ? parseInt(value, 10) : 3001
+}
+
+function isRecord(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function stringValue(value) {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function numberValue(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value !== 'string' || value.trim() === '') return undefined
+  const parsed = parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function renderFormat(queryFormat, bodyFormat, fallback) {
+  const value = stringValue(queryFormat) || stringValue(bodyFormat)
+  if (!value) return fallback
+  if (value === 'png' || value === 'svg') return value
+  throw new Error(`Unsupported render format: ${value}`)
+}
+
+function renderOptions(query, data, fallbackFormat) {
+  return {
+    themeId: stringValue(query.theme) || stringValue(data.themeId) || 'ansi-16',
+    padding: numberValue(query.padding) ?? numberValue(data.padding) ?? 1,
+    scale: numberValue(query.scale) ?? numberValue(data.scale),
+    format: renderFormat(query.format, data.format, fallbackFormat),
+    theme: isRecord(data.theme) ? data.theme : undefined,
+  }
+}
+
+function safeAgentPath(relPath = '') {
+  const requestedPath = String(relPath)
+  if (requestedPath.includes('\0') || path.isAbsolute(requestedPath)) return null
+
+  const resolved = path.resolve(AGENTS_DIR, requestedPath)
+  const relative = path.relative(AGENTS_DIR, resolved)
+  if (relative.startsWith('..') || path.isAbsolute(relative)) return null
+
+  return resolved
 }
 
 function sendJSON(res, status, data) {
@@ -43,27 +93,34 @@ function collectBody(req) {
 }
 
 async function handleRender(query, body) {
-  let data, themeId, padding, scale
+  let data
   if (body && body.length > 0) {
     const json = body.toString('utf-8')
     const parsed = JSON.parse(json)
+    if (!isRecord(parsed)) throw new Error('Request body must be a JSON object')
     data = parsed
-    themeId = query.theme || parsed.theme || 'ansi-16'
-    padding = parseInt(query.padding, 10) || parseInt(parsed.padding, 10) || 1
-    scale = query.scale ? parseFloat(query.scale) : (parsed.scale ? parseFloat(parsed.scale) : undefined)
   } else {
     const dataB64 = query.data
     if (!dataB64) throw new Error('Missing "data" parameter')
     const json = Buffer.from(dataB64, 'base64').toString('utf-8')
-    data = JSON.parse(json)
-    themeId = query.theme || 'ansi-16'
-    padding = parseInt(query.padding, 10) || 1
-    scale = query.scale ? parseFloat(query.scale) : undefined
+    const parsed = JSON.parse(json)
+    if (!isRecord(parsed)) throw new Error('Decoded data must be a JSON object')
+    data = parsed
   }
-  return renderMap(data, { themeId, padding, scale, theme: data.theme })
+
+  const { themeId, padding, scale, format, theme } = renderOptions(query, data, 'png')
+  if (format === 'svg') {
+    return {
+      body: Buffer.from(renderMapSVG(data, { themeId, padding, scale, theme })),
+      contentType: 'image/svg+xml',
+    }
+  }
+
+  return {
+    body: renderMap(data, { themeId, padding, scale, theme }),
+    contentType: 'image/png',
+  }
 }
-
-
 
 async function serveStatic(res, filePath) {
   try {
@@ -112,13 +169,13 @@ const server = http.createServer(async (req, res) => {
         sendError(res, 405, 'Method not allowed')
         return
       }
-      const pngBuffer = await handleRender(query, body)
+      const rendered = await handleRender(query, body)
       res.writeHead(200, {
-        'Content-Type': 'image/png',
-        'Content-Length': pngBuffer.length,
+        'Content-Type': rendered.contentType,
+        'Content-Length': rendered.body.length,
         'Cache-Control': 'public, max-age=3600',
       })
-      res.end(pngBuffer)
+      res.end(rendered.body)
     } catch (err) {
       sendError(res, 400, `Error: ${err.message}`)
     }

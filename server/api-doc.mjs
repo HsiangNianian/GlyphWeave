@@ -135,20 +135,28 @@ It is designed for both humans and LLMs to read and understand how to generate v
 
     preview.innerHTML = '<span style="color:#555;font-size:.85em">Rendering...</span>';
 
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', origin + '/api/render', true);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.onload = function() {
-      if (xhr.status === 200) {
-        preview.innerHTML = '<img src="data:image/svg+xml,' + encodeURIComponent(xhr.responseText) + '" alt="rendered map" style="max-width:100%;max-height:320px;border-radius:2px">';
-      } else {
-        preview.innerHTML = '<span style="color:#f88;font-size:.82em">Error ' + xhr.status + ': ' + (xhr.responseText || 'unknown') + '</span>';
-      }
-    };
-    xhr.onerror = function() {
-      preview.innerHTML = '<span style="color:#f88;font-size:.82em">Network error — cannot reach API</span>';
-    };
-    xhr.send(JSON.stringify(json));
+    fetch(origin + '/api/render', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(json)
+    })
+      .then(function(response) {
+        if (!response.ok) {
+          return response.text().then(function(message) {
+            throw new Error('Error ' + response.status + ': ' + (message || 'unknown'));
+          });
+        }
+        return response.blob();
+      })
+      .then(function(blob) {
+        var imageUrl = URL.createObjectURL(blob);
+        preview.innerHTML = '<img src="' + imageUrl + '" alt="rendered map" style="max-width:100%;max-height:320px;border-radius:2px">';
+        var image = preview.querySelector('img');
+        if (image) image.onload = function() { URL.revokeObjectURL(imageUrl); };
+      })
+      .catch(function(error) {
+        preview.innerHTML = '<span style="color:#f88;font-size:.82em">' + error.message + '</span>';
+      });
   }
 
   renderBtn.addEventListener('click', render);

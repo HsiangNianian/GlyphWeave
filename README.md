@@ -92,9 +92,9 @@ The Render API converts tilemaps to images. It's available in three environments
 
 | Environment | Command | URL | Output |
 |---|---|---|---|
-| Development | `pnpm dev` | `http://localhost:5173/api/render` | PNG (`@napi-rs/canvas`) |
-| Production (Node) | `pnpm build && pnpm start` | `http://localhost:3001/api/render` | PNG (`@napi-rs/canvas`) |
-| Production (Cloudflare) | `pnpm deploy` | `https://glyphweave.hydroroll.team/api/render` | SVG (default) or PNG (`?format=png`) |
+| Development | `pnpm dev` | `http://localhost:5173/api/render` | PNG default or SVG (`?format=svg`) |
+| Production (Node) | `pnpm build && pnpm start` | `http://localhost:3001/api/render` | PNG default or SVG (`?format=svg`) |
+| Production (Cloudflare) | `pnpm deploy` | `https://glyphweave.hydroroll.team/api/render` | SVG |
 
 ### POST (recommended for large maps)
 
@@ -102,11 +102,6 @@ The Render API converts tilemaps to images. It's available in three environments
 curl -X POST https://glyphweave.hydroroll.team/api/render \
   -H "Content-Type: application/json" \
   -d @my-map.gemap > map.svg
-
-# Get PNG output
-curl -X POST "https://glyphweave.hydroroll.team/api/render?format=png" \
-  -H "Content-Type: application/json" \
-  -d @my-map.gemap > map.png
 ```
 
 ### GET (small maps)
@@ -114,7 +109,6 @@ curl -X POST "https://glyphweave.hydroroll.team/api/render?format=png" \
 ```bash
 DATA=$(echo -n '{"tiles":{"0,0":"wall"}}' | base64)
 curl "https://glyphweave.hydroroll.team/api/render?data=$DATA" > map.svg
-curl "https://glyphweave.hydroroll.team/api/render?data=$DATA&format=png" > map.png
 ```
 
 Parameters:
@@ -122,7 +116,7 @@ Parameters:
 - `theme` — `ansi-16` (default) or `cogmind`
 - `padding` — extra tiles around bounds (default: `1`)
 - `scale` — pixels per tile (default: auto-fit ≤ 4096px)
-- `format` — `svg` (default) or `png` (Cloudflare only)
+- `format` — `svg` or `png`; PNG requires the Node renderer
 
 ### Local / Self-hosted
 
@@ -133,6 +127,10 @@ pnpm build && pnpm start           # production, http://localhost:3001
 curl -X POST http://localhost:3001/api/render \
   -H "Content-Type: application/json" \
   -d @my-map.gemap > map.png
+
+curl -X POST "http://localhost:3001/api/render?format=svg" \
+  -H "Content-Type: application/json" \
+  -d @my-map.gemap > map.svg
 ```
 
 ---

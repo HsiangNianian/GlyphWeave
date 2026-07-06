@@ -1,9 +1,45 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import path, { resolve } from 'path'
+import path from 'path'
 import { renderMap } from './server/map-render.mjs'
+import { renderMapSVG } from './server/map-render-svg.mjs'
 import { apiDocPage } from './server/api-doc.mjs'
+
+type RenderFormat = 'png' | 'svg'
+type RenderPayload = Record<string, unknown>
+
+function isRecord(value: unknown): value is RenderPayload {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function numberValue(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value !== 'string' || value.trim() === '') return undefined
+  const parsed = parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function renderFormat(queryFormat: unknown, bodyFormat: unknown, fallback: RenderFormat): RenderFormat {
+  const value = stringValue(queryFormat) || stringValue(bodyFormat)
+  if (!value) return fallback
+  if (value === 'png' || value === 'svg') return value
+  throw new Error(`Unsupported render format: ${value}`)
+}
+
+function renderOptions(query: Record<string, string>, data: RenderPayload, fallbackFormat: RenderFormat) {
+  return {
+    themeId: stringValue(query.theme) || stringValue(data.themeId) || 'ansi-16',
+    padding: numberValue(query.padding) ?? numberValue(data.padding) ?? 1,
+    scale: numberValue(query.scale) ?? numberValue(data.scale),
+    format: renderFormat(query.format, data.format, fallbackFormat),
+    theme: isRecord(data.theme) ? data.theme : undefined,
+  }
+}
 
 /**
  * Vite plugin: serves the render API + doc page.
@@ -22,34 +58,36 @@ function apiPlugin(): Plugin {
         res.setHeader('Access-Control-Allow-Origin', '*')
         try {
           const u = new URL(req.url || '/', 'http://' + (req.headers.host || 'localhost'))
-          const query = Object.fromEntries(u.searchParams)
-          let data, themeId, padding, scale
+          const query = Object.fromEntries(u.searchParams) as Record<string, string>
+          let data: RenderPayload
           if (req.method === 'POST') {
-            const chunks = []
-            for await (const chunk of req) chunks.push(chunk)
+            const chunks: Buffer[] = []
+            for await (const chunk of req) {
+              chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+            }
             const body = Buffer.concat(chunks)
-            const parsed = JSON.parse(body.toString('utf-8'))
+            const parsed = JSON.parse(body.toString('utf-8')) as unknown
+            if (!isRecord(parsed)) throw new Error('Request body must be a JSON object')
             data = parsed
-            themeId = query.theme || parsed.theme || parsed.themeId || 'ansi-16'
-            padding = parseInt(query.padding, 10) || parseInt(parsed.padding, 10) || 1
-            scale = query.scale ? parseFloat(query.scale) : (parsed.scale ? parseFloat(parsed.scale) : undefined)
           } else if (req.method === 'GET') {
             if (!query.data) { res.statusCode = 400; res.end('Missing "data" parameter'); return }
             const json = Buffer.from(query.data, 'base64').toString('utf-8')
-            data = JSON.parse(json)
-            themeId = query.theme || 'ansi-16'
-            padding = parseInt(query.padding, 10) || 1
-            scale = query.scale ? parseFloat(query.scale) : undefined
+            const parsed = JSON.parse(json) as unknown
+            if (!isRecord(parsed)) throw new Error('Decoded data must be a JSON object')
+            data = parsed
           } else {
             res.statusCode = 405; res.end('Method not allowed'); return
           }
-          const pngBuffer = renderMap(data, { themeId, padding, scale, theme: data.theme })
+          const { themeId, padding, scale, format, theme } = renderOptions(query, data, 'png')
+          const body = format === 'svg'
+            ? Buffer.from(renderMapSVG(data, { themeId, padding, scale, theme }))
+            : renderMap(data, { themeId, padding, scale, theme })
           res.writeHead(200, {
-            'Content-Type': 'image/png',
-            'Content-Length': pngBuffer.length,
+            'Content-Type': format === 'svg' ? 'image/svg+xml' : 'image/png',
+            'Content-Length': body.length,
             'Cache-Control': 'public, max-age=3600',
           })
-          res.end(pngBuffer)
+          res.end(body)
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           res.statusCode = 400

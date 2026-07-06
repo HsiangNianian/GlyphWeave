@@ -1,4 +1,11 @@
+export type RenderOptions = {
+  themeId?: string
+  padding?: number
+  scale?: number
+  theme?: unknown
+}
+
 export function renderMap(
-  data: any,
-  options?: { themeId?: string; padding?: number; scale?: number },
+  data: unknown,
+  options?: RenderOptions,
 ): Buffer

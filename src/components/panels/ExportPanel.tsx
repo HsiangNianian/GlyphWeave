@@ -6,7 +6,6 @@ import { Download, Upload, Image } from 'lucide-react'
 export function ExportPanel() {
   const exportMap = useMapStore((s) => s.exportMap)
   const importMap = useMapStore((s) => s.importMap)
-  const worldName = useMapStore((s) => s.worldName)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleExport = useCallback(() => {
@@ -43,7 +42,7 @@ export function ExportPanel() {
 
     // Try the local API first (works in dev / self-hosted Node server)
     const baseUrl = window.location.origin
-    const url = `${baseUrl}/api/render`
+    const url = `${baseUrl}/api/render?format=${format}`
 
     try {
       const res = await fetch(url, {
