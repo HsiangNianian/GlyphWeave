@@ -6,6 +6,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { renderMap } from './map-render.mjs'
 import { renderMapSVG } from './map-render-svg.mjs'
+import { convertImageToMap, parseConvertRequest } from './map-convert.mjs'
 import { apiDocPage } from './api-doc.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -122,6 +123,43 @@ async function handleRender(query, body) {
   }
 }
 
+async function handleConvert(query, body, contentType) {
+  const request = parseConvertRequest(contentType, body, query)
+  const converted = await convertImageToMap(request.imageBuffer, request.options)
+  const renderOptions = { themeId: converted.themeId, theme: converted.theme }
+
+  if (converted.format === 'gemap') {
+    const json = JSON.stringify(converted.map, null, 2)
+    return {
+      body: Buffer.from(json),
+      contentType: 'application/json',
+    }
+  }
+
+  if (converted.format === 'both') {
+    const json = JSON.stringify({
+      map: converted.map,
+      svg: renderMapSVG(converted.map, renderOptions),
+    }, null, 2)
+    return {
+      body: Buffer.from(json),
+      contentType: 'application/json',
+    }
+  }
+
+  if (converted.format === 'png') {
+    return {
+      body: renderMap(converted.map, renderOptions),
+      contentType: 'image/png',
+    }
+  }
+
+  return {
+    body: Buffer.from(renderMapSVG(converted.map, renderOptions)),
+    contentType: 'image/svg+xml',
+  }
+}
+
 async function serveStatic(res, filePath) {
   try {
     const stat = fs.statSync(filePath)
@@ -176,6 +214,28 @@ const server = http.createServer(async (req, res) => {
         'Cache-Control': 'public, max-age=3600',
       })
       res.end(rendered.body)
+    } catch (err) {
+      sendError(res, 400, `Error: ${err.message}`)
+    }
+    return
+  }
+
+  // ── API: Convert image to map ──
+  if (url.pathname === '/api/convert') {
+    try {
+      if (req.method !== 'POST') {
+        sendError(res, 405, 'Method not allowed')
+        return
+      }
+
+      const body = await collectBody(req)
+      const converted = await handleConvert(query, body, req.headers['content-type'] || '')
+      res.writeHead(200, {
+        'Content-Type': converted.contentType,
+        'Content-Length': converted.body.length,
+        'Cache-Control': 'no-store',
+      })
+      res.end(converted.body)
     } catch (err) {
       sendError(res, 400, `Error: ${err.message}`)
     }

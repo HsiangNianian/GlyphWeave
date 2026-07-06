@@ -102,6 +102,13 @@ export default {
       }
     }
 
+    if (url.pathname === '/api/convert') {
+      return new Response('Convert API requires the Node image renderer', {
+        status: 501,
+        headers: corsHeaders,
+      })
+    }
+
     try {
       const response = await env.ASSETS.fetch(request)
       if (response.status === 404) {

@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Card } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 
-import { MapIcon, Upload } from 'lucide-react'
+import { Image as ImageIcon, MapIcon, Upload } from 'lucide-react'
 
 const TILE_SIZES = [16, 20, 24, 32]
 
@@ -24,6 +24,7 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
   const [tileSize, setTileSize] = useState(24)
   const [themeId, setThemeId] = useState('ansi-16')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   const handleCreate = () => {
     if (!worldName.trim()) return
@@ -32,6 +33,10 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
 
   const handleImportClick = () => {
     fileInputRef.current?.click()
+  }
+
+  const handleImageImportClick = () => {
+    imageInputRef.current?.click()
   }
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,6 +68,45 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
       }
     } catch (err) {
       console.error('Failed to import map:', err)
+    }
+    e.target.value = ''
+  }, [onStart, tileSize, themeId])
+
+  const handleImageFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const mapWorldName = file.name.replace(/\.(png|jpe?g|webp)$/i, '')
+    const params = new URLSearchParams({
+      format: 'gemap',
+      themeId,
+      width: '160',
+      worldName: mapWorldName,
+    })
+    const formData = new FormData()
+    formData.append('image', file)
+
+    try {
+      const response = await fetch(`/api/convert?${params.toString()}`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) {
+        const message = await response.text()
+        throw new Error(message || `API returned ${response.status}`)
+      }
+      const data = await response.json()
+      if (!data.tiles) throw new Error('Converted map is missing tiles')
+
+      onStart({
+        worldName: data.worldName || mapWorldName,
+        tileSize,
+        themeId: data.themeId || themeId,
+        initialTiles: data.tiles,
+      })
+    } catch (err) {
+      console.error('Failed to import image:', err)
+      window.alert(err instanceof Error ? err.message : 'Failed to import image')
     }
     e.target.value = ''
   }, [onStart, tileSize, themeId])
@@ -172,10 +216,10 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
           Create World &amp; Enter Editor
         </Button>
 
-        <div className="flex gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <Button
             variant="outline"
-            className="flex-1 h-10 font-mono text-sm border-zinc-700 hover:bg-zinc-800 gap-2"
+            className="h-10 font-mono text-xs border-zinc-700 hover:bg-zinc-800 gap-2"
             onClick={handleImportClick}
           >
             <Upload className="w-4 h-4" />
@@ -184,7 +228,16 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
 
           <Button
             variant="outline"
-            className="flex-1 h-10 font-mono text-sm border-zinc-700 hover:bg-zinc-800 gap-2"
+            className="h-10 font-mono text-xs border-zinc-700 hover:bg-zinc-800 gap-2"
+            onClick={handleImageImportClick}
+          >
+            <ImageIcon className="w-4 h-4" />
+            Import Image
+          </Button>
+
+          <Button
+            variant="outline"
+            className="h-10 font-mono text-xs border-zinc-700 hover:bg-zinc-800 gap-2"
             onClick={() =>
               onStart({
                 worldName: 'The Forgotten Catacombs',
@@ -224,6 +277,13 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
           accept=".gemap,.json"
           className="hidden"
           onChange={handleFileChange}
+        />
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={handleImageFileChange}
         />
       </Card>
     </div>

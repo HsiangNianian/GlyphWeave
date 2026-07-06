@@ -6,7 +6,9 @@ import { Download, Upload, Image } from 'lucide-react'
 export function ExportPanel() {
   const exportMap = useMapStore((s) => s.exportMap)
   const importMap = useMapStore((s) => s.importMap)
+  const themeId = useMapStore((s) => s.themeId)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   const handleExport = useCallback(() => {
     const data = exportMap()
@@ -23,6 +25,10 @@ export function ExportPanel() {
     fileInputRef.current?.click()
   }, [])
 
+  const handleImageImport = useCallback(() => {
+    imageInputRef.current?.click()
+  }, [])
+
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -35,6 +41,38 @@ export function ExportPanel() {
     }
     e.target.value = ''
   }, [importMap])
+
+  const handleImageFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const mapWorldName = file.name.replace(/\.(png|jpe?g|webp)$/i, '')
+    const params = new URLSearchParams({
+      format: 'gemap',
+      themeId,
+      width: '160',
+      worldName: mapWorldName,
+    })
+    const formData = new FormData()
+    formData.append('image', file)
+
+    try {
+      const response = await fetch(`/api/convert?${params.toString()}`, {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) {
+        const message = await response.text()
+        throw new Error(message || `API returned ${response.status}`)
+      }
+      const data = await response.json()
+      importMap(data)
+    } catch (err) {
+      console.error('Failed to import image:', err)
+      window.alert(err instanceof Error ? err.message : 'Failed to import image')
+    }
+    e.target.value = ''
+  }, [importMap, themeId])
 
   const handleRenderExport = useCallback(async (format: 'svg' | 'png') => {
     const data = exportMap()
@@ -77,6 +115,10 @@ export function ExportPanel() {
         <Upload className="w-3.5 h-3.5" />
         Import .gemap
       </Button>
+      <Button variant="outline" className="w-full justify-start gap-2 text-xs h-8" onClick={handleImageImport}>
+        <Image className="w-3.5 h-3.5" />
+        Import Image
+      </Button>
 
       <h4 className="text-xs font-medium text-zinc-400 uppercase tracking-wider pt-1">Render</h4>
       <p className="text-[11px] text-zinc-500 leading-relaxed">
@@ -93,6 +135,13 @@ export function ExportPanel() {
         accept=".gemap,.json"
         className="hidden"
         onChange={handleFileChange}
+      />
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={handleImageFileChange}
       />
     </div>
   )

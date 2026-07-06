@@ -48,7 +48,8 @@ Each tile is an ASCII glyph (`#`, `.`, `~`, `♣`, …). **Weave** them into a c
 - **Export / Import** as `.gemap` JSON — preserves layers, theme, and world name.
 - **Minimap** — real-time overview with viewport rectangle. Click to jump.
 - **View Distance** — configurable render padding for smooth panning.
-- **Render API** — generate PNG images from any map via `GET /api/render` or `POST /api/render`.
+- **Render API** — generate PNG/SVG images from any map via `GET /api/render` or `POST /api/render`.
+- **Convert API** — convert PNG/JPEG/WebP images into theme-matched GlyphWeave maps and SVG output.
 - **Keyboard shortcuts** — `B` brush, `E` eraser, `F` flood fill, `P` pan, `S` select, `G` grid toggle.
 - **Demo maps** — load "The Forgotten Catacombs" or "Grand Realm of Aethra" to explore.
 
@@ -69,7 +70,7 @@ pnpm dev
 
 Open `http://localhost:5173` — choose a world name, tile size, and theme, then start painting. Or click **Load Demo Map** to explore a pre-built dungeon.
 
-> The **Render API** is automatically available on the same port under `/api/` during development. In production, `pnpm start` serves both the frontend and API on port 3001. Deployed to Cloudflare Workers + Assets at [glyphweave.hydroroll.team](https://glyphweave.hydroroll.team).
+> The **Render API** and **Convert API** are available on the same port under `/api/` during development. In production, `pnpm start` serves the frontend plus Node-backed APIs on port 3001. Deployed rendering is available on Cloudflare Workers + Assets at [glyphweave.hydroroll.team](https://glyphweave.hydroroll.team).
 
 ## Keyboard Shortcuts
 
@@ -132,6 +133,45 @@ curl -X POST "http://localhost:3001/api/render?format=svg" \
   -H "Content-Type: application/json" \
   -d @my-map.gemap > map.svg
 ```
+
+---
+
+## Convert API
+
+The Convert API samples an uploaded image into a GlyphWeave map by matching
+each output cell to the nearest tile color in the supplied theme.
+
+| Environment | Command | URL | Output |
+|---|---|---|---|
+| Development | `pnpm dev` | `http://localhost:5173/api/convert` | SVG default, PNG, `.gemap`, or JSON bundle |
+| Production (Node) | `pnpm build && pnpm start` | `http://localhost:3001/api/convert` | SVG default, PNG, `.gemap`, or JSON bundle |
+| Production (Cloudflare) | `pnpm deploy` | `https://glyphweave.hydroroll.team/api/convert` | Not available (`501`) |
+
+`theme` or `themeId` is required because conversion uses the theme palette as
+the tile classifier.
+
+```bash
+curl -X POST "http://localhost:3001/api/convert?themeId=ansi-16&width=160&format=svg" \
+  -H "Content-Type: image/png" \
+  --data-binary @input.png > converted.svg
+```
+
+Multipart uploads can pass a custom theme object:
+
+```bash
+curl -X POST "http://localhost:3001/api/convert?width=160&format=both" \
+  -F "image=@input.webp" \
+  -F "theme=@my-theme.json" > converted.json
+```
+
+Parameters:
+
+- `themeId` — built-in theme ID such as `ansi-16` or `cogmind`
+- `theme` — custom theme JSON object, or a built-in theme ID alias
+- `width` / `height` — output map dimensions; default width is `160`, max side is `512`
+- `format` — `svg` (default), `png`, `gemap`, or `both`
+- `worldName` — map name in `.gemap` output
+- `alphaThreshold` — transparent pixels at or below this alpha become void
 
 ---
 

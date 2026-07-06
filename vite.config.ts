@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import { renderMap } from './server/map-render.mjs'
 import { renderMapSVG } from './server/map-render-svg.mjs'
+import { convertImageToMap, parseConvertRequest } from './server/map-convert.mjs'
 import { apiDocPage } from './server/api-doc.mjs'
 
 type RenderFormat = 'png' | 'svg'
@@ -41,6 +42,14 @@ function renderOptions(query: Record<string, string>, data: RenderPayload, fallb
   }
 }
 
+async function readRequestBody(req: NodeJS.ReadableStream): Promise<Buffer> {
+  const chunks: Buffer[] = []
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  }
+  return Buffer.concat(chunks)
+}
+
 /**
  * Vite plugin: serves the render API + doc page.
  */
@@ -61,11 +70,7 @@ function apiPlugin(): Plugin {
           const query = Object.fromEntries(u.searchParams) as Record<string, string>
           let data: RenderPayload
           if (req.method === 'POST') {
-            const chunks: Buffer[] = []
-            for await (const chunk of req) {
-              chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
-            }
-            const body = Buffer.concat(chunks)
+            const body = await readRequestBody(req)
             const parsed = JSON.parse(body.toString('utf-8')) as unknown
             if (!isRecord(parsed)) throw new Error('Request body must be a JSON object')
             data = parsed
@@ -88,6 +93,54 @@ function apiPlugin(): Plugin {
             'Cache-Control': 'public, max-age=3600',
           })
           res.end(body)
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err)
+          res.statusCode = 400
+          res.end(`Error: ${msg}`)
+        }
+      })
+
+      server.middlewares.use('/api/convert', async (req, res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*')
+        try {
+          if (req.method !== 'POST') {
+            res.statusCode = 405
+            res.end('Method not allowed')
+            return
+          }
+
+          const u = new URL(req.url || '/', 'http://' + (req.headers.host || 'localhost'))
+          const query = Object.fromEntries(u.searchParams) as Record<string, string>
+          const body = await readRequestBody(req)
+          const request = parseConvertRequest(req.headers['content-type'] || '', body, query)
+          const converted = await convertImageToMap(request.imageBuffer, request.options)
+          const renderOptions = { themeId: converted.themeId, theme: converted.theme }
+
+          let responseBody: Buffer
+          let contentType: string
+          if (converted.format === 'gemap') {
+            responseBody = Buffer.from(JSON.stringify(converted.map, null, 2))
+            contentType = 'application/json'
+          } else if (converted.format === 'both') {
+            responseBody = Buffer.from(JSON.stringify({
+              map: converted.map,
+              svg: renderMapSVG(converted.map, renderOptions),
+            }, null, 2))
+            contentType = 'application/json'
+          } else if (converted.format === 'png') {
+            responseBody = renderMap(converted.map, renderOptions)
+            contentType = 'image/png'
+          } else {
+            responseBody = Buffer.from(renderMapSVG(converted.map, renderOptions))
+            contentType = 'image/svg+xml'
+          }
+
+          res.writeHead(200, {
+            'Content-Type': contentType,
+            'Content-Length': responseBody.length,
+            'Cache-Control': 'no-store',
+          })
+          res.end(responseBody)
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           res.statusCode = 400
