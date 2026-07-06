@@ -4,6 +4,7 @@ import type { WorldConfig } from '@/types'
 import { THEME_LIST } from '@/constants/themes'
 import { TILE_TYPES } from '@/constants/tiles'
 import { generateDemoMap } from '@/constants/demo-map'
+import { convertImageFileToMap, DEFAULT_IMAGE_CONVERT_WIDTH } from '@/lib/image-convert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,7 +15,7 @@ import { Image as ImageIcon, MapIcon, Upload } from 'lucide-react'
 
 const TILE_SIZES = [16, 20, 24, 32]
 
-interface HomePageProps {
+type HomePageProps = {
   onStart: (config: WorldConfig) => void
   onWorkshop: () => void
 }
@@ -76,27 +77,13 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
     const file = e.target.files?.[0]
     if (!file) return
 
-    const mapWorldName = file.name.replace(/\.(png|jpe?g|webp)$/i, '')
-    const params = new URLSearchParams({
-      format: 'gemap',
-      themeId,
-      width: '160',
-      worldName: mapWorldName,
-    })
-    const formData = new FormData()
-    formData.append('image', file)
-
+    const mapWorldName = file.name.replace(/\.[^.]+$/, '')
     try {
-      const response = await fetch(`/api/convert?${params.toString()}`, {
-        method: 'POST',
-        body: formData,
+      const data = await convertImageFileToMap(file, {
+        themeId,
+        width: DEFAULT_IMAGE_CONVERT_WIDTH,
+        worldName: mapWorldName,
       })
-      if (!response.ok) {
-        const message = await response.text()
-        throw new Error(message || `API returned ${response.status}`)
-      }
-      const data = await response.json()
-      if (!data.tiles) throw new Error('Converted map is missing tiles')
 
       onStart({
         worldName: data.worldName || mapWorldName,
@@ -281,7 +268,7 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
         <input
           ref={imageInputRef}
           type="file"
-          accept="image/png,image/jpeg,image/webp"
+          accept="image/*"
           className="hidden"
           onChange={handleImageFileChange}
         />

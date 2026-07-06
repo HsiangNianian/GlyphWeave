@@ -296,6 +296,7 @@ src/
 ├── App.tsx                   # 根组件（Home ↔ Editor 路由）
 ├── index.css                 # Tailwind CSS 样式入口
 ├── lib/
+│   ├── image-convert.ts     # 浏览器端图片导入转换（Image → .gemap）
 │   └── utils.ts             # shadcn/ui 工具函数（cn）
 ├── types/
 │   └── index.ts             # 核心类型（TileType, TileColors, WorldConfig 等）

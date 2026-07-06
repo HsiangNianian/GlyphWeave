@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react'
 import { useMapStore } from '@/stores/map-store'
+import { convertImageFileToMap, DEFAULT_IMAGE_CONVERT_WIDTH } from '@/lib/image-convert'
 import { Button } from '@/components/ui/button'
 import { Download, Upload, Image } from 'lucide-react'
 
@@ -46,26 +47,13 @@ export function ExportPanel() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    const mapWorldName = file.name.replace(/\.(png|jpe?g|webp)$/i, '')
-    const params = new URLSearchParams({
-      format: 'gemap',
-      themeId,
-      width: '160',
-      worldName: mapWorldName,
-    })
-    const formData = new FormData()
-    formData.append('image', file)
-
+    const mapWorldName = file.name.replace(/\.[^.]+$/, '')
     try {
-      const response = await fetch(`/api/convert?${params.toString()}`, {
-        method: 'POST',
-        body: formData,
+      const data = await convertImageFileToMap(file, {
+        themeId,
+        width: DEFAULT_IMAGE_CONVERT_WIDTH,
+        worldName: mapWorldName,
       })
-      if (!response.ok) {
-        const message = await response.text()
-        throw new Error(message || `API returned ${response.status}`)
-      }
-      const data = await response.json()
       importMap(data)
     } catch (err) {
       console.error('Failed to import image:', err)
@@ -139,7 +127,7 @@ export function ExportPanel() {
       <input
         ref={imageInputRef}
         type="file"
-        accept="image/png,image/jpeg,image/webp"
+        accept="image/*"
         className="hidden"
         onChange={handleImageFileChange}
       />

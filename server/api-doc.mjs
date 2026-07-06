@@ -1,9 +1,12 @@
 /**
  * API documentation page shared across development, Node server, and Cloudflare Worker.
  */
+import { THEMES, TILE_TYPES, TILE_SIZE } from './map-shared.mjs'
 
 export function apiDocPage(baseUrl) {
   const origin = baseUrl || 'https://glyphweave.hydroroll.team'
+  const themesJson = JSON.stringify(THEMES)
+  const tileTypesJson = JSON.stringify(TILE_TYPES)
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -93,7 +96,7 @@ It is designed for both humans and LLMs to read and understand how to generate v
     <div style="flex:1;min-width:300px;display:flex;flex-direction:column;gap:.8rem">
       <label style="color:#888;font-size:.82em;display:flex;flex-direction:column;gap:.35em">
         Image:
-        <input id="pg-image" type="file" accept="image/png,image/jpeg,image/webp" style="background:#111;color:#ccc;border:1px solid #333;border-radius:3px;padding:.45em;font-size:.9em">
+        <input id="pg-image" type="file" accept="image/*" style="background:#111;color:#ccc;border:1px solid #333;border-radius:3px;padding:.45em;font-size:.9em">
       </label>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.7rem">
         <label style="color:#888;font-size:.82em;display:flex;flex-direction:column;gap:.35em">
@@ -105,7 +108,7 @@ It is designed for both humans and LLMs to read and understand how to generate v
         </label>
         <label style="color:#888;font-size:.82em;display:flex;flex-direction:column;gap:.35em">
           Width:
-          <input id="pg-convert-width" type="number" min="1" max="512" value="160" style="background:#111;color:#ccc;border:1px solid #333;border-radius:3px;padding:.4em .5em;font-size:.9em">
+          <input id="pg-convert-width" type="number" min="1" max="512" value="240" style="background:#111;color:#ccc;border:1px solid #333;border-radius:3px;padding:.4em .5em;font-size:.9em">
         </label>
         <label style="color:#888;font-size:.82em;display:flex;flex-direction:column;gap:.35em">
           Height:
@@ -117,7 +120,6 @@ It is designed for both humans and LLMs to read and understand how to generate v
             <option value="svg">svg</option>
             <option value="gemap">gemap</option>
             <option value="both">both</option>
-            <option value="png">png</option>
           </select>
         </label>
       </div>
@@ -143,6 +145,13 @@ It is designed for both humans and LLMs to read and understand how to generate v
 <script>
 (function() {
   var origin = '${origin}';
+  var THEMES = ${themesJson};
+  var TILE_TYPES = ${tileTypesJson};
+  var TILE_SIZE = ${TILE_SIZE};
+  var DEFAULT_CONVERT_WIDTH = 240;
+  var MAX_CONVERT_DIMENSION = 512;
+  var MAX_CONVERT_CELLS = 512 * 256;
+  var DEFAULT_ALPHA_THRESHOLD = 16;
   var examples = [
     {
       name: '3×3 Room',
@@ -230,6 +239,259 @@ It is designed for both humans and LLMs to read and understand how to generate v
     if (image) image.onload = function() { URL.revokeObjectURL(imageUrl); };
   }
 
+  function parseConvertDimension(input, name) {
+    var raw = input.value.trim();
+    if (!raw) return undefined;
+    var value = Number(raw);
+    if (!Number.isInteger(value) || value < 1 || value > MAX_CONVERT_DIMENSION) {
+      throw new Error(name + ' must be an integer between 1 and ' + MAX_CONVERT_DIMENSION);
+    }
+    return value;
+  }
+
+  function fitConvertDimensions(sourceWidth, sourceHeight) {
+    if (sourceWidth < 1 || sourceHeight < 1) throw new Error('image has invalid dimensions');
+
+    var requestedWidth = parseConvertDimension(convertWidth, 'width');
+    var requestedHeight = parseConvertDimension(convertHeight, 'height');
+    var width = requestedWidth;
+    var height = requestedHeight;
+
+    if (!width && !height) {
+      width = DEFAULT_CONVERT_WIDTH;
+      height = Math.max(1, Math.round(width * sourceHeight / sourceWidth));
+    } else if (width && !height) {
+      height = Math.max(1, Math.round(width * sourceHeight / sourceWidth));
+    } else if (!width && height) {
+      width = Math.max(1, Math.round(height * sourceWidth / sourceHeight));
+    }
+
+    if (!width || !height) throw new Error('could not determine output dimensions');
+    if (width > MAX_CONVERT_DIMENSION || height > MAX_CONVERT_DIMENSION || width * height > MAX_CONVERT_CELLS) {
+      throw new Error('output dimensions must be at most ' + MAX_CONVERT_DIMENSION + 'px per side and ' + MAX_CONVERT_CELLS + ' cells total');
+    }
+    return { width: width, height: height };
+  }
+
+  function selectedConvertTheme() {
+    var rawTheme = convertCustomTheme.value.trim();
+    if (rawTheme) {
+      var customTheme = JSON.parse(rawTheme);
+      if (!customTheme || typeof customTheme !== 'object' || Array.isArray(customTheme)) {
+        throw new Error('custom theme must be a JSON object');
+      }
+      if (!customTheme.colors || typeof customTheme.colors !== 'object') {
+        throw new Error('custom theme must include a colors object');
+      }
+      return {
+        id: typeof customTheme.id === 'string' && customTheme.id ? customTheme.id : 'custom',
+        theme: customTheme,
+        includeTheme: true
+      };
+    }
+
+    var themeId = convertTheme.value || 'ansi-16';
+    var theme = THEMES[themeId];
+    if (!theme) throw new Error('Unknown theme: ' + themeId);
+    return { id: themeId, theme: theme, includeTheme: false };
+  }
+
+  function parseHexColor(value) {
+    var hex = typeof value === 'string' ? value.trim() : '';
+    if (!hex) return null;
+
+    var normalized = hex.charAt(0) === '#' ? hex.slice(1) : hex;
+    if (/^[0-9a-f]{3}$/i.test(normalized)) {
+      return [
+        parseInt(normalized.charAt(0) + normalized.charAt(0), 16),
+        parseInt(normalized.charAt(1) + normalized.charAt(1), 16),
+        parseInt(normalized.charAt(2) + normalized.charAt(2), 16)
+      ];
+    }
+    if (/^[0-9a-f]{6}$/i.test(normalized)) {
+      return [
+        parseInt(normalized.slice(0, 2), 16),
+        parseInt(normalized.slice(2, 4), 16),
+        parseInt(normalized.slice(4, 6), 16)
+      ];
+    }
+    return null;
+  }
+
+  function glyphWeight(tileId) {
+    var tile = TILE_TYPES[tileId];
+    var char = tile && tile.char;
+    if (!char || char === ' ') return 0;
+    if (char === '.' || char === ',' || char === "'" || char === ';') return 0.18;
+    if (char === '#' || char === '█') return 0.42;
+    return 0.32;
+  }
+
+  function mixColor(bg, fg, weight) {
+    return [
+      Math.round(bg[0] * (1 - weight) + fg[0] * weight),
+      Math.round(bg[1] * (1 - weight) + fg[1] * weight),
+      Math.round(bg[2] * (1 - weight) + fg[2] * weight)
+    ];
+  }
+
+  function buildConvertPalette(theme) {
+    var palette = [];
+
+    Object.keys(TILE_TYPES).forEach(function(tileId) {
+      var colors = theme.colors && theme.colors[tileId];
+      if (!colors) return;
+
+      var bg = parseHexColor(colors.bgColor);
+      var fg = parseHexColor(colors.fgColor);
+      if (!bg || !fg) return;
+
+      palette.push({
+        tileId: tileId,
+        color: mixColor(bg, fg, glyphWeight(tileId))
+      });
+    });
+
+    if (palette.length === 0) throw new Error('theme does not define usable tile colors');
+    return palette;
+  }
+
+  function colorDistance(a, b) {
+    var dr = a[0] - b[0];
+    var dg = a[1] - b[1];
+    var db = a[2] - b[2];
+    return dr * dr * 0.3 + dg * dg * 0.59 + db * db * 0.11;
+  }
+
+  function nearestConvertTile(color, palette) {
+    var best = palette[0];
+    var bestDistance = Infinity;
+
+    palette.forEach(function(candidate) {
+      var distance = colorDistance(color, candidate.color);
+      if (distance < bestDistance) {
+        best = candidate;
+        bestDistance = distance;
+      }
+    });
+
+    return best.tileId;
+  }
+
+  function loadBrowserImage(file) {
+    if (typeof createImageBitmap === 'function') {
+      return createImageBitmap(file).then(function(bitmap) {
+        return {
+          image: bitmap,
+          width: bitmap.width,
+          height: bitmap.height,
+          release: function() { bitmap.close(); }
+        };
+      });
+    }
+
+    var url = URL.createObjectURL(file);
+    return new Promise(function(resolve, reject) {
+      var image = new Image();
+      image.onload = function() {
+        resolve({
+          image: image,
+          width: image.naturalWidth,
+          height: image.naturalHeight,
+          release: function() { URL.revokeObjectURL(url); }
+        });
+      };
+      image.onerror = function() {
+        URL.revokeObjectURL(url);
+        reject(new Error('failed to decode image'));
+      };
+      image.src = url;
+    });
+  }
+
+  function imageToConvertPixels(loaded, width, height) {
+    var canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    var ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) throw new Error('canvas 2D context is unavailable');
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(loaded.image, 0, 0, width, height);
+    return ctx.getImageData(0, 0, width, height).data;
+  }
+
+  function fileBaseName(file) {
+    return file.name.replace(/\\.[^.]+$/, '') || 'converted-image';
+  }
+
+  function convertFileToMap(file) {
+    var selected = selectedConvertTheme();
+    return loadBrowserImage(file).then(function(loaded) {
+      try {
+        var size = fitConvertDimensions(loaded.width, loaded.height);
+        var palette = buildConvertPalette(selected.theme);
+        var pixels = imageToConvertPixels(loaded, size.width, size.height);
+        var tiles = {};
+
+        for (var y = 0; y < size.height; y++) {
+          for (var x = 0; x < size.width; x++) {
+            var offset = (y * size.width + x) * 4;
+            var alpha = pixels[offset + 3];
+            if (alpha <= DEFAULT_ALPHA_THRESHOLD) continue;
+
+            var alphaRatio = alpha / 255;
+            var color = [
+              Math.round(pixels[offset] * alphaRatio),
+              Math.round(pixels[offset + 1] * alphaRatio),
+              Math.round(pixels[offset + 2] * alphaRatio)
+            ];
+            var tileId = nearestConvertTile(color, palette);
+            if (tileId !== 'void') tiles[x + ',' + y] = tileId;
+          }
+        }
+
+        var map = {
+          version: 2,
+          worldName: fileBaseName(file),
+          tileSize: TILE_SIZE,
+          themeId: selected.id,
+          tiles: tiles,
+          conversion: {
+            sourceWidth: loaded.width,
+            sourceHeight: loaded.height,
+            width: size.width,
+            height: size.height,
+            strategy: 'theme-nearest'
+          }
+        };
+        if (selected.includeTheme) map.theme = selected.theme;
+        return map;
+      } finally {
+        loaded.release();
+      }
+    });
+  }
+
+  function renderConvertedSvg(map) {
+    return fetch(origin + '/api/render?format=svg', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(map)
+    })
+      .then(function(response) {
+        if (!response.ok) {
+          return response.text().then(function(message) {
+            throw new Error('Error ' + response.status + ': ' + (message || 'unknown'));
+          });
+        }
+        return response.text();
+      });
+  }
+
   function render() {
     clearDownload();
     var json;
@@ -278,57 +540,35 @@ It is designed for both humans and LLMs to read and understand how to generate v
       return;
     }
 
-    var params = new URLSearchParams();
-    params.set('width', convertWidth.value || '160');
-    if (convertHeight.value) params.set('height', convertHeight.value);
-    params.set('format', convertFormat.value || 'svg');
-
-    var form = new FormData();
-    form.append('image', imageInput.files[0]);
-    if (convertCustomTheme.value.trim()) {
-      form.append('theme', convertCustomTheme.value.trim());
-    } else {
-      form.append('themeId', convertTheme.value || 'ansi-16');
-    }
-
+    var file = imageInput.files[0];
+    var format = convertFormat.value || 'svg';
+    var baseName = fileBaseName(file);
     convertPreview.innerHTML = '<span style="color:#555;font-size:.85em">Converting...</span>';
 
-    fetch(origin + '/api/convert?' + params.toString(), {
-      method: 'POST',
-      body: form
-    })
-      .then(function(response) {
-        if (!response.ok) {
-          return response.text().then(function(message) {
-            throw new Error('Error ' + response.status + ': ' + (message || 'unknown'));
-          });
-        }
-        return response.blob().then(function(blob) {
-          return { blob: blob, contentType: response.headers.get('Content-Type') || '' };
-        });
-      })
-      .then(function(result) {
-        var format = convertFormat.value || 'svg';
-        if (result.contentType.indexOf('image/') === 0) {
-          showBlobImage(convertPreview, result.blob, 'converted map');
-          convertOutput.value = result.contentType + ' · ' + result.blob.size + ' bytes';
-          setDownload(result.blob, format === 'png' ? 'converted.png' : 'converted.svg');
-          return;
+    convertFileToMap(file)
+      .then(function(map) {
+        if (format === 'gemap') {
+          var mapJson = JSON.stringify(map, null, 2);
+          convertOutput.value = mapJson;
+          setDownload(new Blob([mapJson], { type: 'application/json' }), baseName + '.gemap');
+          convertPreview.innerHTML = '<span style="color:#8cf;font-size:.82em">Map JSON generated</span>';
+          return null;
         }
 
-        return result.blob.text().then(function(text) {
-          convertOutput.value = text;
-          setDownload(new Blob([text], { type: 'application/json' }), format === 'gemap' ? 'converted.gemap' : 'converted.json');
-          try {
-            var parsed = JSON.parse(text);
-            if (parsed.svg) {
-              showBlobImage(convertPreview, new Blob([parsed.svg], { type: 'image/svg+xml' }), 'converted map');
-            } else {
-              convertPreview.innerHTML = '<span style="color:#8cf;font-size:.82em">Map JSON generated</span>';
-            }
-          } catch (_err) {
-            convertPreview.innerHTML = '<span style="color:#8cf;font-size:.82em">Response generated</span>';
+        return renderConvertedSvg(map).then(function(svg) {
+          var svgBlob = new Blob([svg], { type: 'image/svg+xml' });
+          showBlobImage(convertPreview, svgBlob, 'converted map');
+
+          if (format === 'both') {
+            var bundleJson = JSON.stringify({ map: map, svg: svg }, null, 2);
+            convertOutput.value = bundleJson;
+            setDownload(new Blob([bundleJson], { type: 'application/json' }), baseName + '.json');
+            return null;
           }
+
+          convertOutput.value = 'image/svg+xml · ' + svgBlob.size + ' bytes\\n' + JSON.stringify(map.conversion, null, 2);
+          setDownload(svgBlob, baseName + '.svg');
+          return null;
         });
       })
       .catch(function(error) {
@@ -554,7 +794,7 @@ visible layers are composited top-to-bottom, with later layers overwriting earli
 <thead><tr><th>Path</th><th>Methods</th><th>Description</th></tr></thead>
 <tbody>
 <tr><td><code>/api/render</code></td><td>GET, POST</td><td>Render a tilemap to PNG or SVG</td></tr>
-<tr><td><code>/api/convert</code></td><td>POST</td><td>Convert an image to a theme-matched GlyphWeave map</td></tr>
+<tr><td><code>/api/convert</code></td><td>POST</td><td>Convert an image to a theme-matched GlyphWeave map (Node only)</td></tr>
 <tr><td><code>/api/health</code></td><td>GET</td><td><code>{"ok":true,"version":1}</code></td></tr>
 <tr><td><code>/api</code></td><td>GET</td><td>This documentation page</td></tr>
 </tbody>
@@ -594,6 +834,12 @@ Best for small maps; use POST for larger maps.</p>
 <p>Returns <code>{"ok":true,"version":1}</code>.</p>
 
 <h3>POST /api/convert (image to GlyphWeave map)</h3>
+<div class="note">
+<strong>Deployment note:</strong> the direct Convert API requires the Node image
+renderer. Cloudflare deployments return <code>501</code> for
+<code>/api/convert</code>; the Playground's Convert Image tab converts in the
+browser and uses <code>/api/render?format=svg</code> for preview output.
+</div>
 <pre><code>POST ${origin}/api/convert?themeId=ansi-16&amp;width=160&amp;format=svg
 Content-Type: image/png
 
