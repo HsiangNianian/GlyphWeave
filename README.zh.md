@@ -146,6 +146,30 @@ curl -X POST http://localhost:3001/api/render \
 
 ---
 
+## 画廊
+
+<p align="center">
+  <img src="media/aethra-mega-hd-compressed.png" alt="艾瑟拉宏大王国 — mega HD 渲染" width="720">
+</p>
+<p align="center"><em>艾瑟拉宏大王国</em></p>
+
+<p align="center">
+  <img src="media/badlands-wadi-hd-compressed.png" alt="Badlands Wadi — HD 渲染" width="720">
+</p>
+<p align="center"><em>Badlands Wadi</em></p>
+
+### 展示你的地图
+
+精心构筑了地牢、城镇或荒野？欢迎向画廊投稿 —— 风景图、主题小景、奇特色板都欢迎。
+
+1. 通过 `/api/render`（Cloudflare 出 SVG，Node 出 PNG）渲染，或直接从编辑器导出。
+2. 把图片放到 `media/` 目录（建议压缩到 2 MB 以内）。
+3. 提交 PR，在上面的 `## 画廊` 部分加一行说明。
+
+仓库约定与 PR 流程参见 [`AGENTS.md`](AGENTS.md)。
+
+---
+
 ## 为什么叫 GlyphWeave？
 
 **Glyph** — 每个格子都是一个 ASCII glyph（`#`、`.`、`~`、`♣`……）。  
