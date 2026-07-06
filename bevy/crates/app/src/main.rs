@@ -34,9 +34,9 @@ fn main() {
                 })
                 .set(ImagePlugin::default_nearest())
                 .set(AssetPlugin {
-                    // Smoke commands run from the repo root via --manifest-path, so the
-                    // atlas at bevy/assets/textures/atlas.png resolves correctly.
-                    file_path: "bevy/assets".to_string(),
+                    // bevy 0.18 resolves file_path relative to the executable dir, not
+                    // CWD, so pin it to an absolute path derived from the crate manifest.
+                    file_path: format!("{}/../../assets", env!("CARGO_MANIFEST_DIR")),
                     ..default()
                 }),
         )

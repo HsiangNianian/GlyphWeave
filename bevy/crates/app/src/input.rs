@@ -17,6 +17,7 @@ pub fn in_bounds(tx: i32, ty: i32, b: &MapBounds) -> bool {
     lx >= 0 && ly >= 0 && (lx as u32) < b.width && (ly as u32) < b.height
 }
 
+#[allow(clippy::type_complexity)] // Bevy tilemap projection query — naturally tuple-heavy.
 pub fn update_cursor_tile(
     camera_q: Single<(&Camera, &GlobalTransform)>,
     // Multiple tilemaps (one per layer); they share bounds/anchor/transform, so any one works.
