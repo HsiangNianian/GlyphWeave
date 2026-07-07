@@ -132,8 +132,9 @@ fn spawn_tilemaps_for_world(
     };
     let map_type = TilemapType::default();
 
-    // With TopLeft anchor: tile TilePos(0,0) sits at the tilemap's local origin.
-    // Translate the tilemap so signed tile (min_x, min_y) is the top-left cell.
+    // With TopLeft anchor, the tilemap transform is the map's top-left corner.
+    // bevy_ecs_tilemap's square grid Y axis points upward, while GlyphWeave
+    // tile Y points downward, so tile_pos_for_bounds flips local Y.
     let origin_world_x = bounds.min_x as f32 * tile_px;
     let origin_world_y = -bounds.min_y as f32 * tile_px;
 
@@ -147,7 +148,7 @@ fn spawn_tilemaps_for_world(
             let tx = bounds.min_x + lx as i32;
             let ty = bounds.min_y + ly as i32;
             if let Some(kind) = composite_tile_at(world, tx, ty) {
-                let tile_pos = TilePos { x: lx, y: ly };
+                let tile_pos = tile_pos_for_local(&bounds, lx, ly);
                 let (texture_index, visible) = tile_render_state(Some(kind));
                 let tile_entity = commands
                     .spawn(TileBundle {
@@ -210,7 +211,14 @@ pub fn tile_pos_for_bounds(bounds: &MapBounds, x: i32, y: i32) -> Option<TilePos
     if lx >= bounds.width || ly >= bounds.height {
         return None;
     }
-    Some(TilePos { x: lx, y: ly })
+    Some(tile_pos_for_local(bounds, lx, ly))
+}
+
+fn tile_pos_for_local(bounds: &MapBounds, lx: u32, ly: u32) -> TilePos {
+    TilePos {
+        x: lx,
+        y: bounds.height - 1 - ly,
+    }
 }
 
 pub fn tile_render_state(kind: Option<TileKind>) -> (TileTextureIndex, TileVisible) {
@@ -464,6 +472,45 @@ mod tests {
         assert_eq!(b.min_y, -2);
         assert_eq!(b.width, 5);
         assert_eq!(b.height, 4);
+    }
+
+    #[test]
+    fn tile_pos_maps_to_glyphweave_world_center() {
+        let bounds = MapBounds {
+            min_x: -3,
+            min_y: -2,
+            width: 5,
+            height: 4,
+        };
+        let tile_px = 24.0;
+        let map_size = TilemapSize {
+            x: bounds.width,
+            y: bounds.height,
+        };
+        let grid_size = TilemapGridSize {
+            x: tile_px,
+            y: tile_px,
+        };
+        let tile_size = TilemapTileSize {
+            x: tile_px,
+            y: tile_px,
+        };
+        let map_type = TilemapType::Square;
+        let anchor = TilemapAnchor::TopLeft;
+        let map_origin = Vec2::new(
+            bounds.min_x as f32 * tile_px,
+            -bounds.min_y as f32 * tile_px,
+        );
+
+        for (x, y) in [(-3, -2), (-2, -1), (1, 1)] {
+            let tile_pos = tile_pos_for_bounds(&bounds, x, y).unwrap();
+            let rendered_center = map_origin
+                + tile_pos.center_in_world(&map_size, &grid_size, &tile_size, &map_type, &anchor);
+            let expected_center =
+                Vec2::new((x as f32 + 0.5) * tile_px, -(y as f32 + 0.5) * tile_px);
+
+            assert_eq!(rendered_center, expected_center);
+        }
     }
 
     #[test]
