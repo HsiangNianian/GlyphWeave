@@ -1,10 +1,9 @@
 //! Consume EditEvent messages and update the touched tile's texture index.
 //! In P1 the tool system applies the edit to the core World (source of truth)
 //! AND emits the event; this system only mirrors the change into the render view.
-use crate::render::MapBounds;
 use crate::render::atlas::tile_index;
 use crate::render::tilemap::{
-    COMPOSITE_LAYER_ID, TileEntities, TilemapLayer, composite_tile_at, tile_pos_for_bounds,
+    TileEntities, composite_tile_at, render_chunk_coord_for_tile, tile_pos_for_chunk,
 };
 use crate::resource::{EditEvent, WorldModel};
 use bevy::ecs::message::MessageReader;
@@ -16,12 +15,14 @@ pub fn sync_edits(
     mut commands: Commands,
     mut reader: MessageReader<EditEvent>,
     world_model: Res<WorldModel>,
-    bounds: Option<Res<MapBounds>>,
     mut tile_entities: ResMut<TileEntities>,
-    mut tilemaps: Query<(Entity, &TilemapLayer, &mut TileStorage)>,
+    mut tilemaps: Query<&mut TileStorage>,
     mut tiles: Query<(&mut TileTextureIndex, &mut TileVisible)>,
 ) {
     for ev in reader.read() {
+        let coord = render_chunk_coord_for_tile(ev.x, ev.y);
+        tile_entities.mark_preview_dirty(coord);
+
         let (next_texture, next_visible) = tile_state_for_composite(&world_model.0, ev.x, ev.y);
         if let Some(&entity) = tile_entities.map.get(&(0, ev.x, ev.y)) {
             let Ok((mut tex, mut visible)) = tiles.get_mut(entity) else {
@@ -35,16 +36,13 @@ pub fn sync_edits(
         if !next_visible.0 {
             continue;
         }
-        let Some(bounds) = bounds.as_deref() else {
+        let Some(&tilemap_entity) = tile_entities.chunks.get(&coord) else {
             continue;
         };
-        let Some(tile_pos) = tile_pos_for_bounds(bounds, ev.x, ev.y) else {
+        let Ok(mut tile_storage) = tilemaps.get_mut(tilemap_entity) else {
             continue;
         };
-        let Some((tilemap_entity, _, mut tile_storage)) = tilemaps
-            .iter_mut()
-            .find(|(_, layer, _)| layer.layer_id == COMPOSITE_LAYER_ID)
-        else {
+        let Some(tile_pos) = tile_pos_for_chunk(coord, ev.x, ev.y) else {
             continue;
         };
 

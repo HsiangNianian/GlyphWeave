@@ -63,6 +63,9 @@ pub struct EditorViewSettings {
     pub view_distance: u32,
     pub show_grid: bool,
     pub show_minimap: bool,
+    pub show_fog_of_war: bool,
+    pub fog_radius: u32,
+    pub fog_softness: u32,
 }
 
 impl Default for EditorViewSettings {
@@ -71,6 +74,9 @@ impl Default for EditorViewSettings {
             view_distance: 5,
             show_grid: true,
             show_minimap: true,
+            show_fog_of_war: false,
+            fog_radius: 8,
+            fog_softness: 3,
         }
     }
 }

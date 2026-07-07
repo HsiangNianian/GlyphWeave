@@ -72,9 +72,12 @@ fn main() {
     .insert_resource(ActiveBrush(TileKind::Wall))
     .insert_resource(ActiveTheme("ansi-16".into()))
     .insert_resource(startup_options)
+    .init_resource::<render::tilemap::FogOverlayEntities>()
+    .init_resource::<render::tilemap::RenderMetrics>()
     .init_resource::<render::tilemap::TileEntities>()
     .init_resource::<render::tilemap::RenderRefresh>()
     .init_resource::<ui::CurrentMapPath>()
+    .register_type::<render::tilemap::RenderChunkCoord>()
     .register_type::<render::tilemap::TilemapLayer>()
     .add_systems(
         Startup,
@@ -91,8 +94,7 @@ fn main() {
         Update,
         (
             perf::perf_motion_system,
-            render::tilemap::refresh_when_camera_bounds_change,
-            render::tilemap::refresh_tilemaps,
+            render::tilemap::sync_render_chunks,
             render::tilemap::set_theme,
             render::tilemap::sync_layer_visibility,
         )
@@ -117,7 +119,12 @@ fn main() {
                 (camera::pan_camera, camera::zoom_to_cursor)
                     .run_if(not(bevy_egui::input::egui_wants_any_pointer_input)),
             )
-            .add_systems(Update, render::tilemap::draw_grid);
+            .add_systems(
+                Update,
+                (render::tilemap::draw_grid, render::tilemap::draw_fog_of_war).chain(),
+            );
+    } else {
+        app.add_systems(Update, render::tilemap::draw_grid);
     }
 
     if no_vsync {

@@ -1109,6 +1109,17 @@ fn settings_tab(
     });
     ui.checkbox(&mut view_settings.show_grid, "Show Grid");
     ui.checkbox(&mut view_settings.show_minimap, "Show Minimap");
+    ui.checkbox(&mut view_settings.show_fog_of_war, "Fog of War");
+    if view_settings.show_fog_of_war {
+        ui.horizontal(|ui| {
+            ui.label("Fog Radius");
+            ui.add(egui::DragValue::new(&mut view_settings.fog_radius).range(1..=40));
+        });
+        ui.horizontal(|ui| {
+            ui.label("Fog Softness");
+            ui.add(egui::DragValue::new(&mut view_settings.fog_softness).range(0..=12));
+        });
+    }
 }
 
 fn preset_preview(ui: &mut egui::Ui, grid: &[&[TileKind]], cell: f32) {

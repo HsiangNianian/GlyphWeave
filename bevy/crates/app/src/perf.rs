@@ -1,4 +1,5 @@
 //! Release-mode FPS budget checks for large example maps.
+use crate::render::tilemap::RenderMetrics;
 use crate::resource::WorldModel;
 use bevy::prelude::*;
 use std::cmp::Ordering;
@@ -207,6 +208,7 @@ pub fn perf_motion_system(
 pub fn perf_check_system(
     time: Res<Time>,
     config: Res<PerfCheckConfig>,
+    render_metrics: Res<RenderMetrics>,
     mut state: ResMut<PerfCheckState>,
 ) {
     let present_delta = time.delta_secs_f64();
@@ -277,8 +279,9 @@ pub fn perf_check_system(
          workload_fps={workload_fps:.1} \
          workload_p95_ms={workload_p95_ms:.2} workload_max_ms={workload_max_ms:.2} \
          present_fps={present_fps:.1} present_p95_ms={present_p95_ms:.2} \
-         present_max_ms={present_max_ms:.2} threshold_fps={:.1} \
-         budget_frame_ms={budget_frame_ms:.2}",
+         present_max_ms={present_max_ms:.2} render_mode={:?} visible_chunks={} \
+         loaded_tile_chunks={} loaded_preview_chunks={} queued_tile_chunks={} \
+         tracked_tile_entities={} threshold_fps={:.1} budget_frame_ms={budget_frame_ms:.2}",
         config.map_path.display(),
         config.motion.label(),
         config
@@ -286,6 +289,12 @@ pub fn perf_check_system(
             .map(|value| format!("{value:.1}"))
             .unwrap_or_else(|| "default".into()),
         config.pan_radius_tiles,
+        render_metrics.lod_mode,
+        render_metrics.visible_chunks,
+        render_metrics.loaded_tile_chunks,
+        render_metrics.loaded_preview_chunks,
+        render_metrics.queued_tile_chunks,
+        render_metrics.tracked_tile_entities,
         config.threshold_fps
     );
 
