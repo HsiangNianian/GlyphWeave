@@ -1,4 +1,4 @@
-//! Atlas loading. Two themed atlases (ansi-16, cogmind), each 26 cells x 24px.
+//! Atlas loading. Themed atlases, each 26 cells x 24px.
 //! Both share TileKind glyph order, so the app swaps textures at runtime for
 //! instant theme switching.
 use bevy::asset::AssetServer;
@@ -15,6 +15,7 @@ pub fn tile_index(kind: TileKind) -> u32 {
 pub struct TileAtlas {
     pub ansi16: Handle<Image>,
     pub cogmind: Handle<Image>,
+    pub fortress_pixel: Handle<Image>,
 }
 
 impl TileAtlas {
@@ -22,6 +23,7 @@ impl TileAtlas {
     pub fn handle_for(&self, theme_id: &str) -> Handle<Image> {
         match theme_id {
             "cogmind" => self.cogmind.clone(),
+            "fortress-pixel" => self.fortress_pixel.clone(),
             _ => self.ansi16.clone(),
         }
     }
@@ -30,7 +32,12 @@ impl TileAtlas {
 pub fn load_atlas(mut commands: Commands, asset_server: Res<AssetServer>) {
     let ansi16: Handle<Image> = asset_server.load("textures/atlas-ansi-16.png");
     let cogmind: Handle<Image> = asset_server.load("textures/atlas-cogmind.png");
-    commands.insert_resource(TileAtlas { ansi16, cogmind });
+    let fortress_pixel: Handle<Image> = asset_server.load("textures/atlas-fortress-pixel.png");
+    commands.insert_resource(TileAtlas {
+        ansi16,
+        cogmind,
+        fortress_pixel,
+    });
 }
 
 #[cfg(test)]

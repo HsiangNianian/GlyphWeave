@@ -116,6 +116,7 @@ export function MapCanvas({ containerRef, stageRef }: MapCanvasProps) {
             tileTypeId={tileTypeId}
             tileSize={tileSize}
             colors={theme.colors[tileTypeId] || { fgColor: '#fff', bgColor: '#000' }}
+            renderMode={theme.renderMode}
           />
         ))}
         {gridLineElements}

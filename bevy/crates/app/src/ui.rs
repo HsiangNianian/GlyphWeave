@@ -545,6 +545,13 @@ fn home_screen(
                             "Cogmind",
                             "Low-contrast sci-fi console palette.",
                         );
+                        theme_row(
+                            ui,
+                            &mut ui_state.home_theme_id,
+                            "fortress-pixel",
+                            "Fortress Pixel",
+                            "Painterly carved-stone pixel tiles.",
+                        );
 
                         ui.add_space(18.0);
                         if ui
@@ -1099,6 +1106,13 @@ fn settings_tab(
             active_theme.0 = "cogmind".into();
             world_model.theme_id = "cogmind".into();
         }
+        if ui
+            .add(egui::Button::new("Fortress Pixel").selected(active_theme.0 == "fortress-pixel"))
+            .clicked()
+        {
+            active_theme.0 = "fortress-pixel".into();
+            world_model.theme_id = "fortress-pixel".into();
+        }
     });
 
     ui.add_space(12.0);
@@ -1504,7 +1518,36 @@ fn rgb(hex: u32) -> egui::Color32 {
 }
 
 fn tile_fg(kind: TileKind, theme_id: &str) -> egui::Color32 {
-    if theme_id == "cogmind" {
+    if theme_id == "fortress-pixel" {
+        match kind {
+            TileKind::Void => rgb(0x050403),
+            TileKind::Wall => rgb(0x9b9587),
+            TileKind::Floor => rgb(0x7f745f),
+            TileKind::FloorAlt => rgb(0x6f624e),
+            TileKind::Door => rgb(0xb8793e),
+            TileKind::DoorOpen => rgb(0x8a5a34),
+            TileKind::Water => rgb(0x5ca7c8),
+            TileKind::DeepWater => rgb(0x2f6b93),
+            TileKind::Lava => rgb(0xffb04a),
+            TileKind::Tree => rgb(0x5f9d50),
+            TileKind::Grass => rgb(0x769b47),
+            TileKind::Bridge => rgb(0xa16f42),
+            TileKind::StairsDown => rgb(0xb4aa92),
+            TileKind::StairsUp => rgb(0xd0c4a6),
+            TileKind::Altar => rgb(0xb7adc8),
+            TileKind::Fountain => rgb(0x79b7c4),
+            TileKind::Grave => rgb(0x8f958c),
+            TileKind::Trap => rgb(0xc55345),
+            TileKind::Pillar => rgb(0xb0aa9a),
+            TileKind::Treasure => rgb(0xf0c85a),
+            TileKind::Shop => rgb(0xd4a04e),
+            TileKind::Table => rgb(0x9b6238),
+            TileKind::Throne => rgb(0xd3b15f),
+            TileKind::Cage => rgb(0x9aa0a1),
+            TileKind::Blood => rgb(0x9c2f2d),
+            TileKind::Bar => rgb(0x8c8578),
+        }
+    } else if theme_id == "cogmind" {
         match kind {
             TileKind::Void => rgb(0x000000),
             TileKind::Wall => rgb(0x708090),
@@ -1564,7 +1607,36 @@ fn tile_fg(kind: TileKind, theme_id: &str) -> egui::Color32 {
 }
 
 fn tile_bg(kind: TileKind, theme_id: &str) -> egui::Color32 {
-    if theme_id == "cogmind" {
+    if theme_id == "fortress-pixel" {
+        match kind {
+            TileKind::Void => rgb(0x050403),
+            TileKind::Wall => rgb(0x34322f),
+            TileKind::Floor => rgb(0x443d32),
+            TileKind::FloorAlt => rgb(0x393226),
+            TileKind::Door => rgb(0x402515),
+            TileKind::DoorOpen => rgb(0x20150d),
+            TileKind::Water => rgb(0x173d55),
+            TileKind::DeepWater => rgb(0x0b2337),
+            TileKind::Lava => rgb(0x5a1a0e),
+            TileKind::Tree => rgb(0x23351e),
+            TileKind::Grass => rgb(0x2f3d23),
+            TileKind::Bridge => rgb(0x3f2a18),
+            TileKind::StairsDown => rgb(0x302a22),
+            TileKind::StairsUp => rgb(0x3b3327),
+            TileKind::Altar => rgb(0x342f3c),
+            TileKind::Fountain => rgb(0x263f43),
+            TileKind::Grave => rgb(0x2d302b),
+            TileKind::Trap => rgb(0x3a211d),
+            TileKind::Pillar => rgb(0x3a3834),
+            TileKind::Treasure => rgb(0x4a3514),
+            TileKind::Shop => rgb(0x4a321b),
+            TileKind::Table => rgb(0x322012),
+            TileKind::Throne => rgb(0x4b3516),
+            TileKind::Cage => rgb(0x242525),
+            TileKind::Blood => rgb(0x2c1210),
+            TileKind::Bar => rgb(0x151412),
+        }
+    } else if theme_id == "cogmind" {
         match kind {
             TileKind::Void => rgb(0x000000),
             TileKind::Wall => rgb(0x0a0a0a),

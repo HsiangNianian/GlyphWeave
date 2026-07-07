@@ -19,6 +19,7 @@ export interface Theme {
   id: string
   name: string
   description: string
+  renderMode?: 'glyph' | 'pixel'
   colors: Record<string, TileColors>
 }
 
