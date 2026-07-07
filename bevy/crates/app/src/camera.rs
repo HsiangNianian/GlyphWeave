@@ -1,6 +1,8 @@
 //! 2D camera with wheel zoom-to-cursor and middle/right-drag pan.
 //! Pan/zoom are suppressed while egui wants pointer input.
+use crate::render::tilemap::compute_bounds;
 use crate::resource::EditorTool;
+use crate::resource::WorldModel;
 use bevy::input::mouse::AccumulatedMouseScroll;
 use bevy::prelude::*;
 
@@ -13,6 +15,16 @@ pub fn spawn_camera(mut commands: Commands) {
             ..OrthographicProjection::default_2d()
         }),
     ));
+}
+
+pub fn center_camera_on_world(
+    world_model: Res<WorldModel>,
+    mut camera: Single<&mut Transform, With<Camera2d>>,
+) {
+    let bounds = compute_bounds(&world_model.0);
+    let tile_px = world_model.tile_size.max(1) as f32;
+    camera.translation.x = (bounds.min_x as f32 + bounds.width as f32 * 0.5) * tile_px;
+    camera.translation.y = -(bounds.min_y as f32 + bounds.height as f32 * 0.5) * tile_px;
 }
 
 #[derive(Default, Debug, Clone, Copy)]

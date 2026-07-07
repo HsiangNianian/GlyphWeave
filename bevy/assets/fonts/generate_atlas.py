@@ -6,12 +6,28 @@
 # Run:  python3 generate_atlas.py   (requires Pillow)
 #
 # Color sources: src/constants/themes.ts (ansi-16, cogmind).
+import os
 import sys
+from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 TILE = 24
 N = 26
-FONT_PATH = "NotoSansMono-Regular.ttf"
+HERE = Path(__file__).resolve().parent
+
+# NotoSansMono-Regular is bundled, but it renders several roguelike symbols
+# as tofu boxes on macOS. Prefer symbol-complete monospace fonts and reject
+# any candidate that renders required symbols as the missing-glyph box.
+FONT_SIZE = 18
+FONT_PATHS = [
+    os.environ.get("GLYPHWEAVE_ATLAS_FONT"),
+    "/System/Library/Fonts/Menlo.ttc",
+    "/Library/Fonts/Menlo.ttc",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+    "/usr/share/fonts/dejavu-sans-mono-fonts/DejaVuSansMono.ttf",
+    HERE / "NotoSansMono-Regular.ttf",
+]
+REQUIRED_SYMBOLS = ["♣", "♦", "☠"]
 
 # TileKind index -> glyph char (must match core::TileKind::glyph()).
 GLYPHS = [
@@ -86,10 +102,51 @@ THEMES = {
 
 assert all(len(p) == N for p in THEMES.values()) and len(GLYPHS) == N, "table size mismatch"
 
-try:
-    font = ImageFont.truetype(FONT_PATH, 18)
-except Exception as e:
-    sys.exit(f"could not load {FONT_PATH}: {e}")
+def glyph_mask(font, glyph):
+    img = Image.new("L", (TILE, TILE), 0)
+    draw = ImageDraw.Draw(img)
+    try:
+        draw.text((TILE // 2, TILE // 2 + 1), glyph, fill=255, font=font, anchor="mm")
+    except TypeError:
+        bbox = draw.textbbox((0, 0), glyph, font=font)
+        w, hh = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        draw.text(
+            ((TILE - w) // 2 - bbox[0], (TILE - hh) // 2 - bbox[1]),
+            glyph,
+            fill=255,
+            font=font,
+        )
+    return img.tobytes()
+
+
+def font_covers_required_symbols(font):
+    missing = glyph_mask(font, "\uFFFF")
+    return all(glyph_mask(font, glyph) != missing for glyph in REQUIRED_SYMBOLS)
+
+
+def load_font():
+    errors = []
+    for font_path in FONT_PATHS:
+        if not font_path:
+            continue
+        font_path = Path(font_path)
+        if not font_path.exists():
+            continue
+        try:
+            candidate = ImageFont.truetype(str(font_path), FONT_SIZE)
+        except Exception as e:
+            errors.append(f"{font_path}: {e}")
+            continue
+        if not font_covers_required_symbols(candidate):
+            errors.append(f"{font_path}: missing required tile symbols")
+            continue
+        return candidate, font_path
+    details = "\n".join(errors) if errors else "no candidate font files found"
+    sys.exit(f"could not load an atlas font:\n{details}")
+
+
+font, font_path = load_font()
+print(f"using atlas font {font_path}")
 
 
 def render(palette):
@@ -112,6 +169,6 @@ def render(palette):
 
 
 for name, palette in THEMES.items():
-    out = f"../textures/atlas-{name}.png"
+    out = HERE.parent / "textures" / f"atlas-{name}.png"
     render(palette).save(out)
     print(f"wrote {out}")

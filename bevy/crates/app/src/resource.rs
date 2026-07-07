@@ -1,7 +1,6 @@
 //! Bevy resources wrapping the core world model and shared editor state.
 use bevy::ecs::message::Message;
 use bevy::prelude::Resource;
-use glyphweave_core::edit::Edit;
 use glyphweave_core::world::World;
 
 /// Newtype around `core::World` to avoid a name clash with `bevy::prelude::World`.
@@ -20,13 +19,15 @@ impl std::ops::DerefMut for WorldModel {
     }
 }
 
-/// Buffered edit request produced by the tool system, consumed by render-sync.
-/// Always applied to the world's `active_layer` in P1.
+/// Monotonic world-content revision used by cached UI projections.
+#[derive(Resource, Debug, Clone, Copy, Default)]
+pub struct WorldRevision(pub u64);
+
+/// Tile coordinate changed in the core world and should be mirrored to render state.
 #[derive(Message, Clone, Copy, Debug)]
 pub struct EditEvent {
     pub x: i32,
     pub y: i32,
-    pub edit: Edit,
 }
 
 /// Last-known tile coordinate under the OS cursor (for UI read-out).

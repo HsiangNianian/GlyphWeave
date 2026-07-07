@@ -6,6 +6,7 @@ use crate::render::MapBounds;
 use crate::render::tilemap::RenderRefresh;
 use crate::resource::{
     ActivePreset, CursorTile, EditEvent, EditorHistory, EditorTool, EditorViewSettings, WorldModel,
+    WorldRevision,
 };
 use bevy::ecs::message::MessageWriter;
 use bevy::prelude::*;
@@ -19,6 +20,7 @@ pub fn tool_system(
     keys: Res<ButtonInput<KeyCode>>,
     mut writer: MessageWriter<EditEvent>,
     mut world: ResMut<WorldModel>,
+    mut world_revision: ResMut<WorldRevision>,
     mut history: ResMut<EditorHistory>,
     mut refresh: ResMut<RenderRefresh>,
     mut tool: ResMut<EditorTool>,
@@ -40,6 +42,7 @@ pub fn tool_system(
             history.undo(&mut world.0)
         };
         if changed {
+            bump_world_revision(&mut world_revision);
             refresh.0 = true;
         }
         return;
@@ -102,6 +105,7 @@ pub fn tool_system(
                 }
             }
             refresh_for_expanded_bounds(&mut refresh, bounds.as_deref(), cursor.x, cursor.y);
+            bump_world_revision(&mut world_revision);
             refresh.0 = true;
             return;
         }
@@ -114,6 +118,7 @@ pub fn tool_system(
                 cursor.y,
                 active_brush.0,
             ) {
+                bump_world_revision(&mut world_revision);
                 refresh.0 = true;
             }
             return;
@@ -127,12 +132,16 @@ pub fn tool_system(
     };
 
     edit.apply(&mut world.0, &active_layer, cursor.x, cursor.y);
+    bump_world_revision(&mut world_revision);
     refresh_for_expanded_bounds(&mut refresh, bounds.as_deref(), cursor.x, cursor.y);
     writer.write(EditEvent {
         x: cursor.x,
         y: cursor.y,
-        edit,
     });
+}
+
+fn bump_world_revision(world_revision: &mut ResMut<WorldRevision>) {
+    world_revision.0 = world_revision.0.wrapping_add(1);
 }
 
 fn flood_fill(

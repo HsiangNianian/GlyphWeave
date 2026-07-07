@@ -1,10 +1,13 @@
-//! Spawn one bounded TilemapBundle per visible layer, z-stacked, with a tile
-//! entity for EVERY cell in the union bounds (so any editable coord has an entity).
+//! Spawn a bounded composite TilemapBundle with tile entities only for cells
+//! near the camera. Empty upper-layer cells are transparent by composition,
+//! matching the sparse web renderer while avoiding huge entity counts on large
+//! maps.
 use crate::render::MapBounds;
 use crate::render::atlas::{TileAtlas, tile_index};
 use crate::resource::{ActiveTheme, EditorViewSettings, WorldModel};
 use bevy::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
+use glyphweave_core::tile::TileKind;
 use glyphweave_core::world::World;
 
 /// Tags a tilemap entity; carries its layer index for sync lookups.
@@ -16,6 +19,8 @@ pub struct TilemapLayer {
     pub layer_id: String,
 }
 
+pub const COMPOSITE_LAYER_ID: &str = "__composite__";
+
 /// Strong map from (layer_index, tile_x, tile_y) -> tile entity, for fast sync.
 #[derive(Resource, Default, Debug)]
 pub struct TileEntities {
@@ -25,6 +30,9 @@ pub struct TileEntities {
 /// Set when structural world changes require a full render rebuild.
 #[derive(Resource, Default, Debug, Clone, Copy)]
 pub struct RenderRefresh(pub bool);
+
+const RENDER_PADDING_TILES: i32 = 40;
+const RENDER_REFRESH_MARGIN_TILES: i32 = 8;
 
 /// Pure: compute union bounds over all layers that have any tiles.
 /// Empty world -> 1x1 degenerate bounds so the tilemap still exists.
@@ -75,13 +83,20 @@ pub fn spawn_tilemaps(
     world_model: Res<WorldModel>,
     atlas: Res<TileAtlas>,
     active_theme: Res<ActiveTheme>,
+    camera: Single<(&Camera, &GlobalTransform), With<Camera2d>>,
+    window: Single<&Window>,
     mut tile_entities: ResMut<TileEntities>,
 ) {
+    let (camera, camera_transform) = *camera;
+    let bounds = camera_view_bounds(camera, camera_transform, &window, world_model.tile_size)
+        .map(render_bounds_for_view)
+        .unwrap_or_else(|| compute_bounds(&world_model.0));
     spawn_tilemaps_for_world(
         &mut commands,
         &world_model.0,
         &atlas,
         &active_theme,
+        bounds,
         &mut tile_entities,
     );
 }
@@ -91,10 +106,10 @@ fn spawn_tilemaps_for_world(
     world: &World,
     atlas: &TileAtlas,
     active_theme: &ActiveTheme,
+    bounds: MapBounds,
     tile_entities: &mut TileEntities,
 ) {
     let tile_px = world.tile_size.max(1) as f32;
-    let bounds = compute_bounds(world);
     commands.insert_resource(bounds);
 
     let map_size = TilemapSize {
@@ -118,66 +133,101 @@ fn spawn_tilemaps_for_world(
 
     tile_entities.map.clear();
 
-    for (i, layer) in world.layers.iter().enumerate() {
-        let tilemap_entity = commands.spawn_empty().id();
-        let mut tile_storage = TileStorage::empty(map_size);
-        let grid = world.grid(&layer.id);
+    let tilemap_entity = commands.spawn_empty().id();
+    let mut tile_storage = TileStorage::empty(map_size);
 
-        // Spawn a tile entity for EVERY cell in bounds; absent cells -> Void index.
-        for ly in 0..bounds.height {
-            for lx in 0..bounds.width {
-                let tx = bounds.min_x + lx as i32;
-                let ty = bounds.min_y + ly as i32;
-                let kind = grid
-                    .and_then(|g| g.get(tx, ty))
-                    .unwrap_or(glyphweave_core::tile::TileKind::Void);
+    for ly in 0..bounds.height {
+        for lx in 0..bounds.width {
+            let tx = bounds.min_x + lx as i32;
+            let ty = bounds.min_y + ly as i32;
+            if let Some(kind) = composite_tile_at(world, tx, ty) {
                 let tile_pos = TilePos { x: lx, y: ly };
+                let (texture_index, visible) = tile_render_state(Some(kind));
                 let tile_entity = commands
                     .spawn(TileBundle {
                         position: tile_pos,
                         tilemap_id: TilemapId(tilemap_entity),
-                        texture_index: TileTextureIndex(tile_index(kind)),
+                        texture_index,
+                        visible,
                         ..default()
                     })
                     .id();
                 tile_storage.set(&tile_pos, tile_entity);
-                tile_entities.map.insert((i, tx, ty), tile_entity);
+                tile_entities.map.insert((0, tx, ty), tile_entity);
             }
         }
+    }
 
-        let z = i as f32;
-        commands.entity(tilemap_entity).insert((
-            TilemapLayer {
-                index: i,
-                layer_id: layer.id.clone(),
-            },
-            TilemapBundle {
-                grid_size,
-                map_type,
-                size: map_size,
-                spacing: TilemapSpacing::default(),
-                storage: tile_storage,
-                texture: TilemapTexture::Single(atlas.handle_for(&active_theme.0)),
-                tile_size,
-                transform: Transform::from_xyz(origin_world_x, origin_world_y, z),
-                anchor: TilemapAnchor::TopLeft,
-                visibility: if layer.visible {
-                    Visibility::Visible
-                } else {
-                    Visibility::Hidden
-                },
+    commands.entity(tilemap_entity).insert((
+        TilemapLayer {
+            index: 0,
+            layer_id: COMPOSITE_LAYER_ID.into(),
+        },
+        TilemapBundle {
+            grid_size,
+            map_type,
+            size: map_size,
+            spacing: TilemapSpacing::default(),
+            storage: tile_storage,
+            texture: TilemapTexture::Single(atlas.handle_for(&active_theme.0)),
+            tile_size,
+            transform: Transform::from_xyz(origin_world_x, origin_world_y, 0.0),
+            render_settings: TilemapRenderSettings {
+                render_chunk_size: UVec2::splat(64),
                 ..default()
             },
-        ));
+            anchor: TilemapAnchor::TopLeft,
+            visibility: Visibility::Visible,
+            ..default()
+        },
+    ));
+}
+
+pub fn composite_tile_at(world: &World, x: i32, y: i32) -> Option<TileKind> {
+    world.layers.iter().rev().find_map(|layer| {
+        if !layer.visible {
+            return None;
+        }
+        let kind = world.grid(&layer.id)?.get(x, y)?;
+        (!matches!(kind, TileKind::Void)).then_some(kind)
+    })
+}
+
+pub fn tile_pos_for_bounds(bounds: &MapBounds, x: i32, y: i32) -> Option<TilePos> {
+    let local_x = x.checked_sub(bounds.min_x)?;
+    let local_y = y.checked_sub(bounds.min_y)?;
+    if local_x < 0 || local_y < 0 {
+        return None;
+    }
+    let lx = local_x as u32;
+    let ly = local_y as u32;
+    if lx >= bounds.width || ly >= bounds.height {
+        return None;
+    }
+    Some(TilePos { x: lx, y: ly })
+}
+
+pub fn tile_render_state(kind: Option<TileKind>) -> (TileTextureIndex, TileVisible) {
+    match kind {
+        Some(kind) if !matches!(kind, TileKind::Void) => {
+            (TileTextureIndex(tile_index(kind)), TileVisible(true))
+        }
+        _ => (
+            TileTextureIndex(tile_index(TileKind::Void)),
+            TileVisible(false),
+        ),
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn refresh_tilemaps(
     mut commands: Commands,
     mut refresh: ResMut<RenderRefresh>,
     world_model: Res<WorldModel>,
     atlas: Res<TileAtlas>,
     active_theme: Res<ActiveTheme>,
+    camera: Single<(&Camera, &GlobalTransform), With<Camera2d>>,
+    window: Single<&Window>,
     mut tile_entities: ResMut<TileEntities>,
     mut tilemaps: Query<(Entity, &mut TileStorage), With<TilemapLayer>>,
 ) {
@@ -192,14 +242,99 @@ pub fn refresh_tilemaps(
         commands.entity(entity).despawn();
     }
 
+    let (camera, camera_transform) = *camera;
+    let bounds = camera_view_bounds(camera, camera_transform, &window, world_model.tile_size)
+        .map(render_bounds_for_view)
+        .unwrap_or_else(|| compute_bounds(&world_model.0));
     spawn_tilemaps_for_world(
         &mut commands,
         &world_model.0,
         &atlas,
         &active_theme,
+        bounds,
         &mut tile_entities,
     );
     refresh.0 = false;
+}
+
+pub fn refresh_when_camera_bounds_change(
+    world_model: Res<WorldModel>,
+    camera: Single<(&Camera, &GlobalTransform), With<Camera2d>>,
+    window: Single<&Window>,
+    bounds: Option<Res<MapBounds>>,
+    mut refresh: ResMut<RenderRefresh>,
+) {
+    if refresh.0 {
+        return;
+    }
+    let (camera, camera_transform) = *camera;
+    let Some(view_bounds) =
+        camera_view_bounds(camera, camera_transform, &window, world_model.tile_size)
+    else {
+        return;
+    };
+    let Some(render_bounds) = bounds.as_deref().copied() else {
+        refresh.0 = true;
+        return;
+    };
+    if !render_bounds_contains_view(render_bounds, view_bounds) {
+        refresh.0 = true;
+    }
+}
+
+fn camera_view_bounds(
+    camera: &Camera,
+    camera_transform: &GlobalTransform,
+    window: &Window,
+    tile_size: u32,
+) -> Option<MapBounds> {
+    let top_left = camera
+        .viewport_to_world_2d(camera_transform, Vec2::ZERO)
+        .ok()?;
+    let bottom_right = camera
+        .viewport_to_world_2d(camera_transform, Vec2::new(window.width(), window.height()))
+        .ok()?;
+
+    let tile_px = tile_size.max(1) as f32;
+    let min_world_x = top_left.x.min(bottom_right.x);
+    let max_world_x = top_left.x.max(bottom_right.x);
+    let min_world_y = top_left.y.min(bottom_right.y);
+    let max_world_y = top_left.y.max(bottom_right.y);
+
+    let min_tile_x = (min_world_x / tile_px).floor() as i32;
+    let max_tile_x = (max_world_x / tile_px).ceil() as i32;
+    let min_tile_y = (-max_world_y / tile_px).floor() as i32;
+    let max_tile_y = (-min_world_y / tile_px).ceil() as i32;
+
+    Some(MapBounds {
+        min_x: min_tile_x,
+        min_y: min_tile_y,
+        width: (max_tile_x - min_tile_x + 1).max(1) as u32,
+        height: (max_tile_y - min_tile_y + 1).max(1) as u32,
+    })
+}
+
+fn render_bounds_for_view(view: MapBounds) -> MapBounds {
+    MapBounds {
+        min_x: view.min_x - RENDER_PADDING_TILES,
+        min_y: view.min_y - RENDER_PADDING_TILES,
+        width: view.width + (RENDER_PADDING_TILES * 2) as u32,
+        height: view.height + (RENDER_PADDING_TILES * 2) as u32,
+    }
+}
+
+fn render_bounds_contains_view(render: MapBounds, view: MapBounds) -> bool {
+    let render_min_x = render.min_x + RENDER_REFRESH_MARGIN_TILES;
+    let render_min_y = render.min_y + RENDER_REFRESH_MARGIN_TILES;
+    let render_max_x = render.min_x + render.width as i32 - RENDER_REFRESH_MARGIN_TILES;
+    let render_max_y = render.min_y + render.height as i32 - RENDER_REFRESH_MARGIN_TILES;
+    let view_max_x = view.min_x + view.width as i32;
+    let view_max_y = view.min_y + view.height as i32;
+
+    view.min_x >= render_min_x
+        && view.min_y >= render_min_y
+        && view_max_x <= render_max_x
+        && view_max_y <= render_max_y
 }
 
 /// Swap every tilemap's texture to the atlas for `ActiveTheme` when it changes.
@@ -226,6 +361,10 @@ pub fn sync_layer_visibility(
     mut tilemaps: Query<(&TilemapLayer, &mut Visibility)>,
 ) {
     for (tm_layer, mut vis) in tilemaps.iter_mut() {
+        if tm_layer.layer_id == COMPOSITE_LAYER_ID {
+            *vis = Visibility::Visible;
+            continue;
+        }
         let on = world_model
             .layers
             .get(tm_layer.index)
@@ -290,7 +429,6 @@ pub fn draw_grid(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use glyphweave_core::tile::TileKind;
 
     #[test]
     fn empty_world_degenerate_bounds() {
@@ -331,5 +469,19 @@ mod tests {
         assert_eq!(b.min_y, -2);
         assert_eq!(b.width, 5);
         assert_eq!(b.height, 4);
+    }
+
+    #[test]
+    fn absent_tiles_are_invisible_for_sparse_layer_composition() {
+        let (texture, visible) = tile_render_state(None);
+        assert_eq!(texture.0, tile_index(TileKind::Void));
+        assert!(!visible.0);
+    }
+
+    #[test]
+    fn present_tiles_are_visible() {
+        let (texture, visible) = tile_render_state(Some(TileKind::Wall));
+        assert_eq!(texture.0, tile_index(TileKind::Wall));
+        assert!(visible.0);
     }
 }
