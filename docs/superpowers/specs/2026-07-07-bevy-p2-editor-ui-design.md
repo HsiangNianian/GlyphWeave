@@ -12,11 +12,12 @@ P1 已交付：桌面 Bevy 应用、`.gemap` 加载/保存、3 图层渲染、br
 
 ### P2 目标
 
-1. **主题切换**：ansi-16 ↔ cogmind-dark，运行时即时切换（重贴图）。
-2. **Tile 调色板面板**：26 种 tile 按 9 类分组，点击设置当前笔刷 tile。
-3. **图层面板**：列出图层，点击切换 active layer；勾选框切换 visible / locked。
-4. **多图层编辑**：active layer 可切换；笔刷画在 active layer；visible=false 的图层不渲染；locked 的图层不可编辑。
-5. **设置入口**：主题选择器（在 egui 面板内）。
+1. **React 编辑器信息架构对齐**：Bevy 端外壳以 Vite 编辑器为产品基准：左侧窄工具栏、中央全画布、右侧 tabbed inspector。
+2. **主题切换**：ansi-16 ↔ cogmind-dark，运行时即时切换（重贴图）。
+3. **Tile 调色板面板**：在右侧 `Tiles` tab 中按 9 类分组列出 26 种 tile，点击设置当前笔刷 tile。
+4. **图层面板**：在右侧 `Layers` tab 中列出图层，点击切换 active layer；勾选框切换 visible / locked。
+5. **多图层编辑**：active layer 可切换；笔刷画在 active layer；visible=false 的图层不渲染；locked 的图层不可编辑。
+6. **设置入口**：主题选择器与保存入口放在右侧 `Settings` tab。
 
 ### P2 非目标（延后 P3+）
 
@@ -48,17 +49,31 @@ pub fn palette(theme_id: &str) -> &'static [(ThemeColors; 26)]  // 按 TileKind:
 
 ---
 
-## 3. Tile 调色板面板
+## 3. Editor shell
 
-`app/ui.rs` 增加一个 `egui::SidePanel::left`（或 bottom），按 `TileCategory` 分组列出 26 个 tile。每个 tile 显示其字形 + 名称；点击 → `ActiveBrush.0 = kind`。当前选中高亮。
+Bevy 端不能继续使用 P1/P2 草稿里的 “左调色板 + 右图层” 原型布局。它必须先对齐 React 编辑器的信息架构：
+
+- 左侧 56px 左右的窄工具栏：Brush / Erase 可用，Fill / Select / Undo / Redo 在对应功能落地前可以禁用显示。
+- 中央为地图画布，不再有整条顶部状态栏。
+- 状态信息以小型浮层显示在画布左上角。
+- 右侧 224px 左右 tabbed inspector：Tiles / Presets / Layers / Export / Settings。尚未实现的 tab 禁用或显示明确占位。
+- 右下角提供侧栏收起/展开按钮。
+
+这不是要求 egui 像素级复刻 Tailwind/shadcn，但空间结构、默认入口和用户心智必须与网页编辑器一致。
+
+---
+
+## 4. Tile 调色板面板
+
+`app/ui.rs` 在右侧 `Tiles` tab 中按 `TileCategory` 分组列出 26 个 tile。每个 tile 显示其字形 + 名称；点击 → `ActiveBrush.0 = kind`。当前选中高亮。
 
 类别（来自 `src/constants/tiles.ts`）：wall/floor/water/terrain/vegetation/furniture/item/decoration/special。在 `core::tile` 增加 `TileKind::category() -> TileCategory`。
 
 ---
 
-## 4. 图层面板
+## 5. 图层面板
 
-`app/ui.rs` 增加 `egui::SidePanel::right`：
+`app/ui.rs` 在右侧 `Layers` tab 中提供：
 
 - 每行：`[vis] [lock] name` + 高亮 active。
 - 点 name → `world.active_layer = layer.id`（多图层编辑）。
@@ -69,7 +84,7 @@ pub fn palette(theme_id: &str) -> &'static [(ThemeColors; 26)]  // 按 TileKind:
 
 ---
 
-## 5. 多图层编辑闭环
+## 6. 多图层编辑闭环
 
 - 笔刷：`tool_system` 用 `world.active_layer`（P1 已实现）。
 - 渲染同步：`render_sync::sync_edits` 用 `active_index = position of active_layer`（P1 已实现）——切换 active layer 后自动正确。
@@ -77,10 +92,10 @@ pub fn palette(theme_id: &str) -> &'static [(ThemeColors; 26)]  // 按 TileKind:
 
 ---
 
-## 6. 数据流增量
+## 7. 数据流增量
 
 ```
-egui 面板 ──► ActiveBrush / active_layer / layers[i].visible|locked / ActiveTheme
+egui shell ──► ActiveBrush / active_layer / layers[i].visible|locked / ActiveTheme
                 │
                 ▼
            tool / sync_layer_visibility / set_theme / render_sync
@@ -90,20 +105,21 @@ egui 面板 ──► ActiveBrush / active_layer / layers[i].visible|locked / Ac
 
 ---
 
-## 7. 验收标准（DoD）
+## 8. 验收标准（DoD）
 
-1. `cargo run` 打开窗口，加载 Aethra 地图，左侧出现 **调色板**（26 tile，分类）。
-2. 点击调色板某 tile（如 Wall），左键拖拽画出该 tile（不再只画 Floor）。
-3. 右侧 **图层面板** 列出 3 图层；点 “Structures” 切为 active，画图落在 Structures 层。
-4. 勾掉某层 `vis` → 该层立即消失；勾回 → 重现。
-5. 锁定某层 → 该层不可编辑（左键无反应）。
-6. **主题切换**：点 cogmind → 全图立刻变为冷色调；点 ansi-16 → 变回。
-7. `cargo test --workspace` 全绿；`cargo clippy --workspace --all-targets -- -D warnings` 干净。
-8. 截图验证（grim）。
+1. `cargo run` 打开窗口，加载 Aethra 地图，整体 shell 与 Vite 编辑器信息架构一致：左侧窄工具栏、中央画布、右侧 tabbed inspector。
+2. 右侧 `Tiles` tab 出现 **调色板**（26 tile，分类）。
+3. 点击调色板某 tile（如 Wall），左键拖拽画出该 tile（不再只画 Floor）。
+4. 右侧 `Layers` tab 列出 3 图层；点 “Structures” 切为 active，画图落在 Structures 层。
+5. 勾掉某层 `vis` → 该层立即消失；勾回 → 重现。
+6. 锁定某层 → 该层不可编辑（左键无反应）。
+7. **主题切换**：点 cogmind → 全图立刻变为冷色调；点 ansi-16 → 变回。
+8. `cargo test --workspace` 全绿；`cargo clippy --workspace --all-targets -- -D warnings` 干净。
+9. 截图验证（grim）。
 
 ---
 
-## 8. 风险
+## 9. 风险
 
 - bevy_ecs_tilemap 运行时更换 `TilemapTexture` 是否触发重贴图：需在实现时验证；若不自动重贴，回退为 despawn+respawn tilemaps。
 - egui 面板会占用屏幕空间，需确保画布交互（paint）不被面板吞掉（`egui_wants_any_pointer_input` 门控已存在）。
