@@ -19,6 +19,7 @@ use glyphweave_core::layer::Layer;
 use glyphweave_core::tile::TileKind;
 use glyphweave_core::world::World;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 /// Where the most recent load came from / where Save writes.
 #[derive(Resource, Debug, Clone, Default)]
@@ -149,6 +150,9 @@ pub fn ui_overlay(
         return;
     }
 
+    let (camera_projection, mut camera_position) = camera.into_inner();
+    let zoom_label = zoom_label(camera_projection);
+
     egui::SidePanel::left("tool_rail")
         .resizable(false)
         .exact_width(56.0)
@@ -273,6 +277,8 @@ pub fn ui_overlay(
                     } else {
                         ui.label("tile --");
                     }
+                    ui.separator();
+                    ui.label(zoom_label.as_str());
                     if let Some(b) = bounds.as_deref() {
                         ui.separator();
                         ui.label(format!("{}x{}", b.width, b.height));
@@ -292,7 +298,6 @@ pub fn ui_overlay(
         });
 
     if view_settings.show_minimap {
-        let (camera_projection, mut camera_position) = camera.into_inner();
         minimap_overlay(
             ctx,
             &world.world_model,
@@ -326,7 +331,41 @@ pub fn ui_overlay(
         });
 }
 
+fn zoom_label(projection: &Projection) -> String {
+    match projection {
+        Projection::Orthographic(ortho) => {
+            let zoom = 1.0 / ortho.scale.max(f32::EPSILON);
+            format!("zoom {:.0}%", zoom * 100.0)
+        }
+        _ => "zoom --".into(),
+    }
+}
+
+const CJK_FONT_FALLBACK_NAME: &str = "glyphweave_cjk_fallback";
+
+const CJK_FONT_CANDIDATES: &[&str] = &[
+    // macOS
+    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+    "/System/Library/Fonts/Hiragino Sans GB.ttc",
+    "/System/Library/Fonts/STHeiti Medium.ttc",
+    "/System/Library/Fonts/STHeiti Light.ttc",
+    "/System/Library/Fonts/Supplemental/Songti.ttc",
+    "/System/Library/Fonts/PingFang.ttc",
+    // Windows
+    r"C:\Windows\Fonts\msyh.ttc",
+    r"C:\Windows\Fonts\msyh.ttf",
+    r"C:\Windows\Fonts\simhei.ttf",
+    r"C:\Windows\Fonts\simsun.ttc",
+    // Linux
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+];
+
 fn apply_editor_style(ctx: &egui::Context) {
+    install_cjk_font_fallback(ctx);
+
     let mut visuals = egui::Visuals::dark();
     visuals.panel_fill = zinc(950);
     visuals.window_fill = zinc(950);
@@ -349,6 +388,35 @@ fn apply_editor_style(ctx: &egui::Context) {
     style.spacing.item_spacing = egui::vec2(6.0, 6.0);
     style.spacing.button_padding = egui::vec2(8.0, 5.0);
     ctx.set_style(style);
+}
+
+fn install_cjk_font_fallback(ctx: &egui::Context) {
+    let Some(font_data) = load_cjk_font_data() else {
+        return;
+    };
+
+    let mut fonts = egui::FontDefinitions::default();
+    fonts
+        .font_data
+        .insert(CJK_FONT_FALLBACK_NAME.to_owned(), Arc::new(font_data));
+
+    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+        if let Some(family_fonts) = fonts.families.get_mut(&family)
+            && !family_fonts
+                .iter()
+                .any(|font| font == CJK_FONT_FALLBACK_NAME)
+        {
+            family_fonts.push(CJK_FONT_FALLBACK_NAME.to_owned());
+        }
+    }
+
+    ctx.set_fonts(fonts);
+}
+
+fn load_cjk_font_data() -> Option<egui::FontData> {
+    CJK_FONT_CANDIDATES
+        .iter()
+        .find_map(|path| std::fs::read(path).ok().map(egui::FontData::from_owned))
 }
 
 fn panel_frame() -> egui::Frame {
@@ -1578,3 +1646,38 @@ const TILE_GROUPS: [(&str, &[TileKind]); 9] = [
     ("Decorations", &DECORATION_TILES),
     ("Special", &SPECIAL_TILES),
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zoom_label_uses_visual_zoom_percent() {
+        let zoomed_in = Projection::Orthographic(OrthographicProjection {
+            scale: 0.5,
+            ..OrthographicProjection::default_2d()
+        });
+        let zoomed_out = Projection::Orthographic(OrthographicProjection {
+            scale: 2.0,
+            ..OrthographicProjection::default_2d()
+        });
+
+        assert_eq!(zoom_label(&zoomed_in), "zoom 200%");
+        assert_eq!(zoom_label(&zoomed_out), "zoom 50%");
+    }
+
+    #[test]
+    fn cjk_font_candidates_cover_common_platforms() {
+        assert!(
+            CJK_FONT_CANDIDATES
+                .iter()
+                .any(|path| path.contains("Arial Unicode"))
+        );
+        assert!(CJK_FONT_CANDIDATES.iter().any(|path| path.contains("msyh")));
+        assert!(
+            CJK_FONT_CANDIDATES
+                .iter()
+                .any(|path| path.contains("NotoSansCJK"))
+        );
+    }
+}
