@@ -1,5 +1,6 @@
 //! Cursor -> tile coordinate. Updates CursorTile for UI and tool use.
 use crate::resource::{CursorTile, WorldModel};
+use crate::viewport::viewport_to_world_2d_current;
 use bevy::prelude::*;
 
 /// Pure: convert Bevy world coordinates to GlyphWeave tile coordinates.
@@ -12,17 +13,17 @@ pub fn tile_from_world_pos(world: Vec2, tile_size: u32) -> (i32, i32) {
 }
 
 pub fn update_cursor_tile(
-    camera_q: Single<(&Camera, &GlobalTransform)>,
+    camera_q: Single<(&Transform, &Projection), With<Camera2d>>,
     window: Single<&Window>,
     world_model: Res<WorldModel>,
     mut cursor: ResMut<CursorTile>,
 ) {
-    let (cam, gtf) = *camera_q;
+    let (camera_transform, projection) = *camera_q;
     let Some(p) = window.cursor_position() else {
         cursor.valid = false;
         return;
     };
-    let Ok(world) = cam.viewport_to_world_2d(gtf, p) else {
+    let Some(world) = viewport_to_world_2d_current(camera_transform, projection, &window, p) else {
         cursor.valid = false;
         return;
     };

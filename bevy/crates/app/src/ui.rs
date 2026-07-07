@@ -9,6 +9,7 @@ use crate::resource::{
     ActivePreset, ActiveTheme, CursorTile, EditorHistory, EditorTool, EditorViewSettings,
     WorldModel, WorldRevision,
 };
+use crate::viewport::world_viewport_bounds_current;
 use bevy::diagnostic::DiagnosticsStore;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
@@ -98,7 +99,7 @@ pub fn ui_overlay(
     cursor: Res<CursorTile>,
     mut world: UiWorldParams,
     bounds: Option<Res<MapBounds>>,
-    camera: Single<(&Camera, &GlobalTransform, &mut Transform), With<Camera2d>>,
+    camera: Single<(&Projection, &mut Transform), With<Camera2d>>,
     window: Single<&Window>,
     mut path: ResMut<CurrentMapPath>,
     mut active_brush: ResMut<ActiveBrush>,
@@ -291,7 +292,7 @@ pub fn ui_overlay(
         });
 
     if view_settings.show_minimap {
-        let (camera, camera_transform, mut camera_position) = camera.into_inner();
+        let (camera_projection, mut camera_position) = camera.into_inner();
         minimap_overlay(
             ctx,
             &world.world_model,
@@ -301,8 +302,7 @@ pub fn ui_overlay(
             } else {
                 -12.0
             },
-            camera,
-            camera_transform,
+            camera_projection,
             &mut camera_position,
             *window,
             world.world_revision.0,
@@ -1093,8 +1093,7 @@ fn minimap_overlay(
     world_model: &WorldModel,
     active_theme: &ActiveTheme,
     x_offset: f32,
-    camera: &Camera,
-    camera_transform: &GlobalTransform,
+    camera_projection: &Projection,
     camera_position: &mut Transform,
     window: &Window,
     world_revision: u64,
@@ -1169,8 +1168,8 @@ fn minimap_overlay(
                     projection.scale,
                     projection.min_x,
                     projection.min_y,
-                    camera,
-                    camera_transform,
+                    camera_position,
+                    camera_projection,
                     window,
                     world_model.tile_size,
                 );
@@ -1276,30 +1275,22 @@ fn draw_minimap_viewport(
     scale: f32,
     min_x: i32,
     min_y: i32,
-    camera: &Camera,
-    camera_transform: &GlobalTransform,
+    camera_transform: &Transform,
+    camera_projection: &Projection,
     window: &Window,
     tile_size: u32,
 ) {
-    let Ok(top_left) = camera.viewport_to_world_2d(camera_transform, Vec2::ZERO) else {
-        return;
-    };
-    let Ok(bottom_right) =
-        camera.viewport_to_world_2d(camera_transform, Vec2::new(window.width(), window.height()))
+    let Some(view_bounds) =
+        world_viewport_bounds_current(camera_transform, camera_projection, window)
     else {
         return;
     };
 
     let tile_px = tile_size.max(1) as f32;
-    let min_world_x = top_left.x.min(bottom_right.x);
-    let max_world_x = top_left.x.max(bottom_right.x);
-    let min_world_y = top_left.y.min(bottom_right.y);
-    let max_world_y = top_left.y.max(bottom_right.y);
-
-    let view_left = min_world_x / tile_px;
-    let view_top = -max_world_y / tile_px;
-    let view_width = (max_world_x - min_world_x) / tile_px;
-    let view_height = (max_world_y - min_world_y) / tile_px;
+    let view_left = view_bounds.min_x / tile_px;
+    let view_top = -view_bounds.max_y / tile_px;
+    let view_width = (view_bounds.max_x - view_bounds.min_x) / tile_px;
+    let view_height = (view_bounds.max_y - view_bounds.min_y) / tile_px;
     let viewport_rect = egui::Rect::from_min_size(
         origin
             + egui::vec2(

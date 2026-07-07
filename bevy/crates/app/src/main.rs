@@ -7,6 +7,7 @@ mod render_sync;
 mod resource;
 mod tool;
 mod ui;
+mod viewport;
 
 use bevy::asset::AssetPlugin;
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;

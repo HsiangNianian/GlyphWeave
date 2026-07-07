@@ -3,6 +3,7 @@
 use crate::render::tilemap::compute_bounds;
 use crate::resource::EditorTool;
 use crate::resource::WorldModel;
+use crate::viewport::viewport_to_world_2d_current;
 use bevy::input::mouse::AccumulatedMouseScroll;
 use bevy::prelude::*;
 
@@ -33,14 +34,14 @@ pub struct PanState {
 }
 
 pub fn zoom_to_cursor(
-    cam: Single<(&Camera, &GlobalTransform, &mut Transform, &mut Projection)>,
+    cam: Single<(&mut Transform, &mut Projection), With<Camera2d>>,
     window: Single<&Window>,
     scroll: Res<AccumulatedMouseScroll>,
 ) {
-    let (camera, cam_gtf, mut cam_tf, mut projection) = cam.into_inner();
-    let Projection::Orthographic(ref mut ortho) = *projection else {
+    let (mut cam_tf, mut projection) = cam.into_inner();
+    if !matches!(*projection, Projection::Orthographic(_)) {
         return;
-    };
+    }
 
     // bevy 0.18: AccumulatedMouseScroll { unit, delta }. delta.y: scroll up > 0.
     let dy = scroll.delta.y;
@@ -51,37 +52,40 @@ pub fn zoom_to_cursor(
     let Some(cursor) = window.cursor_position() else {
         return;
     };
-    let Ok(world_before) = camera.viewport_to_world_2d(cam_gtf, cursor) else {
+    let Some(world_before) = viewport_to_world_2d_current(&cam_tf, &projection, &window, cursor)
+    else {
         return;
     };
 
     // Scroll up (dy>0) -> zoom in (smaller scale).
     let factor = 1.0 - dy.signum() * 0.1;
+    let Projection::Orthographic(ref mut ortho) = *projection else {
+        return;
+    };
     ortho.scale = (ortho.scale * factor).clamp(0.05, 50.0);
 
-    if let Ok(world_after) = camera.viewport_to_world_2d(cam_gtf, cursor) {
+    if let Some(world_after) = viewport_to_world_2d_current(&cam_tf, &projection, &window, cursor) {
         cam_tf.translation.x += world_before.x - world_after.x;
         cam_tf.translation.y += world_before.y - world_after.y;
     }
 }
 
 pub fn pan_camera(
-    mut cam_tf: Single<&mut Transform, With<Camera2d>>,
+    cam: Single<(&mut Transform, &Projection), With<Camera2d>>,
     buttons: Res<ButtonInput<MouseButton>>,
     window: Single<&Window>,
-    camera: Single<(&Camera, &GlobalTransform)>,
     tool: Res<EditorTool>,
     mut state: Local<PanState>,
 ) {
     let dragging = buttons.pressed(MouseButton::Middle)
         || buttons.pressed(MouseButton::Right)
         || (*tool == EditorTool::Pan && buttons.pressed(MouseButton::Left));
-    let (cam, gtf) = *camera;
     let Some(p) = window.cursor_position() else {
         state.last_cursor = None;
         return;
     };
 
+    let (mut cam_tf, projection) = cam.into_inner();
     if !dragging {
         state.last_cursor = Some(p);
         return;
@@ -92,9 +96,9 @@ pub fn pan_camera(
         return;
     };
 
-    if let (Ok(w_prev), Ok(w_now)) = (
-        cam.viewport_to_world_2d(gtf, prev),
-        cam.viewport_to_world_2d(gtf, p),
+    if let (Some(w_prev), Some(w_now)) = (
+        viewport_to_world_2d_current(&cam_tf, projection, &window, prev),
+        viewport_to_world_2d_current(&cam_tf, projection, &window, p),
     ) {
         let delta = w_prev - w_now;
         cam_tf.translation.x += delta.x;

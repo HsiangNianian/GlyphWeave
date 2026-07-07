@@ -5,6 +5,7 @@
 use crate::render::MapBounds;
 use crate::render::atlas::{TileAtlas, tile_index};
 use crate::resource::{ActiveTheme, EditorViewSettings, WorldModel};
+use crate::viewport::world_viewport_bounds_current;
 use bevy::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
 use glyphweave_core::tile::TileKind;
@@ -83,14 +84,19 @@ pub fn spawn_tilemaps(
     world_model: Res<WorldModel>,
     atlas: Res<TileAtlas>,
     active_theme: Res<ActiveTheme>,
-    camera: Single<(&Camera, &GlobalTransform), With<Camera2d>>,
+    camera: Single<(&Transform, &Projection), With<Camera2d>>,
     window: Single<&Window>,
     mut tile_entities: ResMut<TileEntities>,
 ) {
-    let (camera, camera_transform) = *camera;
-    let bounds = camera_view_bounds(camera, camera_transform, &window, world_model.tile_size)
-        .map(render_bounds_for_view)
-        .unwrap_or_else(|| compute_bounds(&world_model.0));
+    let (camera_transform, camera_projection) = *camera;
+    let bounds = camera_view_bounds(
+        camera_transform,
+        camera_projection,
+        &window,
+        world_model.tile_size,
+    )
+    .map(render_bounds_for_view)
+    .unwrap_or_else(|| compute_bounds(&world_model.0));
     spawn_tilemaps_for_world(
         &mut commands,
         &world_model.0,
@@ -226,7 +232,7 @@ pub fn refresh_tilemaps(
     world_model: Res<WorldModel>,
     atlas: Res<TileAtlas>,
     active_theme: Res<ActiveTheme>,
-    camera: Single<(&Camera, &GlobalTransform), With<Camera2d>>,
+    camera: Single<(&Transform, &Projection), With<Camera2d>>,
     window: Single<&Window>,
     mut tile_entities: ResMut<TileEntities>,
     mut tilemaps: Query<(Entity, &mut TileStorage), With<TilemapLayer>>,
@@ -242,10 +248,15 @@ pub fn refresh_tilemaps(
         commands.entity(entity).despawn();
     }
 
-    let (camera, camera_transform) = *camera;
-    let bounds = camera_view_bounds(camera, camera_transform, &window, world_model.tile_size)
-        .map(render_bounds_for_view)
-        .unwrap_or_else(|| compute_bounds(&world_model.0));
+    let (camera_transform, camera_projection) = *camera;
+    let bounds = camera_view_bounds(
+        camera_transform,
+        camera_projection,
+        &window,
+        world_model.tile_size,
+    )
+    .map(render_bounds_for_view)
+    .unwrap_or_else(|| compute_bounds(&world_model.0));
     spawn_tilemaps_for_world(
         &mut commands,
         &world_model.0,
@@ -259,7 +270,7 @@ pub fn refresh_tilemaps(
 
 pub fn refresh_when_camera_bounds_change(
     world_model: Res<WorldModel>,
-    camera: Single<(&Camera, &GlobalTransform), With<Camera2d>>,
+    camera: Single<(&Transform, &Projection), With<Camera2d>>,
     window: Single<&Window>,
     bounds: Option<Res<MapBounds>>,
     mut refresh: ResMut<RenderRefresh>,
@@ -267,10 +278,13 @@ pub fn refresh_when_camera_bounds_change(
     if refresh.0 {
         return;
     }
-    let (camera, camera_transform) = *camera;
-    let Some(view_bounds) =
-        camera_view_bounds(camera, camera_transform, &window, world_model.tile_size)
-    else {
+    let (camera_transform, camera_projection) = *camera;
+    let Some(view_bounds) = camera_view_bounds(
+        camera_transform,
+        camera_projection,
+        &window,
+        world_model.tile_size,
+    ) else {
         return;
     };
     let Some(render_bounds) = bounds.as_deref().copied() else {
@@ -283,28 +297,17 @@ pub fn refresh_when_camera_bounds_change(
 }
 
 fn camera_view_bounds(
-    camera: &Camera,
-    camera_transform: &GlobalTransform,
+    camera_transform: &Transform,
+    camera_projection: &Projection,
     window: &Window,
     tile_size: u32,
 ) -> Option<MapBounds> {
-    let top_left = camera
-        .viewport_to_world_2d(camera_transform, Vec2::ZERO)
-        .ok()?;
-    let bottom_right = camera
-        .viewport_to_world_2d(camera_transform, Vec2::new(window.width(), window.height()))
-        .ok()?;
-
+    let view_bounds = world_viewport_bounds_current(camera_transform, camera_projection, window)?;
     let tile_px = tile_size.max(1) as f32;
-    let min_world_x = top_left.x.min(bottom_right.x);
-    let max_world_x = top_left.x.max(bottom_right.x);
-    let min_world_y = top_left.y.min(bottom_right.y);
-    let max_world_y = top_left.y.max(bottom_right.y);
-
-    let min_tile_x = (min_world_x / tile_px).floor() as i32;
-    let max_tile_x = (max_world_x / tile_px).ceil() as i32;
-    let min_tile_y = (-max_world_y / tile_px).floor() as i32;
-    let max_tile_y = (-min_world_y / tile_px).ceil() as i32;
+    let min_tile_x = (view_bounds.min_x / tile_px).floor() as i32;
+    let max_tile_x = (view_bounds.max_x / tile_px).ceil() as i32;
+    let min_tile_y = (-view_bounds.max_y / tile_px).floor() as i32;
+    let max_tile_y = (-view_bounds.min_y / tile_px).ceil() as i32;
 
     Some(MapBounds {
         min_x: min_tile_x,
@@ -381,34 +384,26 @@ pub fn sync_layer_visibility(
 pub fn draw_grid(
     settings: Res<EditorViewSettings>,
     world_model: Res<WorldModel>,
-    camera: Single<(&Camera, &GlobalTransform)>,
+    camera: Single<(&Transform, &Projection), With<Camera2d>>,
     window: Single<&Window>,
     mut gizmos: Gizmos,
 ) {
     if !settings.show_grid {
         return;
     }
-    let (camera, camera_transform) = *camera;
-    let Ok(top_left) = camera.viewport_to_world_2d(camera_transform, Vec2::ZERO) else {
-        return;
-    };
-    let Ok(bottom_right) =
-        camera.viewport_to_world_2d(camera_transform, Vec2::new(window.width(), window.height()))
+    let (camera_transform, camera_projection) = *camera;
+    let Some(view_bounds) =
+        world_viewport_bounds_current(camera_transform, camera_projection, &window)
     else {
         return;
     };
 
     let tile_px = world_model.tile_size.max(1) as f32;
     let padding = settings.view_distance as i32;
-    let min_world_x = top_left.x.min(bottom_right.x);
-    let max_world_x = top_left.x.max(bottom_right.x);
-    let min_world_y = top_left.y.min(bottom_right.y);
-    let max_world_y = top_left.y.max(bottom_right.y);
-
-    let min_tile_x = (min_world_x / tile_px).floor() as i32 - padding;
-    let max_tile_x = (max_world_x / tile_px).ceil() as i32 + padding;
-    let min_tile_y = (-max_world_y / tile_px).floor() as i32 - padding;
-    let max_tile_y = (-min_world_y / tile_px).ceil() as i32 + padding;
+    let min_tile_x = (view_bounds.min_x / tile_px).floor() as i32 - padding;
+    let max_tile_x = (view_bounds.max_x / tile_px).ceil() as i32 + padding;
+    let min_tile_y = (-view_bounds.max_y / tile_px).floor() as i32 - padding;
+    let max_tile_y = (-view_bounds.min_y / tile_px).ceil() as i32 + padding;
 
     let min_x = min_tile_x as f32 * tile_px;
     let max_x = (max_tile_x + 1) as f32 * tile_px;
