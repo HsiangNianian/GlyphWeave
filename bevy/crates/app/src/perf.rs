@@ -12,6 +12,7 @@ pub struct StartupOptions {
     pub map_path: Option<PathBuf>,
     pub no_vsync: bool,
     pub perf_check: Option<PerfCheckConfig>,
+    pub gameplay_demo: bool,
 }
 
 impl StartupOptions {
@@ -20,6 +21,7 @@ impl StartupOptions {
             map_path: None,
             no_vsync: false,
             perf_check: None,
+            gameplay_demo: false,
         };
         let mut threshold_fps = 150.0;
         let mut warmup_secs = 3.0;
@@ -72,7 +74,11 @@ impl StartupOptions {
                     fog = true;
                 }
                 "--perf-gameplay-entities" => {
-                    gameplay_entities = parse_number(args.next(), "--perf-gameplay-entities") as usize;
+                    gameplay_entities =
+                        parse_number(args.next(), "--perf-gameplay-entities") as usize;
+                }
+                "--gameplay-demo" => {
+                    options.gameplay_demo = true;
                 }
                 "--help" | "-h" => {
                     print_usage_and_exit(0);
@@ -385,7 +391,7 @@ fn fail_usage(message: &str) -> ! {
 
 fn print_usage_and_exit(code: i32) -> ! {
     eprintln!(
-        "usage: glyphweave [--map <path>] [--no-vsync] \
+        "usage: glyphweave [--map <path>] [--no-vsync] [--gameplay-demo] \
          [--perf-check --perf-motion <static|pan|zoom> --perf-threshold <fps> \
          --perf-warmup <secs> --perf-sample <secs> \
          --perf-zoom-percent <percent> --perf-pan-radius-tiles <tiles> \

@@ -1,5 +1,6 @@
 mod camera;
 mod gameplay;
+mod gameplay_demo;
 mod input;
 mod perf;
 mod preset;
@@ -31,6 +32,14 @@ pub struct ActiveBrush(pub TileKind);
 
 fn main() {
     let startup_options = StartupOptions::from_env();
+    if startup_options.gameplay_demo {
+        if let Err(err) = gameplay_demo::run() {
+            eprintln!("glyphweave: gameplay demo failed: {err}");
+            std::process::exit(2);
+        }
+        return;
+    }
+
     let perf_check = startup_options.perf_check.clone();
     let perf_mode = perf_check.is_some();
     let no_vsync = startup_options.no_vsync;
