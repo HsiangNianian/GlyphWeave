@@ -1,9 +1,10 @@
 //! Scripted gameplay walkthrough for the early Play mode.
 
+use crate::scenario::{FloodFortressPreset, create_flood_fortress_preset};
 use glyphweave_core::gameplay::{
-    BuildBlueprint, BuildKind, CommandDispatcher, CommandEnvelope, CommandSource, GameCommand,
-    GameState, ResourceKind, RuleBasedTextCommandSource, SimulationConfig, TileArea, TileCoord,
-    tick_gameplay,
+    BuildBlueprint, BuildKind, ChallengeStatus, CommandDispatcher, CommandEnvelope, CommandSource,
+    GameCommand, GameState, ResourceKind, RuleBasedTextCommandSource, SimulationConfig, TileArea,
+    TileCoord, tick_gameplay,
 };
 use glyphweave_core::tile::TileKind;
 use glyphweave_core::world::World;
@@ -167,6 +168,85 @@ pub fn run() -> Result<(), String> {
     }
     println!("[glyphweave:demo] complete");
 
+    Ok(())
+}
+
+pub fn run_flood_fortress() -> Result<(), String> {
+    let (mut world, mut state) = create_flood_fortress_preset(FloodFortressPreset::BreachNight);
+    if let Some(challenge) = state.challenge.as_mut() {
+        challenge.flood.breach_tick = state.time.tick + 3;
+        challenge.goals.silver_min_flood_structures = 5;
+    }
+
+    let config = SimulationConfig {
+        minutes_per_tick: 120,
+        job_work_ticks: 1,
+        monster_spawn_interval: u64::MAX,
+        water_spread_interval: 1,
+        core_flood_failure_ticks: 4,
+        ..SimulationConfig::default()
+    };
+
+    println!("[glyphweave:flood] scripted Flood Fortress challenge");
+    println!("[glyphweave:flood] objective: survive until day 3 with the core dry");
+
+    dispatch(
+        &world,
+        &mut state,
+        GameCommand::Build {
+            blueprint: BuildBlueprint {
+                kind: BuildKind::Wall,
+                area: TileArea::rect(TileCoord::new(-2, -2), TileCoord::new(-2, 2)),
+            },
+        },
+        "build floodwall",
+    )?;
+    dispatch(
+        &world,
+        &mut state,
+        GameCommand::Mine {
+            area: TileArea::single(TileCoord::new(-3, -3)),
+        },
+        "dig channel",
+    )?;
+
+    run_until(
+        &mut world,
+        &mut state,
+        config,
+        "finish works",
+        |_, state| state.open_job_count() == 0,
+    )?;
+    run_until(
+        &mut world,
+        &mut state,
+        config,
+        "survive flood",
+        |_, state| matches!(state.challenge_status(), Some(ChallengeStatus::Won(_))),
+    )?;
+
+    let challenge = state
+        .challenge
+        .as_ref()
+        .ok_or_else(|| "missing challenge state".to_string())?;
+    println!("[glyphweave:flood] status: {:?}", challenge.status);
+    println!(
+        "[glyphweave:flood] score: survivors={}/{} flooded={} core_wet={} built={} channels={} food={} wood={} stone={}",
+        challenge.score.surviving_workers,
+        challenge.score.total_workers,
+        challenge.score.flooded_tiles,
+        challenge.score.core_wet_ticks,
+        challenge.score.flood_structures_built,
+        challenge.score.channels_dug,
+        challenge.score.remaining_food,
+        challenge.score.remaining_wood,
+        challenge.score.remaining_stone
+    );
+    println!("[glyphweave:flood] recent events:");
+    for event in state.events.iter().rev().take(10).rev() {
+        println!("[glyphweave:flood]   #{} {}", event.tick, event.message);
+    }
+    println!("[glyphweave:flood] complete");
     Ok(())
 }
 

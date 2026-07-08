@@ -7,6 +7,7 @@ mod preset;
 mod render;
 mod render_sync;
 mod resource;
+mod scenario;
 mod tool;
 mod ui;
 mod viewport;
@@ -35,6 +36,13 @@ fn main() {
     if startup_options.gameplay_demo {
         if let Err(err) = gameplay_demo::run() {
             eprintln!("glyphweave: gameplay demo failed: {err}");
+            std::process::exit(2);
+        }
+        return;
+    }
+    if startup_options.flood_demo {
+        if let Err(err) = gameplay_demo::run_flood_fortress() {
+            eprintln!("glyphweave: flood demo failed: {err}");
             std::process::exit(2);
         }
         return;
@@ -155,10 +163,17 @@ fn main() {
                 perf::perf_cursor_to_camera_system,
                 render::tilemap::draw_grid,
                 render::tilemap::draw_fog_of_war,
+            )
+                .chain(),
+        )
+        .add_systems(
+            Update,
+            (
                 gameplay::sync_gameplay_entities,
                 gameplay::draw_gameplay_overlays,
             )
-                .chain(),
+                .chain()
+                .run_if(perf::has_perf_gameplay_entities),
         );
     }
 

@@ -214,6 +214,9 @@ pub enum JobKind {
     Explore {
         target: TileCoord,
     },
+    Evacuate {
+        target: TileCoord,
+    },
 }
 
 impl JobKind {
@@ -222,7 +225,8 @@ impl JobKind {
             Self::Mine { target }
             | Self::Chop { target }
             | Self::Build { target, .. }
-            | Self::Explore { target } => *target,
+            | Self::Explore { target }
+            | Self::Evacuate { target } => *target,
             Self::Haul { from, .. } => *from,
         }
     }
@@ -268,6 +272,7 @@ pub enum WorkerStatus {
     Walking,
     Working,
     Hauling,
+    Evacuating,
     Hungry,
     Downed,
 }
@@ -339,6 +344,195 @@ impl ItemPile {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Stockpile {
     pub area: TileArea,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CoreStorehouse {
+    pub area: TileArea,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SafeZone {
+    pub area: TileArea,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WaterSource {
+    pub pos: TileCoord,
+    pub max_level: u8,
+}
+
+impl WaterSource {
+    pub fn new(pos: TileCoord, max_level: u8) -> Self {
+        Self {
+            pos,
+            max_level: max_level.clamp(1, 3),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OldDam {
+    pub pos: TileCoord,
+    pub breached: bool,
+}
+
+impl OldDam {
+    pub fn new(pos: TileCoord) -> Self {
+        Self {
+            pos,
+            breached: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MedalTier {
+    Bronze,
+    Silver,
+    Gold,
+}
+
+impl MedalTier {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Bronze => "bronze",
+            Self::Silver => "silver",
+            Self::Gold => "gold",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ChallengeKind {
+    FloodFortress,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ChallengeStatus {
+    Setup,
+    Running,
+    Won(MedalTier),
+    Lost { reason: String },
+}
+
+impl ChallengeStatus {
+    pub fn is_running(&self) -> bool {
+        matches!(self, Self::Running)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChallengeGoals {
+    pub survive_until_day: u32,
+    pub silver_min_survivors: usize,
+    pub silver_min_flood_structures: u32,
+    pub gold_min_channels: u32,
+    pub gold_min_food: u32,
+    pub gold_min_wood: u32,
+    pub gold_min_stone: u32,
+}
+
+impl Default for ChallengeGoals {
+    fn default() -> Self {
+        Self {
+            survive_until_day: 3,
+            silver_min_survivors: 3,
+            silver_min_flood_structures: 8,
+            gold_min_channels: 1,
+            gold_min_food: 10,
+            gold_min_wood: 10,
+            gold_min_stone: 5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ChallengeScore {
+    pub total_workers: usize,
+    pub surviving_workers: usize,
+    pub flooded_tiles: usize,
+    pub core_wet_ticks: u32,
+    pub flood_structures_built: u32,
+    pub channels_dug: u32,
+    pub remaining_food: u32,
+    pub remaining_wood: u32,
+    pub remaining_stone: u32,
+    pub medal: Option<MedalTier>,
+    pub failure_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct FloodStats {
+    pub max_flooded_tiles: usize,
+    pub core_wet_ticks: u32,
+    pub flood_structures_built: u32,
+    pub channels_dug: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FloodFortressState {
+    pub breach_tick: u64,
+    pub old_dams: Vec<OldDam>,
+    pub water_sources: Vec<WaterSource>,
+    pub water_levels: HashMap<TileCoord, u8>,
+    pub core_flood_ticks: u32,
+    pub stats: FloodStats,
+}
+
+impl FloodFortressState {
+    pub fn new(
+        started_tick: u64,
+        old_dams: Vec<OldDam>,
+        water_sources: Vec<WaterSource>,
+        breach_after_ticks: u64,
+    ) -> Self {
+        let water_levels = water_sources
+            .iter()
+            .map(|source| (source.pos, source.max_level))
+            .collect();
+        Self {
+            breach_tick: started_tick.saturating_add(breach_after_ticks),
+            old_dams,
+            water_sources,
+            water_levels,
+            core_flood_ticks: 0,
+            stats: FloodStats::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChallengeState {
+    pub kind: ChallengeKind,
+    pub status: ChallengeStatus,
+    pub started_tick: u64,
+    pub goals: ChallengeGoals,
+    pub flood: FloodFortressState,
+    pub score: ChallengeScore,
+}
+
+impl ChallengeState {
+    pub fn flood_fortress(
+        started_tick: u64,
+        old_dams: Vec<OldDam>,
+        water_sources: Vec<WaterSource>,
+        breach_after_ticks: u64,
+    ) -> Self {
+        Self {
+            kind: ChallengeKind::FloodFortress,
+            status: ChallengeStatus::Running,
+            started_tick,
+            goals: ChallengeGoals::default(),
+            flood: FloodFortressState::new(
+                started_tick,
+                old_dams,
+                water_sources,
+                breach_after_ticks,
+            ),
+            score: ChallengeScore::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -424,10 +618,13 @@ pub struct GameState {
     pub monsters: HashMap<EntityId, Monster>,
     pub jobs: Vec<Job>,
     pub stockpiles: Vec<Stockpile>,
+    pub core_storehouse: Option<CoreStorehouse>,
+    pub safe_zone: Option<SafeZone>,
     pub item_piles: HashMap<TileCoord, ItemPile>,
     pub inventory: Inventory,
     pub time: GameTime,
     pub fog: FogMemory,
+    pub challenge: Option<ChallengeState>,
     pub events: VecDeque<GameEvent>,
 }
 
@@ -439,10 +636,13 @@ impl Default for GameState {
             monsters: HashMap::new(),
             jobs: Vec::new(),
             stockpiles: Vec::new(),
+            core_storehouse: None,
+            safe_zone: None,
             item_piles: HashMap::new(),
             inventory: Inventory::default(),
             time: GameTime::default(),
             fog: FogMemory::default(),
+            challenge: None,
             events: VecDeque::with_capacity(128),
         }
     }
@@ -499,6 +699,60 @@ impl GameState {
         self.stockpiles
             .first()
             .map(|stockpile| stockpile.area.center())
+    }
+
+    pub fn set_core_storehouse(&mut self, area: TileArea) {
+        self.core_storehouse = Some(CoreStorehouse { area });
+        if self.stockpiles.is_empty() {
+            self.stockpiles.push(Stockpile { area });
+        }
+        self.emit(format!(
+            "Core storehouse set {},{} to {},{}.",
+            area.min_x, area.min_y, area.max_x, area.max_y
+        ));
+    }
+
+    pub fn set_safe_zone(&mut self, area: TileArea) {
+        self.safe_zone = Some(SafeZone { area });
+        self.emit(format!(
+            "Safe zone set {},{} to {},{}.",
+            area.min_x, area.min_y, area.max_x, area.max_y
+        ));
+    }
+
+    pub fn start_flood_fortress(
+        &mut self,
+        core_area: TileArea,
+        old_dams: Vec<OldDam>,
+        water_sources: Vec<WaterSource>,
+        breach_after_ticks: u64,
+    ) {
+        self.set_core_storehouse(core_area);
+        self.challenge = Some(ChallengeState::flood_fortress(
+            self.time.tick,
+            old_dams,
+            water_sources,
+            breach_after_ticks,
+        ));
+        self.emit("Flood Fortress challenge armed. The old dam is counting down.");
+    }
+
+    pub fn water_level(&self, coord: TileCoord) -> u8 {
+        self.challenge
+            .as_ref()
+            .map(|challenge| {
+                challenge
+                    .flood
+                    .water_levels
+                    .get(&coord)
+                    .copied()
+                    .unwrap_or(0)
+            })
+            .unwrap_or(0)
+    }
+
+    pub fn challenge_status(&self) -> Option<&ChallengeStatus> {
+        self.challenge.as_ref().map(|challenge| &challenge.status)
     }
 
     pub fn emit(&mut self, message: impl Into<String>) {

@@ -37,6 +37,8 @@ pub enum GameCommand {
     Haul { from: TileArea, to: TileCoord },
     Explore { area: TileArea },
     SetStockpile { area: TileArea },
+    SetCoreStorehouse { area: TileArea },
+    Evacuate { area: TileArea },
     Cancel { area: TileArea },
 }
 
@@ -73,6 +75,7 @@ pub enum CommandError {
     AreaTooLarge { requested: usize, limit: usize },
     NoValidTargets,
     MissingStockpile,
+    NoWorkers,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -80,6 +83,8 @@ pub struct CommandReceipt {
     pub jobs_created: usize,
     pub jobs_canceled: usize,
     pub stockpiles_created: usize,
+    pub core_storehouse_set: bool,
+    pub safe_zone_set: bool,
 }
 
 pub struct CommandDispatcher;
@@ -147,6 +152,36 @@ impl CommandDispatcher {
                 ));
                 Ok(CommandReceipt {
                     stockpiles_created: 1,
+                    ..CommandReceipt::default()
+                })
+            }
+            GameCommand::SetCoreStorehouse { area } => {
+                validate_area(area)?;
+                state.set_core_storehouse(area);
+                Ok(CommandReceipt {
+                    core_storehouse_set: true,
+                    ..CommandReceipt::default()
+                })
+            }
+            GameCommand::Evacuate { area } => {
+                validate_area(area)?;
+                let target = area.center();
+                let worker_count = state
+                    .workers
+                    .values()
+                    .filter(|worker| worker.can_work())
+                    .count();
+                if worker_count == 0 {
+                    return Err(CommandError::NoWorkers);
+                }
+                state.set_safe_zone(area);
+                for _ in 0..worker_count {
+                    state.push_job(JobKind::Evacuate { target });
+                }
+                state.emit(format!("Queued evacuation for {worker_count} worker(s)."));
+                Ok(CommandReceipt {
+                    jobs_created: worker_count,
+                    safe_zone_set: true,
                     ..CommandReceipt::default()
                 })
             }
@@ -250,7 +285,21 @@ fn parse_text_command(text: &str, focus: TileCoord) -> Result<GameCommand, Strin
         || normalized.contains("仓库")
         || normalized.contains("储物")
     {
+        if normalized.contains("core")
+            || normalized.contains("heart")
+            || normalized.contains("核心")
+            || normalized.contains("中心")
+        {
+            return Ok(GameCommand::SetCoreStorehouse { area });
+        }
         return Ok(GameCommand::SetStockpile { area });
+    }
+    if normalized.contains("evacuate")
+        || normalized.contains("safe")
+        || normalized.contains("撤离")
+        || normalized.contains("安全区")
+    {
+        return Ok(GameCommand::Evacuate { area });
     }
     if normalized.contains("cancel") || normalized.contains("取消") {
         return Ok(GameCommand::Cancel { area });
@@ -369,5 +418,32 @@ mod tests {
 
         assert_eq!(receipt.stockpiles_created, 1);
         assert_eq!(state.stockpiles[0].area, area);
+    }
+
+    #[test]
+    fn dispatcher_sets_core_and_evacuates_workers() {
+        let mut state = GameState::new_with_worker(TileCoord::new(0, 0));
+        let core = TileArea::centered(TileCoord::new(2, 2), 1);
+        let receipt = CommandDispatcher::dispatch(
+            &World::default(),
+            &mut state,
+            CommandEnvelope::human(GameCommand::SetCoreStorehouse { area: core }),
+        )
+        .unwrap();
+        assert!(receipt.core_storehouse_set);
+        assert_eq!(state.core_storehouse.map(|core| core.area), Some(core));
+
+        let safe = TileArea::centered(TileCoord::new(5, 0), 1);
+        let receipt = CommandDispatcher::dispatch(
+            &World::default(),
+            &mut state,
+            CommandEnvelope::human(GameCommand::Evacuate { area: safe }),
+        )
+        .unwrap();
+
+        assert!(receipt.safe_zone_set);
+        assert_eq!(receipt.jobs_created, 1);
+        assert_eq!(state.safe_zone.map(|zone| zone.area), Some(safe));
+        assert!(matches!(state.jobs[0].kind, JobKind::Evacuate { .. }));
     }
 }

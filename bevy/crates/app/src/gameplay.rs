@@ -8,9 +8,9 @@ use crate::resource::{CursorTile, EditEvent, WorldModel, WorldRevision};
 use bevy::ecs::message::MessageWriter;
 use bevy::prelude::*;
 use glyphweave_core::gameplay::{
-    BuildBlueprint, BuildKind, CommandDispatcher, CommandEnvelope, CommandError, GameCommand,
-    GameState, ResourceKind, RuleBasedTextCommandSource, SimulationConfig, TileArea, TileCoord,
-    tick_gameplay, CommandSource,
+    BuildBlueprint, BuildKind, CommandDispatcher, CommandEnvelope, CommandError, CommandSource,
+    GameCommand, GameState, ResourceKind, RuleBasedTextCommandSource, SimulationConfig, TileArea,
+    TileCoord, tick_gameplay,
 };
 use glyphweave_core::world::World;
 use std::collections::{HashMap, HashSet};
@@ -41,13 +41,15 @@ pub enum ActiveGameOrder {
     Haul,
     Explore,
     Stockpile,
+    CoreStorehouse,
+    Evacuate,
     Cancel,
     #[default]
     Inspect,
 }
 
 impl ActiveGameOrder {
-    pub const ALL: [ActiveGameOrder; 10] = [
+    pub const ALL: [ActiveGameOrder; 12] = [
         ActiveGameOrder::Mine,
         ActiveGameOrder::Chop,
         ActiveGameOrder::BuildWall,
@@ -56,6 +58,8 @@ impl ActiveGameOrder {
         ActiveGameOrder::Haul,
         ActiveGameOrder::Explore,
         ActiveGameOrder::Stockpile,
+        ActiveGameOrder::CoreStorehouse,
+        ActiveGameOrder::Evacuate,
         ActiveGameOrder::Cancel,
         ActiveGameOrder::Inspect,
     ];
@@ -70,6 +74,8 @@ impl ActiveGameOrder {
             Self::Haul => "Haul",
             Self::Explore => "Explore",
             Self::Stockpile => "Stockpile",
+            Self::CoreStorehouse => "Core",
+            Self::Evacuate => "Evac",
             Self::Cancel => "Cancel",
             Self::Inspect => "Inspect",
         }
@@ -127,9 +133,9 @@ pub fn is_play_mode(mode: Res<GameMode>) -> bool {
 }
 
 pub fn init_gameplay_state(mut commands: Commands, world_model: Res<WorldModel>) {
-    commands.insert_resource(GameplayModel(GameState::new_with_worker(spawn_coord_for_world(
-        &world_model.0,
-    ))));
+    commands.insert_resource(GameplayModel(GameState::new_with_worker(
+        spawn_coord_for_world(&world_model.0),
+    )));
 }
 
 pub fn reset_gameplay_for_world(gameplay: &mut GameplayModel, world: &World) {
@@ -139,15 +145,17 @@ pub fn reset_gameplay_for_world(gameplay: &mut GameplayModel, world: &World) {
 pub fn seed_perf_gameplay_entities(gameplay: &mut GameplayModel, world: &World, count: usize) {
     let anchor = spawn_coord_for_world(world);
     gameplay.0 = GameState::default();
-    gameplay.stockpiles.push(glyphweave_core::gameplay::Stockpile {
-        area: TileArea::centered(anchor, 4),
-    });
+    gameplay
+        .stockpiles
+        .push(glyphweave_core::gameplay::Stockpile {
+            area: TileArea::centered(anchor, 4),
+        });
 
     for index in 0..count {
         let coord = perf_coord(anchor, index);
-        let coord = if glyphweave_core::gameplay::is_passable(glyphweave_core::gameplay::rendered_tile_at(
-            world, coord,
-        )) {
+        let coord = if glyphweave_core::gameplay::is_passable(
+            glyphweave_core::gameplay::rendered_tile_at(world, coord),
+        ) {
             coord
         } else {
             anchor
@@ -200,12 +208,13 @@ pub fn command_for_order(
                 area,
             },
         }),
-        ActiveGameOrder::Haul => state.stockpile_target().map(|to| GameCommand::Haul {
-            from: area,
-            to,
-        }),
+        ActiveGameOrder::Haul => state
+            .stockpile_target()
+            .map(|to| GameCommand::Haul { from: area, to }),
         ActiveGameOrder::Explore => Some(GameCommand::Explore { area }),
         ActiveGameOrder::Stockpile => Some(GameCommand::SetStockpile { area }),
+        ActiveGameOrder::CoreStorehouse => Some(GameCommand::SetCoreStorehouse { area }),
+        ActiveGameOrder::Evacuate => Some(GameCommand::Evacuate { area }),
         ActiveGameOrder::Cancel => Some(GameCommand::Cancel { area }),
         ActiveGameOrder::Inspect => None,
     }
@@ -277,6 +286,10 @@ pub fn gameplay_hotkeys(
         *active_order = ActiveGameOrder::Cancel;
     } else if keys.just_pressed(KeyCode::KeyO) {
         *active_order = ActiveGameOrder::Explore;
+    } else if keys.just_pressed(KeyCode::KeyV) {
+        *active_order = ActiveGameOrder::Evacuate;
+    } else if keys.just_pressed(KeyCode::KeyK) {
+        *active_order = ActiveGameOrder::CoreStorehouse;
     }
 }
 
@@ -373,9 +386,10 @@ pub fn sync_gameplay_entities(
     let pile_coords: HashSet<_> = gameplay.item_piles.keys().copied().collect();
     for pile in gameplay.item_piles.values() {
         let color = item_pile_color(&pile.items);
-        let entity = *visuals.item_piles.entry(pile.pos).or_insert_with(|| {
-            spawn_visual(&mut commands, pile.pos, tile_px, color, 0.38, 4.7)
-        });
+        let entity = *visuals
+            .item_piles
+            .entry(pile.pos)
+            .or_insert_with(|| spawn_visual(&mut commands, pile.pos, tile_px, color, 0.38, 4.7));
         update_visual(entity, pile.pos, tile_px, color, 0.38, 4.7, &mut transforms);
     }
     despawn_missing(&mut commands, &mut visuals.item_piles, &pile_coords);
@@ -404,6 +418,39 @@ pub fn draw_gameplay_overlays(
             size,
             Color::srgba(0.3, 0.95, 0.55, 0.75),
         );
+    }
+
+    if let Some(core) = gameplay.core_storehouse {
+        draw_area_rect(
+            &mut gizmos,
+            core.area,
+            tile_px,
+            Color::srgba(0.25, 0.8, 1.0, 0.9),
+        );
+    }
+
+    if let Some(safe_zone) = gameplay.safe_zone {
+        draw_area_rect(
+            &mut gizmos,
+            safe_zone.area,
+            tile_px,
+            Color::srgba(0.55, 1.0, 0.3, 0.85),
+        );
+    }
+
+    if let Some(challenge) = &gameplay.challenge {
+        for dam in &challenge.flood.old_dams {
+            let color = if dam.breached {
+                Color::srgba(0.2, 0.55, 1.0, 0.9)
+            } else {
+                Color::srgba(1.0, 0.45, 0.1, 0.9)
+            };
+            gizmos.rect_2d(
+                Isometry2d::from_translation(tile_center(dam.pos, tile_px)),
+                Vec2::splat(tile_px * 0.92),
+                color,
+            );
+        }
     }
 
     for job in gameplay.jobs.iter().filter(|job| job.is_open()) {
@@ -435,6 +482,7 @@ fn command_error_label(err: CommandError) -> String {
         }
         CommandError::NoValidTargets => "no valid targets".into(),
         CommandError::MissingStockpile => "missing stockpile".into(),
+        CommandError::NoWorkers => "no workers".into(),
     }
 }
 
@@ -446,7 +494,8 @@ fn spawn_coord_for_world(world: &World) -> TileCoord {
         return origin;
     }
 
-    world.layers
+    world
+        .layers
         .iter()
         .filter_map(|layer| world.grid(&layer.id))
         .flat_map(|grid| grid.iter_tiles())
@@ -460,10 +509,7 @@ fn perf_coord(anchor: TileCoord, index: usize) -> TileCoord {
     let side = ((index as f32).sqrt().ceil() as i32).max(1);
     let row = index as i32 / side;
     let col = index as i32 % side;
-    TileCoord::new(
-        anchor.x + col - side / 2,
-        anchor.y + row - side / 2,
-    )
+    TileCoord::new(anchor.x + col - side / 2, anchor.y + row - side / 2)
 }
 
 fn spawn_visual(
@@ -530,6 +576,16 @@ fn tile_center(coord: TileCoord, tile_px: f32) -> Vec2 {
     )
 }
 
+fn draw_area_rect(gizmos: &mut Gizmos, area: TileArea, tile_px: f32, color: Color) {
+    let left = area.min_x as f32 * tile_px;
+    let right = (area.max_x + 1) as f32 * tile_px;
+    let top = -(area.min_y as f32) * tile_px;
+    let bottom = -((area.max_y + 1) as f32) * tile_px;
+    let center = Vec2::new((left + right) * 0.5, (top + bottom) * 0.5);
+    let size = Vec2::new(right - left, top - bottom);
+    gizmos.rect_2d(Isometry2d::from_translation(center), size, color);
+}
+
 fn item_pile_color(items: &glyphweave_core::gameplay::Inventory) -> Color {
     if items.get(ResourceKind::Wood) > 0 {
         Color::srgba(0.75, 0.45, 0.22, 0.95)
@@ -550,8 +606,7 @@ mod tests {
     fn active_order_maps_to_build_command() {
         let state = GameState::new_with_worker(TileCoord::new(0, 0));
         let command =
-            command_for_order(ActiveGameOrder::BuildWall, TileCoord::new(2, 3), 0, &state)
-                .unwrap();
+            command_for_order(ActiveGameOrder::BuildWall, TileCoord::new(2, 3), 0, &state).unwrap();
 
         match command {
             GameCommand::Build { blueprint } => {

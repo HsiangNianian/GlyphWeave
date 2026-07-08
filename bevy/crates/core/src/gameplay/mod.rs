@@ -13,11 +13,12 @@ pub use command::{
     CommandSource, CommandSourceKind, GameCommand, RuleBasedTextCommandSource,
 };
 pub use sim::{
-    SimulationConfig, TickResult, build_cost, is_choppable, is_mineable, is_passable,
-    rendered_tile_at,
-    resource_from_chop, resource_from_mine, tick_gameplay,
+    SimulationConfig, TickResult, build_cost, is_choppable, is_gameplay_passable, is_mineable,
+    is_passable, rendered_tile_at, resource_from_chop, resource_from_mine, tick_gameplay,
 };
 pub use state::{
-    EntityId, FogMemory, GameEvent, GameState, GameTime, Inventory, ItemPile, Job, JobKind,
-    JobStatus, Monster, ResourceKind, Stockpile, TileArea, TileCoord, Worker, WorkerStatus,
+    ChallengeGoals, ChallengeKind, ChallengeScore, ChallengeState, ChallengeStatus, CoreStorehouse,
+    EntityId, FloodFortressState, FloodStats, FogMemory, GameEvent, GameState, GameTime, Inventory,
+    ItemPile, Job, JobKind, JobStatus, MedalTier, Monster, OldDam, ResourceKind, SafeZone,
+    Stockpile, TileArea, TileCoord, WaterSource, Worker, WorkerStatus,
 };

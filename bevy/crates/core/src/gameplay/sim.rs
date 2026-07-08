@@ -1,5 +1,6 @@
 use crate::gameplay::state::{
-    GameState, Inventory, JobKind, JobStatus, ResourceKind, TileCoord, Worker, WorkerStatus,
+    ChallengeScore, ChallengeStatus, GameState, Inventory, JobKind, JobStatus, MedalTier,
+    ResourceKind, TileCoord, Worker, WorkerStatus,
 };
 use crate::tile::TileKind;
 use crate::world::World;
@@ -13,6 +14,8 @@ pub struct SimulationConfig {
     pub hunger_decay_interval: u64,
     pub monster_spawn_interval: u64,
     pub max_monsters: usize,
+    pub water_spread_interval: u64,
+    pub core_flood_failure_ticks: u32,
 }
 
 impl Default for SimulationConfig {
@@ -24,6 +27,8 @@ impl Default for SimulationConfig {
             hunger_decay_interval: 24,
             monster_spawn_interval: 120,
             max_monsters: 6,
+            water_spread_interval: 2,
+            core_flood_failure_ticks: 8,
         }
     }
 }
@@ -35,6 +40,8 @@ pub struct TickResult {
     pub jobs_failed: usize,
     pub monsters_spawned: usize,
     pub attacks: usize,
+    pub water_tiles_changed: usize,
+    pub challenge_ended: bool,
 }
 
 pub fn tick_gameplay(
@@ -46,6 +53,7 @@ pub fn tick_gameplay(
     state.time.advance(config.minutes_per_tick);
     state.fog.begin_frame();
 
+    tick_flood_fortress(world, state, config, &mut result);
     assign_jobs(state);
 
     let worker_ids: Vec<_> = state.workers.keys().copied().collect();
@@ -60,6 +68,7 @@ pub fn tick_gameplay(
 
     maybe_spawn_monster(world, state, config, &mut result);
     tick_monsters(world, state, config, &mut result);
+    tick_challenge_outcome(state, config, &mut result);
     result
 }
 
@@ -108,6 +117,29 @@ pub fn is_passable(kind: Option<TileKind>) -> bool {
     }
 }
 
+pub fn is_gameplay_passable(world: &World, state: &GameState, coord: TileCoord) -> bool {
+    match state.water_level(coord) {
+        0 => is_passable(rendered_tile_at(world, coord)),
+        1 => is_shallow_water_walkable(rendered_tile_at(world, coord)),
+        _ => false,
+    }
+}
+
+fn is_shallow_water_walkable(kind: Option<TileKind>) -> bool {
+    !matches!(
+        kind,
+        Some(
+            TileKind::Wall
+                | TileKind::DeepWater
+                | TileKind::Lava
+                | TileKind::Tree
+                | TileKind::Pillar
+                | TileKind::Cage
+                | TileKind::Bar
+        )
+    )
+}
+
 pub fn is_mineable(kind: Option<TileKind>) -> bool {
     matches!(
         kind,
@@ -142,6 +174,308 @@ pub fn build_cost(kind: TileKind) -> Inventory {
         _ => {}
     }
     cost
+}
+
+fn tick_flood_fortress(
+    world: &mut World,
+    state: &mut GameState,
+    config: SimulationConfig,
+    result: &mut TickResult,
+) {
+    let Some(challenge) = state.challenge.as_ref() else {
+        return;
+    };
+    if !challenge.status.is_running() {
+        return;
+    }
+
+    breach_old_dams(world, state, result);
+
+    if flood_has_breached(state)
+        && (config.water_spread_interval == 0
+            || state.time.tick.is_multiple_of(config.water_spread_interval))
+    {
+        spread_water(world, state, result);
+    }
+
+    update_core_flooding(state);
+}
+
+fn breach_old_dams(world: &mut World, state: &mut GameState, result: &mut TickResult) {
+    let should_breach = state
+        .challenge
+        .as_ref()
+        .map(|challenge| state.time.tick >= challenge.flood.breach_tick)
+        .unwrap_or(false);
+    if !should_breach {
+        return;
+    }
+
+    let mut breached = Vec::new();
+    if let Some(challenge) = state.challenge.as_mut() {
+        for dam in &mut challenge.flood.old_dams {
+            if dam.breached {
+                continue;
+            }
+            dam.breached = true;
+            challenge.flood.water_levels.insert(dam.pos, 3);
+            breached.push(dam.pos);
+        }
+    }
+
+    if breached.is_empty() {
+        return;
+    }
+
+    let layer = world.active_layer.clone();
+    for coord in breached {
+        world.set(&layer, coord.x, coord.y, TileKind::DeepWater);
+        result.tile_changes.push(coord);
+        result.water_tiles_changed += 1;
+        state.emit(format!(
+            "The old dam at {},{} failed. Excellent planning, everyone.",
+            coord.x, coord.y
+        ));
+    }
+}
+
+fn flood_has_breached(state: &GameState) -> bool {
+    state
+        .challenge
+        .as_ref()
+        .map(|challenge| challenge.flood.old_dams.iter().any(|dam| dam.breached))
+        .unwrap_or(false)
+}
+
+fn spread_water(world: &mut World, state: &mut GameState, result: &mut TickResult) {
+    let Some(challenge) = state.challenge.as_ref() else {
+        return;
+    };
+    let mut next_levels = challenge.flood.water_levels.clone();
+
+    for source in &challenge.flood.water_sources {
+        let current = next_levels.get(&source.pos).copied().unwrap_or(0);
+        next_levels.insert(source.pos, current.max(source.max_level));
+    }
+
+    let current_levels: Vec<(TileCoord, u8)> = next_levels
+        .iter()
+        .map(|(coord, level)| (*coord, *level))
+        .collect();
+    for (coord, level) in current_levels {
+        if level <= 1 {
+            continue;
+        }
+        let neighbor_level = level - 1;
+        for neighbor in coord.neighbors4() {
+            if !water_can_enter(world, neighbor) {
+                continue;
+            }
+            let current = next_levels.get(&neighbor).copied().unwrap_or(0);
+            if neighbor_level > current {
+                next_levels.insert(neighbor, neighbor_level);
+            }
+        }
+    }
+
+    let mut changed = Vec::new();
+    if let Some(challenge) = state.challenge.as_mut() {
+        for (coord, level) in &next_levels {
+            let old = challenge
+                .flood
+                .water_levels
+                .get(coord)
+                .copied()
+                .unwrap_or(0);
+            if *level != old {
+                changed.push((*coord, *level));
+            }
+        }
+        challenge.flood.water_levels = next_levels;
+        challenge.flood.stats.max_flooded_tiles = challenge
+            .flood
+            .stats
+            .max_flooded_tiles
+            .max(challenge.flood.water_levels.len());
+    }
+
+    let layer = world.active_layer.clone();
+    for (coord, level) in changed {
+        world.set(&layer, coord.x, coord.y, water_tile_for_level(level));
+        result.tile_changes.push(coord);
+        result.water_tiles_changed += 1;
+    }
+}
+
+fn water_can_enter(world: &World, coord: TileCoord) -> bool {
+    !matches!(
+        rendered_tile_at(world, coord),
+        Some(
+            TileKind::Wall
+                | TileKind::Door
+                | TileKind::DoorOpen
+                | TileKind::Lava
+                | TileKind::Tree
+                | TileKind::Pillar
+                | TileKind::Cage
+                | TileKind::Bar
+        )
+    )
+}
+
+fn water_tile_for_level(level: u8) -> TileKind {
+    if level >= 2 {
+        TileKind::DeepWater
+    } else {
+        TileKind::Water
+    }
+}
+
+fn update_core_flooding(state: &mut GameState) {
+    let Some(core) = state.core_storehouse else {
+        return;
+    };
+    let flooded = core.area.iter().any(|coord| state.water_level(coord) >= 2);
+    let mut started = false;
+    if let Some(challenge) = state.challenge.as_mut() {
+        if flooded {
+            challenge.flood.core_flood_ticks += 1;
+            challenge.flood.stats.core_wet_ticks += 1;
+            started = challenge.flood.core_flood_ticks == 1;
+        } else {
+            challenge.flood.core_flood_ticks = 0;
+        }
+    }
+    if started {
+        state.emit("Core storehouse is taking water. This is the opposite of storage.");
+    }
+}
+
+fn tick_challenge_outcome(
+    state: &mut GameState,
+    config: SimulationConfig,
+    result: &mut TickResult,
+) {
+    let Some(challenge) = state.challenge.as_ref() else {
+        return;
+    };
+    if !challenge.status.is_running() {
+        return;
+    }
+
+    let mut loss_reason = None;
+    if state.workers.values().all(|worker| !worker.can_work()) {
+        loss_reason = Some("all workers are down".to_string());
+    } else if challenge.flood.core_flood_ticks >= config.core_flood_failure_ticks {
+        loss_reason = Some("core storehouse flooded".to_string());
+    }
+
+    if let Some(reason) = loss_reason {
+        settle_challenge_loss(state, result, reason);
+        return;
+    }
+
+    let should_win = state
+        .challenge
+        .as_ref()
+        .map(|challenge| state.time.day >= challenge.goals.survive_until_day)
+        .unwrap_or(false);
+    if should_win {
+        settle_challenge_win(state, result);
+    } else {
+        refresh_challenge_score(state, None, None);
+    }
+}
+
+fn settle_challenge_loss(state: &mut GameState, result: &mut TickResult, reason: String) {
+    refresh_challenge_score(state, None, Some(reason.clone()));
+    if let Some(challenge) = state.challenge.as_mut() {
+        challenge.status = ChallengeStatus::Lost {
+            reason: reason.clone(),
+        };
+    }
+    result.challenge_ended = true;
+    state.emit(format!("Flood Fortress failed: {reason}."));
+}
+
+fn settle_challenge_win(state: &mut GameState, result: &mut TickResult) {
+    let medal = compute_medal(state);
+    refresh_challenge_score(state, Some(medal), None);
+    if let Some(challenge) = state.challenge.as_mut() {
+        challenge.status = ChallengeStatus::Won(medal);
+    }
+    result.challenge_ended = true;
+    state.emit(format!(
+        "Flood Fortress survived with a {} medal.",
+        medal.label()
+    ));
+}
+
+fn refresh_challenge_score(
+    state: &mut GameState,
+    medal: Option<MedalTier>,
+    failure_reason: Option<String>,
+) {
+    let score = build_challenge_score(state, medal, failure_reason);
+    if let Some(challenge) = state.challenge.as_mut() {
+        challenge.score = score;
+    }
+}
+
+fn build_challenge_score(
+    state: &GameState,
+    medal: Option<MedalTier>,
+    failure_reason: Option<String>,
+) -> ChallengeScore {
+    let flood_stats = state
+        .challenge
+        .as_ref()
+        .map(|challenge| challenge.flood.stats.clone())
+        .unwrap_or_default();
+    ChallengeScore {
+        total_workers: state.workers.len(),
+        surviving_workers: state
+            .workers
+            .values()
+            .filter(|worker| worker.can_work())
+            .count(),
+        flooded_tiles: flood_stats.max_flooded_tiles,
+        core_wet_ticks: flood_stats.core_wet_ticks,
+        flood_structures_built: flood_stats.flood_structures_built,
+        channels_dug: flood_stats.channels_dug,
+        remaining_food: state.inventory.get(ResourceKind::Food),
+        remaining_wood: state.inventory.get(ResourceKind::Wood),
+        remaining_stone: state.inventory.get(ResourceKind::Stone),
+        medal,
+        failure_reason,
+    }
+}
+
+fn compute_medal(state: &GameState) -> MedalTier {
+    let Some(challenge) = state.challenge.as_ref() else {
+        return MedalTier::Bronze;
+    };
+    let score = build_challenge_score(state, None, None);
+    let goals = challenge.goals;
+
+    let gold = score.surviving_workers == score.total_workers
+        && score.core_wet_ticks == 0
+        && score.channels_dug >= goals.gold_min_channels
+        && score.remaining_food >= goals.gold_min_food
+        && score.remaining_wood >= goals.gold_min_wood
+        && score.remaining_stone >= goals.gold_min_stone;
+    if gold {
+        return MedalTier::Gold;
+    }
+
+    let silver = score.surviving_workers >= goals.silver_min_survivors
+        && score.core_wet_ticks == 0
+        && score.flood_structures_built >= goals.silver_min_flood_structures;
+    if silver {
+        return MedalTier::Silver;
+    }
+
+    MedalTier::Bronze
 }
 
 fn assign_jobs(state: &mut GameState) {
@@ -210,13 +544,18 @@ fn tick_worker(
     };
 
     if worker.pos != destination {
-        if let Some(next) = next_step_toward(world, worker.pos, destination, config.max_path_nodes)
+        if let Some(next) =
+            next_step_toward(world, state, worker.pos, destination, config.max_path_nodes)
         {
-            worker.pos = next;
             worker.status = match job_kind {
                 JobKind::Haul { .. } => WorkerStatus::Hauling,
+                JobKind::Evacuate { .. } => WorkerStatus::Evacuating,
                 _ => WorkerStatus::Walking,
             };
+            if state.water_level(next) == 1 && state.time.tick.is_multiple_of(2) {
+                return;
+            }
+            worker.pos = next;
         } else {
             fail_job(state, worker, job_index, "path blocked", result);
         }
@@ -257,14 +596,14 @@ fn job_destination(
 ) -> Option<TileCoord> {
     match job {
         JobKind::Mine { target } | JobKind::Chop { target } => {
-            adjacent_work_tile(world, worker.pos, *target, config.max_path_nodes)
+            adjacent_work_tile(world, state, worker.pos, *target, config.max_path_nodes)
         }
         JobKind::Build {
             target, tile_id, ..
         } => {
             let kind = TileKind::from_id(tile_id)?;
             if matches!(kind, TileKind::Wall | TileKind::Pillar | TileKind::Bar) {
-                adjacent_work_tile(world, worker.pos, *target, config.max_path_nodes)
+                adjacent_work_tile(world, state, worker.pos, *target, config.max_path_nodes)
             } else {
                 Some(*target)
             }
@@ -277,11 +616,13 @@ fn job_destination(
             }
         }
         JobKind::Explore { target } => Some(*target),
+        JobKind::Evacuate { target } => Some(*target),
     }
 }
 
 fn adjacent_work_tile(
     world: &World,
+    state: &GameState,
     start: TileCoord,
     target: TileCoord,
     max_nodes: usize,
@@ -289,8 +630,10 @@ fn adjacent_work_tile(
     target
         .neighbors4()
         .into_iter()
-        .filter(|coord| is_passable(rendered_tile_at(world, *coord)))
-        .min_by_key(|coord| path_distance(world, start, *coord, max_nodes).unwrap_or(u32::MAX))
+        .filter(|coord| is_gameplay_passable(world, state, *coord))
+        .min_by_key(|coord| {
+            path_distance(world, state, start, *coord, max_nodes).unwrap_or(u32::MAX)
+        })
 }
 
 fn complete_job(
@@ -314,6 +657,12 @@ fn complete_job(
             let layer = world.active_layer.clone();
             world.set(&layer, target.x, target.y, TileKind::Floor);
             result.tile_changes.push(target);
+            if is_channel_dig(state, target)
+                && let Some(challenge) = state.challenge.as_mut()
+                && challenge.status.is_running()
+            {
+                challenge.flood.stats.channels_dug += 1;
+            }
             if let Some(resource) = resource_from_mine(kind) {
                 state.add_item_pile(target, resource, 1);
             }
@@ -352,6 +701,12 @@ fn complete_job(
             let layer = world.active_layer.clone();
             world.set(&layer, target.x, target.y, kind);
             result.tile_changes.push(target);
+            if matches!(kind, TileKind::Wall | TileKind::Door | TileKind::DoorOpen)
+                && let Some(challenge) = state.challenge.as_mut()
+                && challenge.status.is_running()
+            {
+                challenge.flood.stats.flood_structures_built += 1;
+            }
             finish_job(state, worker, job_index, result, "Built structure.");
         }
         JobKind::Haul { from, to } => {
@@ -375,6 +730,15 @@ fn complete_job(
         JobKind::Explore { target } => {
             state.fog.reveal(target);
             finish_job(state, worker, job_index, result, "Explored new ground.");
+        }
+        JobKind::Evacuate { target: _ } => {
+            finish_job(
+                state,
+                worker,
+                job_index,
+                result,
+                "Reached the safe zone. Nobody is calling it cowardice.",
+            );
         }
     }
 }
@@ -507,9 +871,13 @@ fn tick_monsters(
             if let Some(name) = attacked_name {
                 state.emit(format!("{name} was attacked."));
             }
-        } else if let Some(next) =
-            next_step_toward(world, monster.pos, worker_pos, config.max_path_nodes / 2)
-        {
+        } else if let Some(next) = next_step_toward(
+            world,
+            state,
+            monster.pos,
+            worker_pos,
+            config.max_path_nodes / 2,
+        ) {
             monster.pos = next;
         }
         state.monsters.insert(monster_id, monster);
@@ -518,6 +886,7 @@ fn tick_monsters(
 
 fn next_step_toward(
     world: &World,
+    state: &GameState,
     start: TileCoord,
     goal: TileCoord,
     max_nodes: usize,
@@ -531,13 +900,13 @@ fn next_step_toward(
 
     while let Some(current) = queue.pop_front() {
         if visited.len() > max_nodes.max(1) {
-            return greedy_step(world, start, goal);
+            return greedy_step(world, state, start, goal);
         }
         for next in current.neighbors4() {
             if !visited.insert(next) {
                 continue;
             }
-            if next != goal && !is_passable(rendered_tile_at(world, next)) {
+            if !is_gameplay_passable(world, state, next) {
                 continue;
             }
             came_from.insert(next, current);
@@ -547,11 +916,12 @@ fn next_step_toward(
             queue.push_back(next);
         }
     }
-    greedy_step(world, start, goal)
+    greedy_step(world, state, start, goal)
 }
 
 fn path_distance(
     world: &World,
+    state: &GameState,
     start: TileCoord,
     goal: TileCoord,
     max_nodes: usize,
@@ -569,7 +939,7 @@ fn path_distance(
             if !visited.insert(next) {
                 continue;
             }
-            if next != goal && !is_passable(rendered_tile_at(world, next)) {
+            if !is_gameplay_passable(world, state, next) {
                 continue;
             }
             if next == goal {
@@ -596,12 +966,34 @@ fn first_step(
     None
 }
 
-fn greedy_step(world: &World, start: TileCoord, goal: TileCoord) -> Option<TileCoord> {
+fn greedy_step(
+    world: &World,
+    state: &GameState,
+    start: TileCoord,
+    goal: TileCoord,
+) -> Option<TileCoord> {
     start
         .neighbors4()
         .into_iter()
-        .filter(|coord| is_passable(rendered_tile_at(world, *coord)))
+        .filter(|coord| is_gameplay_passable(world, state, *coord))
         .min_by_key(|coord| coord.manhattan(goal))
+}
+
+fn is_channel_dig(state: &GameState, target: TileCoord) -> bool {
+    let Some(challenge) = state.challenge.as_ref() else {
+        return false;
+    };
+    let near_source = challenge
+        .flood
+        .water_sources
+        .iter()
+        .any(|source| source.pos.manhattan(target) <= 6);
+    let near_dam = challenge
+        .flood
+        .old_dams
+        .iter()
+        .any(|dam| dam.pos.manhattan(target) <= 6);
+    near_source || near_dam
 }
 
 fn ring_candidates(center: TileCoord, radius: i32) -> impl Iterator<Item = TileCoord> {
@@ -623,7 +1015,7 @@ mod tests {
     use crate::gameplay::command::{
         BuildBlueprint, BuildKind, CommandDispatcher, CommandEnvelope, GameCommand,
     };
-    use crate::gameplay::state::TileArea;
+    use crate::gameplay::state::{OldDam, TileArea, WaterSource};
 
     #[test]
     fn mine_job_turns_wall_into_floor_and_drops_stone() {
@@ -723,18 +1115,229 @@ mod tests {
         assert!(state.fog.explored.contains(&TileCoord::new(3, 0)));
     }
 
+    #[test]
+    fn flood_fortress_loses_when_core_stays_deep() {
+        let mut world = World::default();
+        let mut state = GameState::new_with_worker(TileCoord::new(2, 0));
+        state.start_flood_fortress(
+            TileArea::single(TileCoord::new(0, 0)),
+            vec![OldDam::new(TileCoord::new(-1, 0))],
+            vec![WaterSource::new(TileCoord::new(-2, 0), 3)],
+            1,
+        );
+
+        run_ticks_with_config(
+            &mut world,
+            &mut state,
+            4,
+            SimulationConfig {
+                water_spread_interval: 1,
+                core_flood_failure_ticks: 2,
+                monster_spawn_interval: u64::MAX,
+                ..SimulationConfig::default()
+            },
+        );
+
+        assert!(matches!(
+            state.challenge_status(),
+            Some(ChallengeStatus::Lost { reason }) if reason == "core storehouse flooded"
+        ));
+        assert!(state.water_level(TileCoord::new(0, 0)) >= 2);
+    }
+
+    #[test]
+    fn flood_fortress_water_waits_for_dam_breach() {
+        let mut world = World::default();
+        let mut state = GameState::new_with_worker(TileCoord::new(2, 0));
+        state.start_flood_fortress(
+            TileArea::single(TileCoord::new(0, 0)),
+            vec![OldDam::new(TileCoord::new(-1, 0))],
+            vec![WaterSource::new(TileCoord::new(-2, 0), 3)],
+            100,
+        );
+
+        run_ticks_with_config(
+            &mut world,
+            &mut state,
+            5,
+            SimulationConfig {
+                water_spread_interval: 1,
+                monster_spawn_interval: u64::MAX,
+                ..SimulationConfig::default()
+            },
+        );
+
+        assert_eq!(state.water_level(TileCoord::new(-2, 0)), 3);
+        assert_eq!(state.water_level(TileCoord::new(-1, 0)), 0);
+        assert_eq!(state.water_level(TileCoord::new(0, 0)), 0);
+    }
+
+    #[test]
+    fn flood_fortress_wall_blocks_water_and_awards_bronze() {
+        let mut world = World::default();
+        let layer = world.active_layer.clone();
+        world.set(&layer, -1, 0, TileKind::Wall);
+        let mut state = GameState::new_with_worker(TileCoord::new(2, 0));
+        state.start_flood_fortress(
+            TileArea::single(TileCoord::new(1, 0)),
+            vec![OldDam::new(TileCoord::new(-3, 0))],
+            vec![WaterSource::new(TileCoord::new(-4, 0), 3)],
+            1,
+        );
+
+        run_ticks_with_config(
+            &mut world,
+            &mut state,
+            8,
+            SimulationConfig {
+                minutes_per_tick: 720,
+                water_spread_interval: 1,
+                monster_spawn_interval: u64::MAX,
+                ..SimulationConfig::default()
+            },
+        );
+
+        assert!(matches!(
+            state.challenge_status(),
+            Some(ChallengeStatus::Won(MedalTier::Bronze))
+        ));
+        assert_eq!(state.water_level(TileCoord::new(1, 0)), 0);
+    }
+
+    #[test]
+    fn worker_does_not_path_into_deep_water_goal() {
+        let mut world = World::default();
+        let mut state = GameState::new_with_worker(TileCoord::new(0, 0));
+        state.start_flood_fortress(
+            TileArea::single(TileCoord::new(4, 0)),
+            vec![OldDam::new(TileCoord::new(8, 0))],
+            vec![WaterSource::new(TileCoord::new(8, 1), 3)],
+            100,
+        );
+        if let Some(challenge) = state.challenge.as_mut() {
+            challenge.flood.water_levels.insert(TileCoord::new(1, 0), 3);
+        }
+        CommandDispatcher::dispatch(
+            &world,
+            &mut state,
+            CommandEnvelope::human(GameCommand::Explore {
+                area: TileArea::single(TileCoord::new(1, 0)),
+            }),
+        )
+        .unwrap();
+
+        run_ticks_with_config(
+            &mut world,
+            &mut state,
+            6,
+            SimulationConfig {
+                max_path_nodes: 8,
+                monster_spawn_interval: u64::MAX,
+                ..SimulationConfig::default()
+            },
+        );
+
+        assert_ne!(
+            state.workers.values().next().map(|worker| worker.pos),
+            Some(TileCoord::new(1, 0))
+        );
+    }
+
+    #[test]
+    fn channel_score_counts_near_flood_digs_only() {
+        let mut world = World::default();
+        let layer = world.active_layer.clone();
+        world.set(&layer, -3, 0, TileKind::Wall);
+        world.set(&layer, 20, 0, TileKind::Wall);
+        let mut state = GameState::new_with_worker(TileCoord::new(-2, 0));
+        state.start_flood_fortress(
+            TileArea::single(TileCoord::new(4, 0)),
+            vec![OldDam::new(TileCoord::new(-4, 0))],
+            vec![WaterSource::new(TileCoord::new(-5, 0), 3)],
+            100,
+        );
+        CommandDispatcher::dispatch(
+            &world,
+            &mut state,
+            CommandEnvelope::human(GameCommand::Mine {
+                area: TileArea::single(TileCoord::new(-3, 0)),
+            }),
+        )
+        .unwrap();
+        run_ticks_with_config(
+            &mut world,
+            &mut state,
+            6,
+            SimulationConfig {
+                job_work_ticks: 1,
+                monster_spawn_interval: u64::MAX,
+                ..SimulationConfig::default()
+            },
+        );
+        assert_eq!(
+            state
+                .challenge
+                .as_ref()
+                .map(|challenge| challenge.flood.stats.channels_dug),
+            Some(1)
+        );
+
+        let mut far_state = GameState::new_with_worker(TileCoord::new(19, 0));
+        far_state.start_flood_fortress(
+            TileArea::single(TileCoord::new(4, 0)),
+            vec![OldDam::new(TileCoord::new(-4, 0))],
+            vec![WaterSource::new(TileCoord::new(-5, 0), 3)],
+            100,
+        );
+        CommandDispatcher::dispatch(
+            &world,
+            &mut far_state,
+            CommandEnvelope::human(GameCommand::Mine {
+                area: TileArea::single(TileCoord::new(20, 0)),
+            }),
+        )
+        .unwrap();
+        run_ticks_with_config(
+            &mut world,
+            &mut far_state,
+            6,
+            SimulationConfig {
+                job_work_ticks: 1,
+                monster_spawn_interval: u64::MAX,
+                ..SimulationConfig::default()
+            },
+        );
+        assert_eq!(
+            far_state
+                .challenge
+                .as_ref()
+                .map(|challenge| challenge.flood.stats.channels_dug),
+            Some(0)
+        );
+    }
+
     fn run_ticks(world: &mut World, state: &mut GameState, ticks: usize) -> TickResult {
+        run_ticks_with_config(
+            world,
+            state,
+            ticks,
+            SimulationConfig {
+                job_work_ticks: 2,
+                monster_spawn_interval: u64::MAX,
+                ..SimulationConfig::default()
+            },
+        )
+    }
+
+    fn run_ticks_with_config(
+        world: &mut World,
+        state: &mut GameState,
+        ticks: usize,
+        config: SimulationConfig,
+    ) -> TickResult {
         let mut total = TickResult::default();
         for _ in 0..ticks {
-            let result = tick_gameplay(
-                world,
-                state,
-                SimulationConfig {
-                    job_work_ticks: 2,
-                    monster_spawn_interval: u64::MAX,
-                    ..SimulationConfig::default()
-                },
-            );
+            let result = tick_gameplay(world, state, config);
             total.jobs_completed += result.jobs_completed;
             total.jobs_failed += result.jobs_failed;
             total.tile_changes.extend(result.tile_changes);

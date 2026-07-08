@@ -13,13 +13,14 @@ use crate::resource::{
     ActivePreset, ActiveTheme, CursorTile, EditorHistory, EditorTool, EditorViewSettings,
     WorldModel, WorldRevision,
 };
+use crate::scenario::{FloodFortressPreset, create_flood_fortress_preset};
 use crate::viewport::world_viewport_bounds_current;
 use bevy::diagnostic::DiagnosticsStore;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
+use glyphweave_core::gameplay::{BuildKind, ChallengeStatus, GameCommand, ResourceKind, TileCoord};
 use glyphweave_core::gemap::{load_world, save_world};
-use glyphweave_core::gameplay::{BuildKind, GameCommand, ResourceKind, TileCoord};
 use glyphweave_core::layer::Layer;
 use glyphweave_core::tile::TileKind;
 use glyphweave_core::world::World;
@@ -660,6 +661,47 @@ fn home_screen(
                         }
 
                         ui.add_space(10.0);
+                        ui.label(
+                            egui::RichText::new("Built-in Challenges")
+                                .size(11.0)
+                                .color(zinc(400)),
+                        );
+                        for preset in FloodFortressPreset::ALL {
+                            if ui
+                                .add(
+                                    egui::Button::new(format!(
+                                        "{} - {}",
+                                        preset.label(),
+                                        preset.description()
+                                    ))
+                                    .min_size(egui::vec2(card_width, 30.0)),
+                                )
+                                .clicked()
+                            {
+                                let (world, state) = create_flood_fortress_preset(preset);
+                                enter_editor(
+                                    world_model,
+                                    ui_state,
+                                    active_theme,
+                                    active_brush,
+                                    active_preset,
+                                    tool,
+                                    history,
+                                    refresh,
+                                    path,
+                                    world_revision,
+                                    gameplay_model,
+                                    world,
+                                    None,
+                                );
+                                gameplay_model.0 = state;
+                                ui_state.side_tab = SideTab::Play;
+                                ui_state.path_text.clear();
+                                ui_state.status_message.clear();
+                            }
+                        }
+
+                        ui.add_space(10.0);
                         ui.horizontal(|ui| {
                             if ui
                                 .add(
@@ -952,7 +994,11 @@ fn play_tab(
         gameplay_model.time.day,
         gameplay_model.time.minute_of_day / 60,
         gameplay_model.time.minute_of_day % 60,
-        if gameplay_model.time.is_night() { "night" } else { "day" }
+        if gameplay_model.time.is_night() {
+            "night"
+        } else {
+            "day"
+        }
     ));
     ui.label(format!(
         "workers {} idle {}",
@@ -965,6 +1011,7 @@ fn play_tab(
         gameplay_model.monsters.len(),
         gameplay_model.item_piles.len()
     ));
+    challenge_status_panel(ui, gameplay_model);
 
     ui.add_space(8.0);
     ui.label(egui::RichText::new("Inventory").size(11.0).color(zinc(500)));
@@ -978,18 +1025,27 @@ fn play_tab(
     if cursor.valid {
         let focus = TileCoord::new(cursor.x, cursor.y);
         let preview = command_for_order(**active_order, focus, 0, gameplay_model);
-        ui.label(format!("{}, {} -> {}", cursor.x, cursor.y, command_label(preview.as_ref())));
+        ui.label(format!(
+            "{}, {} -> {}",
+            cursor.x,
+            cursor.y,
+            command_label(preview.as_ref())
+        ));
     } else {
         ui.label("outside map");
     }
 
     ui.add_space(8.0);
     ui.label(egui::RichText::new("Events").size(11.0).color(zinc(500)));
-    egui::ScrollArea::vertical().max_height(150.0).show(ui, |ui| {
-        for event in gameplay_model.events.iter().rev().take(12) {
-            ui.label(egui::RichText::new(format!("#{} {}", event.tick, event.message)).size(10.0));
-        }
-    });
+    egui::ScrollArea::vertical()
+        .max_height(150.0)
+        .show(ui, |ui| {
+            for event in gameplay_model.events.iter().rev().take(12) {
+                ui.label(
+                    egui::RichText::new(format!("#{} {}", event.tick, event.message)).size(10.0),
+                );
+            }
+        });
 }
 
 fn inventory_row(
@@ -1017,8 +1073,56 @@ fn command_label(command: Option<&GameCommand>) -> &'static str {
         Some(GameCommand::Haul { .. }) => "haul",
         Some(GameCommand::Explore { .. }) => "explore",
         Some(GameCommand::SetStockpile { .. }) => "stockpile",
+        Some(GameCommand::SetCoreStorehouse { .. }) => "core storehouse",
+        Some(GameCommand::Evacuate { .. }) => "evacuate",
         Some(GameCommand::Cancel { .. }) => "cancel",
         None => "inspect",
+    }
+}
+
+fn challenge_status_panel(ui: &mut egui::Ui, gameplay_model: &GameplayModel) {
+    let Some(challenge) = &gameplay_model.challenge else {
+        return;
+    };
+    ui.add_space(8.0);
+    ui.label(
+        egui::RichText::new("Flood Fortress")
+            .size(11.0)
+            .color(zinc(500)),
+    );
+    let status = match &challenge.status {
+        ChallengeStatus::Setup => "setup".to_string(),
+        ChallengeStatus::Running => {
+            let ticks_left = challenge
+                .flood
+                .breach_tick
+                .saturating_sub(gameplay_model.time.tick);
+            if ticks_left == 0 {
+                "running - dam breached".to_string()
+            } else {
+                format!("running - dam in {ticks_left} ticks")
+            }
+        }
+        ChallengeStatus::Won(medal) => format!("won - {}", medal.label()),
+        ChallengeStatus::Lost { reason } => format!("lost - {reason}"),
+    };
+    ui.label(status);
+    ui.label(format!(
+        "water {} core wet {}",
+        challenge.flood.water_levels.len(),
+        challenge.flood.stats.core_wet_ticks
+    ));
+    ui.label(format!(
+        "built {} channels {}",
+        challenge.flood.stats.flood_structures_built, challenge.flood.stats.channels_dug
+    ));
+    if challenge.score.total_workers > 0 {
+        ui.label(format!(
+            "score survivors {}/{} flooded {}",
+            challenge.score.surviving_workers,
+            challenge.score.total_workers,
+            challenge.score.flooded_tiles
+        ));
     }
 }
 
