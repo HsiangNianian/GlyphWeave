@@ -15,20 +15,29 @@ function getVisibleRange(stage: Konva.Stage | null, tileSize: number, w: number,
   const wy = -pos.y / s
   const ww = w / s
   const wh = h / s
+  const rawMinX = Math.floor(wx / tileSize)
+  const rawMinY = Math.floor(wy / tileSize)
+  const rawMaxX = Math.ceil((wx + ww) / tileSize)
+  const rawMaxY = Math.ceil((wy + wh) / tileSize)
+  // 50% buffer beyond viewport edges so panning doesn't immediately unload tiles
+  const bufX = Math.max(Math.ceil((rawMaxX - rawMinX) * 0.5), 0)
+  const bufY = Math.max(Math.ceil((rawMaxY - rawMinY) * 0.5), 0)
   return {
-    minX: Math.floor(wx / tileSize) - padding,
-    minY: Math.floor(wy / tileSize) - padding,
-    maxX: Math.ceil((wx + ww) / tileSize) + padding,
-    maxY: Math.ceil((wy + wh) / tileSize) + padding,
+    minX: rawMinX - padding - bufX,
+    minY: rawMinY - padding - bufY,
+    maxX: rawMaxX + padding + bufX,
+    maxY: rawMaxY + padding + bufY,
   }
 }
 
 interface MapCanvasProps {
   containerRef: RefObject<HTMLDivElement | null>
   stageRef: MutableRefObject<Konva.Stage | null>
+  viewVersion: number
+  onViewChange: () => void
 }
 
-export function MapCanvas({ containerRef, stageRef }: MapCanvasProps) {
+export function MapCanvas({ containerRef, stageRef, viewVersion, onViewChange }: MapCanvasProps) {
   const tiles = useMapStore((s) => s.tiles)
   const layers = useMapStore((s) => s.layers)
   const showGrid = useUiStore((s) => s.showGrid)
@@ -36,7 +45,8 @@ export function MapCanvas({ containerRef, stageRef }: MapCanvasProps) {
   const currentTool = useMapStore((s) => s.currentTool)
   const themeId = useMapStore((s) => s.themeId)
   const theme = THEMES[themeId]
-  const { tileSize, handleWheel, handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave } = useCanvas(stageRef)
+  const zoomScale = useUiStore((s) => s.zoomScale)
+  const { tileSize, handleWheel, handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave } = useCanvas(stageRef, onViewChange)
 
   const [size, setSize] = useState({ width: 800, height: 600 })
 
@@ -54,7 +64,7 @@ export function MapCanvas({ containerRef, stageRef }: MapCanvasProps) {
 
   const visibleRange = useMemo(
     () => getVisibleRange(stageRef.current, tileSize, size.width, size.height, viewDistance),
-    [size, tileSize, tiles, viewDistance, stageRef.current],
+    [size, tileSize, tiles, viewDistance, zoomScale, viewVersion],
   )
 
   const visibleTiles = useMemo(() => {

@@ -6,12 +6,13 @@ import { THEMES } from '@/constants/themes'
 
 interface MinimapProps {
   stageRef: React.RefObject<Konva.Stage | null>
+  onViewChange?: () => void
 }
 
 const MINIMAP_WIDTH = 200
 const MINIMAP_HEIGHT = 140
 
-export function Minimap({ stageRef }: MinimapProps) {
+export function Minimap({ stageRef, onViewChange }: MinimapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const cachedBase = useRef<ImageData | null>(null)
   const tiles = useMapStore((s) => s.tiles)
@@ -165,37 +166,64 @@ export function Minimap({ stageRef }: MinimapProps) {
     return () => cancelAnimationFrame(frame)
   }, [stageRef, tileSize])
 
-  // ── click to pan ──
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const stage = stageRef.current
-      if (!stage) return
-      const canvas = canvasRef.current
-      if (!canvas) return
+  // ── drag minimap to pan main viewport ──
+  const draggingRef = useRef(false)
 
+  const minimapToWorld = useCallback(
+    (px: number, py: number) => {
+      const canvas = canvasRef.current
+      if (!canvas) return { wx: 0, wy: 0 }
       const rect = canvas.getBoundingClientRect()
-      const px = e.clientX - rect.left
-      const py = e.clientY - rect.top
+      const cx = px - rect.left
+      const cy = py - rect.top
       const scale = parseFloat(canvas.dataset.scale || '1')
       const originX = parseInt(canvas.dataset.originX || '0', 10)
       const originY = parseInt(canvas.dataset.originY || '0', 10)
-
-      // minimap pixel → world coordinate
-      const wx = px / scale + originX * tileSize
-      const wy = py / scale + originY * tileSize
-
-      // center viewport on this point
-      const vw = stage.width()
-      const vh = stage.height()
-      const s = stage.scaleX()
-      stage.position({
-        x: -wx * s + vw / 2,
-        y: -wy * s + vh / 2,
-      })
-      stage.batchDraw()
+      return { wx: cx / scale + originX * tileSize, wy: cy / scale + originY * tileSize }
     },
-    [stageRef, tileSize],
+    [tileSize],
   )
+
+  const panToWorld = useCallback(
+    (wx: number, wy: number) => {
+      const stage = stageRef.current
+      if (!stage) return
+      const s = stage.scaleX()
+      stage.position({ x: -wx * s + stage.width() / 2, y: -wy * s + stage.height() / 2 })
+      stage.batchDraw()
+      onViewChange?.()
+    },
+    [stageRef, onViewChange],
+  )
+
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      e.preventDefault()
+      draggingRef.current = true
+      const { wx, wy } = minimapToWorld(e.clientX, e.clientY)
+      panToWorld(wx, wy)
+      document.body.style.cursor = 'grabbing'
+    },
+    [minimapToWorld, panToWorld],
+  )
+
+  useEffect(() => {
+    const handleMove = (e: MouseEvent) => {
+      if (!draggingRef.current) return
+      const { wx, wy } = minimapToWorld(e.clientX, e.clientY)
+      panToWorld(wx, wy)
+    }
+    const handleUp = () => {
+      draggingRef.current = false
+      document.body.style.cursor = ''
+    }
+    window.addEventListener('mousemove', handleMove)
+    window.addEventListener('mouseup', handleUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMove)
+      window.removeEventListener('mouseup', handleUp)
+    }
+  }, [minimapToWorld, panToWorld])
 
   return (
     <div
@@ -208,7 +236,7 @@ export function Minimap({ stageRef }: MinimapProps) {
         width={MINIMAP_WIDTH}
         height={MINIMAP_HEIGHT}
         className="block cursor-crosshair"
-        onClick={handleClick}
+        onMouseDown={handleMouseDown}
       />
     </div>
   )

@@ -46,6 +46,19 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
   const pendingWidthRef = useRef(320)
   const rafRef = useRef(0)
 
+  // View change tracking for visible-range recalculation (pan / minimap drag)
+  const [viewVersion, setViewVersion] = useState(0)
+  const viewVersionRef = useRef(0)
+  const viewRafRef = useRef(0)
+  const onViewChange = useCallback(() => {
+    if (viewRafRef.current) return
+    viewRafRef.current = requestAnimationFrame(() => {
+      viewRafRef.current = 0
+      viewVersionRef.current += 1
+      setViewVersion(viewVersionRef.current)
+    })
+  }, [])
+
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     draggingRef.current = true
@@ -115,7 +128,7 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
       <Toolbar />
 
       <div ref={canvasRef} className="flex-1 relative overflow-hidden">
-        <MapCanvas containerRef={canvasRef} stageRef={stageRef} />
+        <MapCanvas containerRef={canvasRef} stageRef={stageRef} viewVersion={viewVersion} onViewChange={onViewChange} />
 
         <div className="absolute top-3 left-3 flex items-center gap-2 pointer-events-none">
           <div className="flex items-center gap-2 pointer-events-auto">
@@ -132,7 +145,7 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
 
         {showMinimap && (
           <div className="absolute top-3 right-3 pointer-events-none">
-            <Minimap stageRef={stageRef} />
+            <Minimap stageRef={stageRef} onViewChange={onViewChange} />
           </div>
         )}
 

@@ -3,7 +3,7 @@ import Konva from 'konva'
 import { useMapStore } from '@/stores/map-store'
 import { useUiStore } from '@/stores/ui-store'
 
-export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
+export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>, onViewChange?: () => void) {
   const isPanning = useRef(false)
   const lastMousePos = useRef({ x: 0, y: 0 })
   const isDrawing = useRef(false)
@@ -111,6 +111,7 @@ export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
       stage.position({ x: pos.x + dx, y: pos.y + dy })
       lastMousePos.current = { x: evt.clientX, y: evt.clientY }
       stage.batchDraw()
+      onViewChange?.()
       return
     }
 
