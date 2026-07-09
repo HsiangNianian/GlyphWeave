@@ -5,23 +5,9 @@ import { TileCell } from './TileCell'
 import { useCanvas } from '@/hooks/useCanvas'
 import { useMapStore } from '@/stores/map-store'
 import { useUiStore } from '@/stores/ui-store'
-import { THEMES } from '@/constants/themes'
-
-function getVisibleRange(stage: Konva.Stage | null, tileSize: number, w: number, h: number, padding: number) {
-  if (!stage) return { minX: -10, minY: -10, maxX: 10, maxY: 10 }
-  const pos = stage.position()
-  const s = stage.scaleX()
-  const wx = -pos.x / s
-  const wy = -pos.y / s
-  const ww = w / s
-  const wh = h / s
-  return {
-    minX: Math.floor(wx / tileSize) - padding,
-    minY: Math.floor(wy / tileSize) - padding,
-    maxX: Math.ceil((wx + ww) / tileSize) + padding,
-    maxY: Math.ceil((wy + wh) / tileSize) + padding,
-  }
-}
+import { getVisibleRange } from '@/lib/viewport'
+import { iterateVisibleTiles } from '@/lib/map-core'
+import { resolveTheme } from '@/lib/theme-registry'
 
 interface MapCanvasProps {
   containerRef: RefObject<HTMLDivElement | null>
@@ -33,9 +19,11 @@ export function MapCanvas({ containerRef, stageRef }: MapCanvasProps) {
   const layers = useMapStore((s) => s.layers)
   const showGrid = useUiStore((s) => s.showGrid)
   const viewDistance = useUiStore((s) => s.viewDistance)
+  const viewport = useUiStore((s) => s.viewport)
   const currentTool = useMapStore((s) => s.currentTool)
   const themeId = useMapStore((s) => s.themeId)
-  const theme = THEMES[themeId]
+  const customThemes = useMapStore((s) => s.customThemes)
+  const theme = resolveTheme(themeId, customThemes)
   const { tileSize, handleWheel, handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave } = useCanvas(stageRef)
 
   const [size, setSize] = useState({ width: 800, height: 600 })
@@ -53,27 +41,12 @@ export function MapCanvas({ containerRef, stageRef }: MapCanvasProps) {
   }, [containerRef])
 
   const visibleRange = useMemo(
-    () => getVisibleRange(stageRef.current, tileSize, size.width, size.height, viewDistance),
-    [size, tileSize, tiles, viewDistance, stageRef.current],
+    () => getVisibleRange(viewport, { width: size.width, height: size.height }, tileSize, viewDistance),
+    [size, tileSize, viewDistance, viewport],
   )
 
   const visibleTiles = useMemo(() => {
-    const result: Array<{ key: string; gridX: number; gridY: number; tileTypeId: string }> = []
-    for (const layer of layers) {
-      if (!layer.visible) continue
-      const layerTiles = tiles[layer.id]
-      if (!layerTiles) continue
-      for (const [key, tileTypeId] of Object.entries(layerTiles)) {
-        if (!tileTypeId) continue
-        const [sx, sy] = key.split(',')
-        const x = parseInt(sx, 10)
-        const y = parseInt(sy, 10)
-        if (x >= visibleRange.minX && x <= visibleRange.maxX && y >= visibleRange.minY && y <= visibleRange.maxY) {
-          result.push({ key: `${layer.id}:${key}`, gridX: x, gridY: y, tileTypeId })
-        }
-      }
-    }
-    return result
+    return [...iterateVisibleTiles(tiles, layers, { range: visibleRange })]
   }, [tiles, layers, visibleRange])
 
   const gridLineElements = useMemo(() => {

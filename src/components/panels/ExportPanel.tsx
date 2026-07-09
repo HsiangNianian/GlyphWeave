@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react'
 import { useMapStore } from '@/stores/map-store'
 import { convertImageFileToMap, DEFAULT_IMAGE_CONVERT_WIDTH } from '@/lib/image-convert'
+import { resolveTheme } from '@/lib/theme-registry'
 import { Button } from '@/components/ui/button'
 import { Download, Upload, Image } from 'lucide-react'
 
@@ -8,6 +9,7 @@ export function ExportPanel() {
   const exportMap = useMapStore((s) => s.exportMap)
   const importMap = useMapStore((s) => s.importMap)
   const themeId = useMapStore((s) => s.themeId)
+  const customThemes = useMapStore((s) => s.customThemes)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
 
@@ -51,6 +53,7 @@ export function ExportPanel() {
     try {
       const data = await convertImageFileToMap(file, {
         themeId,
+        theme: resolveTheme(themeId, customThemes),
         width: DEFAULT_IMAGE_CONVERT_WIDTH,
         worldName: mapWorldName,
       })
@@ -60,7 +63,7 @@ export function ExportPanel() {
       window.alert(err instanceof Error ? err.message : 'Failed to import image')
     }
     e.target.value = ''
-  }, [importMap, themeId])
+  }, [customThemes, importMap, themeId])
 
   const handleRenderExport = useCallback(async (format: 'svg' | 'png') => {
     const data = exportMap()

@@ -2,6 +2,7 @@ import { useRef, useCallback, type MutableRefObject } from 'react'
 import Konva from 'konva'
 import { useMapStore } from '@/stores/map-store'
 import { useUiStore } from '@/stores/ui-store'
+import { panViewport, pointerToTile as viewportPointerToTile, zoomAtPoint } from '@/lib/viewport'
 
 export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
   const isPanning = useRef(false)
@@ -22,12 +23,9 @@ export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
     const stage = stageRef.current
     if (!stage) return [0, 0]
     const pos = stage.position()
-    const scale = stage.scaleX()
-    return [
-      Math.floor((pointer.x - pos.x) / scale / tileSize),
-      Math.floor((pointer.y - pos.y) / scale / tileSize),
-    ]
-  }, [tileSize])
+    const [x, y] = viewportPointerToTile(pointer, { x: pos.x, y: pos.y, scale: stage.scaleX() }, tileSize)
+    return [x, y]
+  }, [stageRef, tileSize])
 
   const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault()
@@ -38,21 +36,13 @@ export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
 
     const direction = e.evt.deltaY > 0 ? -1 : 1
     const factor = Math.pow(1.12, direction)
-    const zoomScale = useUiStore.getState().zoomScale
-    const clampedScale = Math.max(0.0625, Math.min(16, zoomScale * factor))
-
-    const mousePointTo = {
-      x: (pointer.x - stage.x()) / zoomScale,
-      y: (pointer.y - stage.y()) / zoomScale,
-    }
-    stage.position({
-      x: pointer.x - mousePointTo.x * clampedScale,
-      y: pointer.y - mousePointTo.y * clampedScale,
-    })
-    stage.scale({ x: clampedScale, y: clampedScale })
+    const currentViewport = { x: stage.x(), y: stage.y(), scale: stage.scaleX() }
+    const nextViewport = zoomAtPoint(currentViewport, pointer, currentViewport.scale * factor)
+    stage.position({ x: nextViewport.x, y: nextViewport.y })
+    stage.scale({ x: nextViewport.scale, y: nextViewport.scale })
     stage.batchDraw()
-    useUiStore.getState().setZoomScale(clampedScale)
-  }, [])
+    useUiStore.getState().setViewport(nextViewport)
+  }, [stageRef])
 
   const handleMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     const evt = e.evt
@@ -97,7 +87,7 @@ export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
       setTile(tx, ty, tileId)
       lastDrawnTile.current = `${tx},${ty}`
     }
-  }, [pointerToTile, currentTool, activeTileType, activePreset, placePreset, floodFill, setTile])
+  }, [activeLayerLocked, activePreset, activeTileType, currentTool, floodFill, placePreset, pointerToTile, setTile, stageRef])
 
   const handleMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     const evt = e.evt
@@ -108,9 +98,11 @@ export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
       const dx = evt.clientX - lastMousePos.current.x
       const dy = evt.clientY - lastMousePos.current.y
       const pos = stage.position()
-      stage.position({ x: pos.x + dx, y: pos.y + dy })
+      const nextViewport = panViewport({ x: pos.x, y: pos.y, scale: stage.scaleX() }, { x: dx, y: dy })
+      stage.position({ x: nextViewport.x, y: nextViewport.y })
       lastMousePos.current = { x: evt.clientX, y: evt.clientY }
       stage.batchDraw()
+      useUiStore.getState().setViewport(nextViewport)
       return
     }
 
@@ -127,7 +119,7 @@ export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
     const tileId = currentTool === 'erase' ? null : activeTileType
     setTile(tx, ty, tileId)
     lastDrawnTile.current = tileKey
-  }, [pointerToTile, currentTool, activeTileType, setTile])
+  }, [activeLayerLocked, activeTileType, currentTool, pointerToTile, setTile, stageRef])
 
   const handleMouseUp = useCallback(() => {
     isPanning.current = false
@@ -137,7 +129,7 @@ export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
     if (stage) {
       stage.container().style.cursor = currentTool === 'pan' ? 'grab' : 'crosshair'
     }
-  }, [currentTool])
+  }, [currentTool, stageRef])
 
   const handleMouseLeave = useCallback(() => {
     isPanning.current = false

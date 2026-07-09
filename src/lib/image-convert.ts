@@ -1,5 +1,6 @@
 import { TILE_TYPES } from '@/constants/tiles'
 import { THEMES } from '@/constants/themes'
+import { normalizeTheme } from '@/lib/theme-registry'
 import type { Theme } from '@/types'
 
 export const DEFAULT_IMAGE_CONVERT_WIDTH = 240
@@ -25,6 +26,7 @@ type LoadedImage = {
 
 export type ImageConvertOptions = {
   themeId: string
+  theme?: Theme
   worldName?: string
   width?: number
   height?: number
@@ -223,7 +225,7 @@ export async function convertImageFileToMap(
   file: File,
   options: ImageConvertOptions,
 ): Promise<ConvertedImageMap> {
-  const theme = THEMES[options.themeId]
+  const theme = options.theme ? normalizeTheme(options.theme) : THEMES[options.themeId]
   if (!theme) throw new Error(`Unknown theme: ${options.themeId}`)
 
   const loaded = await loadImage(file)

@@ -16,6 +16,7 @@ import { ExportPanel } from '@/components/panels/ExportPanel'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Download, PanelRightClose, PanelRightOpen, Settings, Plus, Minus } from 'lucide-react'
+import { zoomAtPoint } from '@/lib/viewport'
 
 interface EditorPageProps {
   worldConfig: WorldConfig
@@ -33,6 +34,7 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
   const zoomIn = useUiStore((s) => s.zoomIn)
   const zoomOut = useUiStore((s) => s.zoomOut)
   const resetZoom = useUiStore((s) => s.resetZoom)
+  const setViewport = useUiStore((s) => s.setViewport)
 
   const canvasRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Konva.Stage | null>(null)
@@ -54,17 +56,16 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
     // Zoom from viewport center
     const cx = stage.width() / 2
     const cy = stage.height() / 2
-    const mousePointTo = {
-      x: (cx - stage.x()) / currentStageScale,
-      y: (cy - stage.y()) / currentStageScale,
-    }
-    stage.position({
-      x: cx - mousePointTo.x * zoomScale,
-      y: cy - mousePointTo.y * zoomScale,
-    })
+    const nextViewport = zoomAtPoint(
+      { x: stage.x(), y: stage.y(), scale: currentStageScale },
+      { x: cx, y: cy },
+      zoomScale,
+    )
+    stage.position({ x: nextViewport.x, y: nextViewport.y })
     stage.scale({ x: zoomScale, y: zoomScale })
     stage.batchDraw()
-  }, [zoomScale])
+    setViewport(nextViewport)
+  }, [setViewport, zoomScale])
 
   useEffect(() => {
     initWorld(worldConfig)
