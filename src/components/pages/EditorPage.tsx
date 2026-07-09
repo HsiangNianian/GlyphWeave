@@ -16,6 +16,7 @@ import { ExportPanel } from '@/components/panels/ExportPanel'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Download, PanelRightClose, PanelRightOpen, Settings, Plus, Minus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface EditorPageProps {
   worldConfig: WorldConfig
@@ -23,6 +24,7 @@ interface EditorPageProps {
 }
 
 export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
+  const { t } = useTranslation()
   const initWorld = useMapStore((s) => s.initWorld)
   const sidePanelOpen = useUiStore((s) => s.sidePanelOpen)
   const toggleSidePanel = useUiStore((s) => s.toggleSidePanel)
@@ -85,7 +87,7 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
               className="text-[11px] text-zinc-500 hover:text-zinc-300 h-6 px-2 bg-black/60 backdrop-blur-sm border border-zinc-800"
               onClick={onBack}
             >
-              ← Home
+              {t('editor.home')}
             </Button>
           </div>
         </div>
@@ -103,14 +105,14 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
               variant="ghost"
               size="icon"
               className="w-6 h-6 text-zinc-400 hover:text-zinc-200"
-              title="Zoom Out"
+              title={t('editor.zoomOut')}
               onClick={zoomOut}
             >
               <Minus className="w-3 h-3" />
             </Button>
             <button
               className="text-[11px] font-mono text-zinc-400 hover:text-zinc-200 px-1.5 min-w-[48px] text-center cursor-pointer select-none"
-              title="Reset zoom to 100%"
+              title={t('editor.zoomReset')}
               onClick={resetZoom}
             >
               {Math.round(zoomScale * 100)}%
@@ -119,7 +121,7 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
               variant="ghost"
               size="icon"
               className="w-6 h-6 text-zinc-400 hover:text-zinc-200"
-              title="Zoom In"
+              title={t('editor.zoomIn')}
               onClick={zoomIn}
             >
               <Plus className="w-3 h-3" />
@@ -145,9 +147,9 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
         <div className="w-56 bg-zinc-950 border-l border-zinc-800 flex flex-col overflow-hidden shrink-0">
           <Tabs value={sidePanelTab} onValueChange={setSidePanelTab} className="flex flex-col h-full">
             <TabsList className="bg-zinc-900 border-b border-zinc-800 rounded-none px-1 h-9 justify-start gap-0 overflow-x-auto flex-nowrap">
-              <TabsTrigger value="tiles" className="text-xs h-8 px-2 data-[state=active]:bg-zinc-800 rounded-none shrink-0">Tiles</TabsTrigger>
-              <TabsTrigger value="presets" className="text-xs h-8 px-2 data-[state=active]:bg-zinc-800 rounded-none shrink-0">Presets</TabsTrigger>
-              <TabsTrigger value="layers" className="text-xs h-8 px-2 data-[state=active]:bg-zinc-800 rounded-none shrink-0">Layers</TabsTrigger>
+              <TabsTrigger value="tiles" className="text-xs h-8 px-2 data-[state=active]:bg-zinc-800 rounded-none shrink-0">{t('editor.tiles')}</TabsTrigger>
+              <TabsTrigger value="presets" className="text-xs h-8 px-2 data-[state=active]:bg-zinc-800 rounded-none shrink-0">{t('editor.presets')}</TabsTrigger>
+              <TabsTrigger value="layers" className="text-xs h-8 px-2 data-[state=active]:bg-zinc-800 rounded-none shrink-0">{t('editor.layers')}</TabsTrigger>
               <TabsTrigger value="export" className="text-xs h-8 px-2 data-[state=active]:bg-zinc-800 rounded-none shrink-0">
                 <Download className="w-3.5 h-3.5" />
               </TabsTrigger>

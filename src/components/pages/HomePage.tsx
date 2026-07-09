@@ -5,6 +5,7 @@ import { THEME_LIST } from '@/constants/themes'
 import { TILE_TYPES } from '@/constants/tiles'
 import { generateDemoMap } from '@/constants/demo-map'
 import { convertImageFileToMap, DEFAULT_IMAGE_CONVERT_WIDTH } from '@/lib/image-convert'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -21,6 +22,7 @@ type HomePageProps = {
 }
 
 export function HomePage({ onStart, onWorkshop }: HomePageProps) {
+  const { t } = useTranslation()
   const [worldName, setWorldName] = useState('My Roguelike World')
   const [tileSize, setTileSize] = useState(24)
   const [themeId, setThemeId] = useState('ansi-16')
@@ -112,26 +114,26 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
       <Card className="w-full max-w-lg bg-zinc-950 border-zinc-800 p-6 space-y-6">
         <div className="text-center space-y-1">
           <h1 className="text-2xl font-mono font-bold text-zinc-100 tracking-tight">
-            GlyphWeave
+            {t('app.title')}
           </h1>
           <p className="text-sm text-zinc-500 font-mono">
-            ASCII Roguelike Tilemap Editor
+            {t('app.subtitle')}
           </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="worldName" className="text-xs text-zinc-400">World Name</Label>
+          <Label htmlFor="worldName" className="text-xs text-zinc-400">{t('home.worldName')}</Label>
             <Input
               id="worldName"
               value={worldName}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setWorldName(e.target.value)}
-            placeholder="Enter world name..."
+            placeholder={t('home.worldNamePlaceholder')}
             className="bg-zinc-900 border-zinc-700 text-zinc-100 h-9 text-sm"
           />
         </div>
 
         <div className="space-y-2">
-          <Label className="text-xs text-zinc-400">Tile Size</Label>
+          <Label className="text-xs text-zinc-400">{t('home.tileSize')}</Label>
           <div className="flex gap-2">
             {TILE_SIZES.map((size) => (
               <Button
@@ -148,7 +150,7 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
         </div>
 
         <div className="space-y-2">
-          <Label className="text-xs text-zinc-400">Color Theme</Label>
+          <Label className="text-xs text-zinc-400">{t('home.colorTheme')}</Label>
           <div className="grid grid-cols-1 gap-2">
             {THEME_LIST.map((theme) => {
               const colors = sampleColors.map((t) => theme.colors[t.id])
@@ -181,8 +183,8 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
                     ))}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-zinc-200">{theme.name}</p>
-                    <p className="text-[11px] text-zinc-500 truncate">{theme.description}</p>
+                    <p className="text-sm font-medium text-zinc-200">{t(`themes.${theme.id}.name`, theme.name)}</p>
+                    <p className="text-[11px] text-zinc-500 truncate">{t(`themes.${theme.id}.description`, theme.description)}</p>
                   </div>
                   {themeId === theme.id && (
                     <div className="w-2 h-2 rounded-full bg-zinc-100 shrink-0" />
@@ -200,7 +202,7 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
           onClick={handleCreate}
           disabled={!worldName.trim()}
         >
-          Create World &amp; Enter Editor
+          {t('home.createWorld')}
         </Button>
 
         <div className="grid grid-cols-3 gap-2">
@@ -210,7 +212,7 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
             onClick={handleImportClick}
           >
             <Upload className="w-4 h-4" />
-            Import Map
+            {t('home.importGemap')}
           </Button>
 
           <Button
@@ -219,7 +221,7 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
             onClick={handleImageImportClick}
           >
             <ImageIcon className="w-4 h-4" />
-            Import Image
+            {t('home.importImage')}
           </Button>
 
           <Button
@@ -235,7 +237,7 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
             }
           >
             <MapIcon className="w-4 h-4" />
-            Demo Map
+            {t('home.demoMap')}
           </Button>
         </div>
 
@@ -254,7 +256,7 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
             className="inline-flex items-center gap-1.5 text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-            Theme Workshop
+            {t('home.themeWorkshop')}
           </button>
         </div>
 

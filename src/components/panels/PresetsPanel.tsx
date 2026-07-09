@@ -7,6 +7,7 @@ import { THEMES } from '@/constants/themes'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { useTranslation } from 'react-i18next'
 import type { Preset } from '@/types'
 
 function PresetPreview({ preset, themeId }: { preset: Preset; themeId: string }) {
@@ -46,6 +47,7 @@ function PresetPreview({ preset, themeId }: { preset: Preset; themeId: string })
 }
 
 export function PresetsPanel() {
+  const { t } = useTranslation()
   const [activeCategory, setActiveCategory] = useState<string>('rooms')
   const activePreset = useMapStore((s) => s.activePreset)
   const setActivePreset = useMapStore((s) => s.setActivePreset)
@@ -70,7 +72,7 @@ export function PresetsPanel() {
             className="text-xs h-7 px-2"
             onClick={() => setActiveCategory(cat.key)}
           >
-            {cat.label}
+            {t(`presets.${cat.key}`, cat.label)}
           </Button>
         ))}
       </div>
@@ -103,7 +105,7 @@ export function PresetsPanel() {
         {activePreset && (
           <div className="mt-3 p-2 rounded bg-zinc-800/50 border border-zinc-700">
             <p className="text-xs text-zinc-400 text-center">
-              Click on the canvas to place "{activePreset.name}"
+              {t('presets.placeHint', { name: activePreset.name })}
             </p>
           </div>
         )}

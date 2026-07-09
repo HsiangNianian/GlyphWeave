@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ArrowLeft, Download, Upload, Eye } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 const CATEGORIES = [
   { key: 'wall', label: 'Walls' },
@@ -43,6 +44,7 @@ interface ThemeWorkshopProps {
 }
 
 export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
+  const { t } = useTranslation()
   // Start from a copy of ansi-16
   const [theme, setTheme] = useState<Theme>(() => ({
     ...THEMES['ansi-16'],
@@ -153,10 +155,10 @@ export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
       <header className="flex items-center gap-3 px-4 h-12 border-b border-zinc-800 shrink-0">
         <button onClick={onBack} className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200">
           <ArrowLeft className="w-3.5 h-3.5" />
-          Home
+          {t('common.back').replace('← ', '')}
         </button>
         <span className="text-sm font-mono text-zinc-500">/</span>
-        <h1 className="text-sm font-medium text-zinc-200">Theme Workshop</h1>
+        <h1 className="text-sm font-medium text-zinc-200">{t('workshop.title')}</h1>
       </header>
 
       <div className="flex flex-1 min-h-0">
@@ -165,7 +167,7 @@ export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
           {/* Metadata */}
           <div className="p-3 space-y-2 border-b border-zinc-800">
             <div>
-              <Label className="text-[10px] text-zinc-500">Theme ID</Label>
+              <Label className="text-[10px] text-zinc-500">{t('workshop.themeId')}</Label>
               <Input
                 value={theme.id}
                 onChange={(e) => updateMeta('id', e.target.value)}
@@ -173,7 +175,7 @@ export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
               />
             </div>
             <div>
-              <Label className="text-[10px] text-zinc-500">Name</Label>
+              <Label className="text-[10px] text-zinc-500">{t('workshop.themeName')}</Label>
               <Input
                 value={theme.name}
                 onChange={(e) => updateMeta('name', e.target.value)}
@@ -181,7 +183,7 @@ export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
               />
             </div>
             <div>
-              <Label className="text-[10px] text-zinc-500">Description</Label>
+              <Label className="text-[10px] text-zinc-500">{t('workshop.description')}</Label>
               <Input
                 value={theme.description}
                 onChange={(e) => updateMeta('description', e.target.value)}
@@ -195,7 +197,7 @@ export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
             {groupedTiles.map((group) => (
               <div key={group.key}>
                 <p className="text-[10px] font-medium text-zinc-600 uppercase tracking-wider px-1 mb-1">
-                  {group.label}
+                  {t(`tilepalette.${group.key}`, group.label)}
                 </p>
                 {group.tiles.map((tileId) => {
                   const tc = theme.colors[tileId] || { fgColor: '#fff', bgColor: '#000' }
@@ -230,23 +232,23 @@ export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
           <div className="flex items-center gap-2 px-3 h-10 border-b border-zinc-800 shrink-0">
             <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={handleExport}>
               <Download className="w-3 h-3" />
-              Export .theme.json
+              {t('workshop.exportTheme')}
             </Button>
             <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={handleImport}>
               <Upload className="w-3 h-3" />
-              Import .theme.json
+              {t('workshop.importTheme')}
             </Button>
             <div className="flex-1" />
             <Button size="sm" className="h-7 text-xs gap-1.5" onClick={() => onUseTheme(theme)}>
               <Eye className="w-3 h-3" />
-              Use This Theme
+              {t('workshop.useTheme')}
             </Button>
           </div>
 
           {/* Preview */}
           <div className="flex-1 flex items-center justify-center p-4 bg-black">
             {previewLoading ? (
-              <span className="text-xs text-zinc-600">Rendering preview...</span>
+              <span className="text-xs text-zinc-600">{t('common.loading')}</span>
             ) : previewUrl ? (
               <img
                 src={previewUrl}
@@ -254,14 +256,14 @@ export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
                 className="max-w-full max-h-full rounded"
               />
             ) : (
-              <span className="text-xs text-zinc-600">Adjust colors to preview</span>
+              <span className="text-xs text-zinc-600">{t('workshop.selectTile')}</span>
             )}
           </div>
         </main>
 
         {/* Right: color pickers */}
         <aside className="w-64 shrink-0 border-l border-zinc-800 p-4 space-y-4 overflow-y-auto">
-          <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Tile Colors</h3>
+          <h3 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">{t('workshop.tileColors')}</h3>
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -275,7 +277,7 @@ export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
             </div>
 
             <div>
-              <Label className="text-[10px] text-zinc-500">Foreground (char color)</Label>
+              <Label className="text-[10px] text-zinc-500">{t('workshop.foreground')}</Label>
               <div className="flex items-center gap-2 mt-1">
                 <input
                   type="color"
@@ -292,7 +294,7 @@ export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
             </div>
 
             <div>
-              <Label className="text-[10px] text-zinc-500">Background</Label>
+              <Label className="text-[10px] text-zinc-500">{t('workshop.background')}</Label>
               <div className="flex items-center gap-2 mt-1">
                 <input
                   type="color"

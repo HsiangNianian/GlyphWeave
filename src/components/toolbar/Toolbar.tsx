@@ -2,6 +2,7 @@
 import { useMapStore } from '@/stores/map-store'
 import type { ToolType } from '@/types'
 import { Brush, Eraser, Hand, PaintBucket, MousePointer2, Undo2, Redo2 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -15,6 +16,7 @@ const TOOLS: { id: ToolType; label: string; icon: typeof Brush; shortcut: string
 ]
 
 export function Toolbar() {
+  const { t } = useTranslation()
   const currentTool = useMapStore((s) => s.currentTool)
   const setCurrentTool = useMapStore((s) => s.setCurrentTool)
   const undo = useMapStore((s) => s.undo)
@@ -37,7 +39,13 @@ export function Toolbar() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right">
-              {tool.label} <span className="text-zinc-500 ml-1">[{tool.shortcut}]</span>
+              {tool.id === 'brush' ? t('toolbar.brush')
+                : tool.id === 'erase' ? t('toolbar.eraser')
+                : tool.id === 'fill' ? t('toolbar.fill')
+                : tool.id === 'pan' ? t('toolbar.pan')
+                : tool.id === 'select' ? t('toolbar.select')
+                : tool.label}{' '}
+              <span className="text-zinc-500 ml-1">[{tool.shortcut}]</span>
             </TooltipContent>
           </Tooltip>
         )

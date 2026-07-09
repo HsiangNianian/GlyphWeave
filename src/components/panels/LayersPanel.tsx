@@ -2,9 +2,11 @@
 import { useMapStore } from '@/stores/map-store'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
+import { useTranslation } from 'react-i18next'
 import { Plus, Eye, EyeOff, Lock, Unlock, Trash2 } from 'lucide-react'
 
 export function LayersPanel() {
+  const { t } = useTranslation()
   const layers = useMapStore((s) => s.layers)
   const activeLayer = useMapStore((s) => s.activeLayer)
   const addLayer = useMapStore((s) => s.addLayer)
@@ -16,13 +18,13 @@ export function LayersPanel() {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-800">
-        <span className="text-xs font-medium text-zinc-400">Layers</span>
+        <span className="text-xs font-medium text-zinc-400">{t('layers.title')}</span>
         <Button
           variant="ghost"
           size="icon"
           className="w-6 h-6"
           onClick={() => addLayer()}
-          title="Add Layer"
+          title={t('layers.addLayer')}
         >
           <Plus className="w-3.5 h-3.5" />
         </Button>
@@ -43,7 +45,7 @@ export function LayersPanel() {
                 size="icon"
                 className="w-5 h-5 shrink-0"
                 onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(i) }}
-                title={layer.visible ? 'Hide layer' : 'Show layer'}
+                title={layer.visible ? t('layers.hideLayer') : t('layers.showLayer')}
               >
                 {layer.visible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
               </Button>
@@ -53,7 +55,7 @@ export function LayersPanel() {
                 size="icon"
                 className="w-5 h-5 shrink-0"
                 onClick={(e) => { e.stopPropagation(); toggleLayerLock(i) }}
-                title={layer.locked ? 'Unlock layer' : 'Lock layer'}
+                title={layer.locked ? t('layers.unlockLayer') : t('layers.lockLayer')}
               >
                 {layer.locked ? <Lock className="w-3 h-3" /> : <Unlock className="w-3 h-3" />}
               </Button>
@@ -63,7 +65,7 @@ export function LayersPanel() {
                   size="icon"
                   className="w-5 h-5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                   onClick={(e) => { e.stopPropagation(); removeLayer(i) }}
-                  title="Delete layer"
+                  title={t('layers.deleteLayer')}
                 >
                   <Trash2 className="w-3 h-3 text-red-400" />
                 </Button>

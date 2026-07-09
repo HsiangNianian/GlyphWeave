@@ -1,0 +1,148 @@
+{
+  "app": {
+    "title": "GlyphWeave",
+    "subtitle": "ASCII Roguelike 瓦片地图编辑器"
+  },
+  "common": {
+    "back": "← 返回",
+    "close": "关闭",
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "confirm": "确定",
+    "loading": "加载中…",
+    "copy": "复制"
+  },
+  "home": {
+    "worldName": "世界名称",
+    "worldNamePlaceholder": "输入世界名称…",
+    "tileSize": "瓦片尺寸",
+    "colorTheme": "配色主题",
+    "createWorld": "创建世界",
+    "importGemap": "导入 .gemap",
+    "importImage": "导入图片",
+    "themeWorkshop": "主题工坊",
+    "themeCopied": "主题已复制！",
+    "demoMap": "示例地图"
+  },
+  "editor": {
+    "home": "← 首页",
+    "tiles": "瓦片",
+    "presets": "预设",
+    "layers": "图层",
+    "export": "导出",
+    "settings": "设置",
+    "zoomOut": "缩小",
+    "zoomReset": "缩放至 100%",
+    "zoomIn": "放大"
+  },
+  "toolbar": {
+    "brush": "画笔",
+    "eraser": "橡皮擦",
+    "fill": "填充",
+    "pan": "平移",
+    "select": "选择",
+    "undo": "撤销",
+    "redo": "重做",
+    "shortcut": "快捷键"
+  },
+  "tilepalette": {
+    "wall": "墙壁",
+    "floor": "地板",
+    "water": "水域",
+    "terrain": "地形",
+    "vegetation": "植被",
+    "furniture": "家具",
+    "item": "物品",
+    "decoration": "装饰",
+    "special": "特殊"
+  },
+  "presets": {
+    "rooms": "房间",
+    "corridors": "走廊",
+    "features": "特征",
+    "dungeon": "地牢",
+    "traps": "陷阱",
+    "placeHint": "点击画布放置 \"{{name}}\""
+  },
+  "layers": {
+    "title": "图层",
+    "addLayer": "添加图层",
+    "showLayer": "显示图层",
+    "hideLayer": "隐藏图层",
+    "lockLayer": "锁定图层",
+    "unlockLayer": "解锁图层",
+    "deleteLayer": "删除图层"
+  },
+  "exportPanel": {
+    "title": "导入 / 导出",
+    "desc": "将地图导出为 .gemap JSON 文件，或导入已有地图继续编辑。",
+    "exportGemap": "导出 .gemap",
+    "importGemap": "导入 .gemap",
+    "importImage": "导入图片",
+    "render": "渲染",
+    "renderDesc": "通过 API 将完整地图渲染为图片。",
+    "exportSvg": "导出 SVG"
+  },
+  "settings": {
+    "view": "视图",
+    "viewDistance": "视野距离",
+    "viewDistanceDesc": "在视口边缘之外额外渲染的瓦片数。数值越大平移越流畅，但内存占用更高。",
+    "display": "显示",
+    "showGrid": "显示网格",
+    "showMinimap": "显示小地图"
+  },
+  "workshop": {
+    "title": "主题工坊",
+    "back": "← 返回",
+    "themeName": "主题名称",
+    "themeId": "主题 ID",
+    "description": "描述",
+    "tileColors": "瓦片颜色",
+    "foreground": "前景色",
+    "background": "背景色",
+    "preview": "预览",
+    "exportTheme": "导出主题",
+    "importTheme": "导入主题",
+    "useTheme": "使用主题",
+    "selectTile": "选择瓦片来编辑颜色"
+  },
+  "themes": {
+    "ansi-16": {
+      "name": "ANSI 16",
+      "description": "经典 ANSI 终端 16 色调色板 — 大胆、鲜艳、标志性风格。"
+    },
+    "cogmind": {
+      "name": "Cogmind 暗色",
+      "description": "低光赛博朋克终端风格 — 柔和、冷峻、富有氛围感。"
+    }
+  },
+  "tileType": {
+    "void": "空",
+    "wall": "墙壁",
+    "floor": "地板",
+    "floorAlt": "地板(副)",
+    "door": "门",
+    "doorOpen": "门(开)",
+    "water": "水",
+    "deepWater": "深水",
+    "lava": "熔岩",
+    "tree": "树",
+    "grass": "草地",
+    "bridge": "桥",
+    "stairsDown": "下行楼梯",
+    "stairsUp": "上行楼梯",
+    "altar": "祭坛",
+    "fountain": "喷泉",
+    "grave": "坟墓",
+    "trap": "陷阱",
+    "pillar": "柱子",
+    "treasure": "宝藏",
+    "shop": "商店",
+    "table": "桌子",
+    "throne": "王座",
+    "cage": "笼子",
+    "blood": "血迹",
+    "bar": "栅栏"
+  }
+}

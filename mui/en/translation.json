@@ -1,0 +1,148 @@
+{
+  "app": {
+    "title": "GlyphWeave",
+    "subtitle": "ASCII Roguelike Tilemap Editor"
+  },
+  "common": {
+    "back": "← Back",
+    "close": "Close",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "loading": "Loading…",
+    "copy": "Copy"
+  },
+  "home": {
+    "worldName": "World Name",
+    "worldNamePlaceholder": "Enter world name…",
+    "tileSize": "Tile Size",
+    "colorTheme": "Color Theme",
+    "createWorld": "Create World",
+    "importGemap": "Import .gemap",
+    "importImage": "Import Image",
+    "themeWorkshop": "Theme Workshop",
+    "themeCopied": "Theme copied!",
+    "demoMap": "Demo Map"
+  },
+  "editor": {
+    "home": "← Home",
+    "tiles": "Tiles",
+    "presets": "Presets",
+    "layers": "Layers",
+    "export": "Export",
+    "settings": "Settings",
+    "zoomOut": "Zoom Out",
+    "zoomReset": "Reset zoom to 100%",
+    "zoomIn": "Zoom In"
+  },
+  "toolbar": {
+    "brush": "Brush",
+    "eraser": "Eraser",
+    "fill": "Fill",
+    "pan": "Pan",
+    "select": "Select",
+    "undo": "Undo",
+    "redo": "Redo",
+    "shortcut": "Shortcut"
+  },
+  "tilepalette": {
+    "wall": "Walls",
+    "floor": "Floors",
+    "water": "Water",
+    "terrain": "Terrain",
+    "vegetation": "Vegetation",
+    "furniture": "Furniture",
+    "item": "Items",
+    "decoration": "Decorations",
+    "special": "Special"
+  },
+  "presets": {
+    "rooms": "Rooms",
+    "corridors": "Corridors",
+    "features": "Features",
+    "dungeon": "Dungeon",
+    "traps": "Traps",
+    "placeHint": "Click on the canvas to place \"{{name}}\""
+  },
+  "layers": {
+    "title": "Layers",
+    "addLayer": "Add Layer",
+    "showLayer": "Show layer",
+    "hideLayer": "Hide layer",
+    "lockLayer": "Lock layer",
+    "unlockLayer": "Unlock layer",
+    "deleteLayer": "Delete layer"
+  },
+  "exportPanel": {
+    "title": "Export / Import",
+    "desc": "Export your map as a .gemap JSON file, or import one to continue editing.",
+    "exportGemap": "Export .gemap",
+    "importGemap": "Import .gemap",
+    "importImage": "Import Image",
+    "render": "Render",
+    "renderDesc": "Render the full map to an image via the API.",
+    "exportSvg": "Export SVG"
+  },
+  "settings": {
+    "view": "View",
+    "viewDistance": "View Distance",
+    "viewDistanceDesc": "Extra tiles rendered beyond viewport edges. Higher = smoother panning, more memory.",
+    "display": "Display",
+    "showGrid": "Show Grid",
+    "showMinimap": "Show Minimap"
+  },
+  "workshop": {
+    "title": "Theme Workshop",
+    "back": "← Back",
+    "themeName": "Theme Name",
+    "themeId": "Theme ID",
+    "description": "Description",
+    "tileColors": "Tile Colors",
+    "foreground": "Foreground",
+    "background": "Background",
+    "preview": "Preview",
+    "exportTheme": "Export Theme",
+    "importTheme": "Import Theme",
+    "useTheme": "Use Theme",
+    "selectTile": "Select a tile to edit its colors"
+  },
+  "themes": {
+    "ansi-16": {
+      "name": "ANSI 16",
+      "description": "Classic ANSI terminal 16-color palette — bold, vibrant, iconic."
+    },
+    "cogmind": {
+      "name": "Cogmind Dark",
+      "description": "Low-light cyberpunk terminal — muted, cold, atmospheric."
+    }
+  },
+  "tileType": {
+    "void": "Void",
+    "wall": "Wall",
+    "floor": "Floor",
+    "floorAlt": "Floor Alt",
+    "door": "Door",
+    "doorOpen": "Door Open",
+    "water": "Water",
+    "deepWater": "Deep Water",
+    "lava": "Lava",
+    "tree": "Tree",
+    "grass": "Grass",
+    "bridge": "Bridge",
+    "stairsDown": "Stairs Down",
+    "stairsUp": "Stairs Up",
+    "altar": "Altar",
+    "fountain": "Fountain",
+    "grave": "Grave",
+    "trap": "Trap",
+    "pillar": "Pillar",
+    "treasure": "Treasure",
+    "shop": "Shop",
+    "table": "Table",
+    "throne": "Throne",
+    "cage": "Cage",
+    "blood": "Blood",
+    "bar": "Bar"
+  }
+}

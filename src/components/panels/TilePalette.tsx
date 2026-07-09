@@ -3,8 +3,10 @@ import { useMapStore } from '@/stores/map-store'
 import { TILE_TYPE_LIST, TILE_CATEGORIES } from '@/constants/tiles'
 import { THEMES } from '@/constants/themes'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { useTranslation } from 'react-i18next'
 
 export function TilePalette() {
+  const { t } = useTranslation()
   const activeTileType = useMapStore((s) => s.activeTileType)
   const setActiveTileType = useMapStore((s) => s.setActiveTileType)
   const currentTool = useMapStore((s) => s.currentTool)
@@ -31,7 +33,7 @@ export function TilePalette() {
           return (
             <div key={cat.key}>
               <h4 className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider mb-1.5 px-1">
-                {cat.label}
+                {t(`tilepalette.${cat.key}`, cat.label)}
               </h4>
               <div className="grid grid-cols-4 gap-1">
                 {tiles.map((tile) => {
@@ -57,7 +59,7 @@ export function TilePalette() {
                         {tile.char}
                       </span>
                       <span className="text-[9px] text-zinc-500 truncate w-full text-center leading-tight">
-                        {tile.name}
+                        {t(`tileType.${tile.id}`, tile.name)}
                       </span>
                     </button>
                   )

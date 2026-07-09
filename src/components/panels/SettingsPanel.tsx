@@ -1,7 +1,9 @@
 'use client'
 import { useUiStore } from '@/stores/ui-store'
+import { useTranslation } from 'react-i18next'
 
 export function SettingsPanel() {
+  const { t } = useTranslation()
   const viewDistance = useUiStore((s) => s.viewDistance)
   const setViewDistance = useUiStore((s) => s.setViewDistance)
   const showGrid = useUiStore((s) => s.showGrid)
@@ -11,12 +13,12 @@ export function SettingsPanel() {
 
   return (
     <div className="flex flex-col gap-4 p-3">
-      <h4 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">View</h4>
+      <h4 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">{t('settings.view')}</h4>
 
       {/* View Distance */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <label className="text-xs text-zinc-400">View Distance</label>
+          <label className="text-xs text-zinc-400">{t('settings.viewDistance')}</label>
           <span className="text-xs text-zinc-500 font-mono w-6 text-right">{viewDistance}</span>
         </div>
         <input
@@ -31,13 +33,13 @@ export function SettingsPanel() {
             [&::-webkit-slider-thumb]:cursor-pointer"
         />
         <p className="text-[10px] text-zinc-600 leading-relaxed">
-          Extra tiles rendered beyond viewport edges. Higher = smoother panning, more memory.
+          {t('settings.viewDistanceDesc')}
         </p>
       </div>
 
       <div className="h-px bg-zinc-800" />
 
-      <h4 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">Display</h4>
+      <h4 className="text-xs font-medium text-zinc-400 uppercase tracking-wider">{t('settings.display')}</h4>
 
       {/* Grid toggle */}
       <label className="flex items-center gap-2 cursor-pointer">
@@ -47,7 +49,7 @@ export function SettingsPanel() {
           onChange={() => setShowGrid(!showGrid)}
           className="accent-zinc-400 w-3.5 h-3.5"
         />
-        <span className="text-xs text-zinc-300">Show Grid</span>
+        <span className="text-xs text-zinc-300">{t('settings.showGrid')}</span>
       </label>
 
       {/* Minimap toggle */}
@@ -58,7 +60,7 @@ export function SettingsPanel() {
           onChange={() => setShowMinimap(!showMinimap)}
           className="accent-zinc-400 w-3.5 h-3.5"
         />
-        <span className="text-xs text-zinc-300">Show Minimap</span>
+        <span className="text-xs text-zinc-300">{t('settings.showMinimap')}</span>
       </label>
     </div>
   )
