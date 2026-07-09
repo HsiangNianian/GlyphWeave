@@ -20,6 +20,9 @@
   <img src="https://img.shields.io/badge/TypeScript-000?style=flat&logo=typescript" alt="TypeScript">
   <img src="https://img.shields.io/badge/Vite-000?style=flat&logo=vite" alt="Vite">
   <img src="https://img.shields.io/badge/pnpm-000?style=flat&logo=pnpm" alt="pnpm">
+  <br>
+  <img src="https://img.shields.io/badge/Rust_1.89+-000?style=flat&logo=rust" alt="Rust">
+  <img src="https://img.shields.io/badge/Bevy_0.18-282828?style=flat" alt="Bevy">
 </p>
 
 <p align="center">
@@ -33,6 +36,21 @@
 **GlyphWeave** is an open-source, infinite-canvas tilemap editor designed for roguelike ASCII art. Paint dungeons tile by tile, place preset rooms, switch between retro terminal themes, and export your worlds as portable `.gemap` files — all in the browser.
 
 Each tile is an ASCII glyph (`#`, `.`, `~`, `♣`, …). **Weave** them into a coherent map, strand by strand.
+
+---
+
+## Two Implementations
+
+GlyphWeave ships in two forms that share the same `.gemap` map format:
+
+| | Web app | Desktop app |
+|---|---|---|
+| Path | `src/` | `bevy/` |
+| Stack | React 19, Konva, Tailwind, Zustand | Rust, Bevy 0.18, `bevy_ecs_tilemap`, `bevy_egui` |
+| Runs in | Browser | Native desktop (WASM planned) |
+| Status | Full feature set (production) | In progress — P1 foundation + P2 editor UI done; P3–P5 tracked |
+
+The Bevy port is the active development direction (desktop-first, heading toward a real-time simulation/lighting engine). The React app remains the reference for behavior and visuals. See [docs/superpowers/specs/](docs/superpowers/specs/) for the phased plan.
 
 ---
 
@@ -58,6 +76,8 @@ Each tile is an ASCII glyph (`#`, `.`, `~`, `♣`, …). **Weave** them into a c
 
 ## Quick Start
 
+### Web app (React)
+
 ```bash
 # Install dependencies
 pnpm install
@@ -70,6 +90,16 @@ pnpm dev
 ```
 
 Open `http://localhost:5173` — choose a world name, tile size, and theme, then start painting. Or click **Load Demo Map** to explore a pre-built dungeon.
+
+### Desktop app (Rust + Bevy)
+
+Requires Rust ≥ 1.89 (edition 2024) and a Vulkan-capable GPU.
+
+```bash
+cargo run --manifest-path bevy/Cargo.toml -p glyphweave-app
+```
+
+A 1280×720 window opens and auto-loads the Grand Realm of Aethra demo. Left-drag paints the selected tile, the wheel zooms to the cursor, and middle/right-drag pans. The left panel holds the tile palette and theme toggle; the right panel lists layers. Tests: `cargo test --manifest-path bevy/Cargo.toml --workspace`.
 
 > The **Render API** and **Convert API** are available on the same port under `/api/` during development. In production, `pnpm start` serves the frontend plus Node-backed APIs on port 3001. Cloudflare Workers + Assets deployments support rendering and app-side browser image import; direct `/api/convert` remains Node-only.
 
