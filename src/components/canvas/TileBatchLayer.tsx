@@ -2,9 +2,10 @@
 import { useCallback } from 'react'
 import { Shape } from 'react-konva'
 import type { Context } from 'konva/lib/Context'
-import { TILE_TYPES } from '@/constants/tiles'
 import type { VisibleTile } from '@/lib/map-core'
 import type { TileColors } from '@/types'
+import { useUiStore } from '@/stores/ui-store'
+import { getSurface } from '@/lib/surfaces'
 
 type TileBatchLayerProps = {
   tiles: readonly VisibleTile[]
@@ -13,26 +14,29 @@ type TileBatchLayerProps = {
 }
 
 export function TileBatchLayer({ tiles, tileSize, colorsByTileId }: TileBatchLayerProps) {
+  const surfaceStyle = useUiStore((s) => s.surfaceStyle)
+
   const sceneFunc = useCallback((context: Context): void => {
-    context.imageSmoothingEnabled = false
-    context.textAlign = 'center'
-    context.textBaseline = 'middle'
-    context.font = `${Math.round(tileSize * 0.75)}px "Geist", "Noto Sans SC", "Microsoft YaHei", "PingFang SC", monospace`
+    const ctx = context as unknown as CanvasRenderingContext2D
+    const surface = getSurface(surfaceStyle)
 
-    for (const tile of tiles) {
-      const colors = colorsByTileId[tile.tileTypeId]
-      const x = tile.gridX * tileSize
-      const y = tile.gridY * tileSize
-      context.fillStyle = colors?.bgColor || '#000000'
-      context.fillRect(x, y, tileSize, tileSize)
-
-      const char = TILE_TYPES[tile.tileTypeId]?.char
-      if (!char) continue
-
-      context.fillStyle = colors?.fgColor || '#ffffff'
-      context.fillText(char, x + tileSize / 2, y + tileSize / 2, tileSize)
+    if (surface.renderBatch) {
+      surface.renderBatch({ ctx, tiles, tileSize, colorsByTileId })
+    } else {
+      // Fall back to per-tile rendering
+      for (const tile of tiles) {
+        const colors = colorsByTileId[tile.tileTypeId]
+        surface.renderTile({
+          ctx,
+          tileTypeId: tile.tileTypeId,
+          x: tile.gridX * tileSize,
+          y: tile.gridY * tileSize,
+          tileSize,
+          colors: colors || { fgColor: '#ffffff', bgColor: '#000000' },
+        })
+      }
     }
-  }, [colorsByTileId, tileSize, tiles])
+  }, [colorsByTileId, surfaceStyle, tileSize, tiles])
 
   return <Shape listening={false} perfectDrawEnabled={false} sceneFunc={sceneFunc} />
 }

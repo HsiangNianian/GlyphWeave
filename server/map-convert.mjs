@@ -1,5 +1,5 @@
 import { createCanvas, loadImage } from '@napi-rs/canvas'
-import { THEMES, TILE_TYPES, TILE_SIZE } from './map-shared.mjs'
+import { THEMES, TILE_TYPES, ASCII_GLYPHS, TILE_SIZE } from './map-shared.mjs'
 
 const DEFAULT_WIDTH = 160
 const MAX_DIMENSION = 512
@@ -261,7 +261,7 @@ function parseHexColor(value) {
 }
 
 function glyphWeight(tileId) {
-  const char = TILE_TYPES[tileId]?.char
+  const char = ASCII_GLYPHS[tileId]
   if (!char || char === ' ') return 0
   if (char === '.' || char === ',' || char === "'" || char === ';') return 0.18
   if (char === '#' || char === '█') return 0.42

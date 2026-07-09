@@ -1,7 +1,11 @@
 import type { ReactElement } from 'react'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Hammer } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ArrowLeft, Eye, Hammer } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useUiStore } from '@/stores/ui-store'
+import { getAllSurfaces } from '@/lib/surfaces'
+import type { SurfaceStyle } from '@/types'
 
 export type TitlebarPage = 'home' | 'editor' | 'workshop'
 
@@ -14,6 +18,10 @@ interface TitlebarProps {
 
 export function Titlebar({ page, worldName, onBack, onWorkshop }: TitlebarProps): ReactElement {
   const { t } = useTranslation()
+  const surfaceStyle = useUiStore((s) => s.surfaceStyle)
+  const setSurfaceStyle = useUiStore((s) => s.setSurfaceStyle)
+  const isEditable = surfaceStyle === 'ascii'
+  const surfaces = getAllSurfaces()
 
   return (
     <div className="h-9 shrink-0 flex items-center gap-2 px-3 bg-zinc-950 border-b border-zinc-800 select-none">
@@ -63,6 +71,37 @@ export function Titlebar({ page, worldName, onBack, onWorkshop }: TitlebarProps)
 
       {/* Right section: actions */}
       <div className="flex items-center gap-1">
+        {/* Surface style switcher (editor only) */}
+        {page === 'editor' && (
+          <>
+            {!isEditable && (
+              <span className="text-[10px] text-amber-500/80 font-mono px-1 select-none">
+                <Eye className="w-3 h-3 inline-block mr-0.5 -mt-px" />
+                {t('surfaces.viewOnlyBadge')}
+              </span>
+            )}
+            <Select
+              value={surfaceStyle}
+              onValueChange={(v) => setSurfaceStyle(v as SurfaceStyle)}
+            >
+              <SelectTrigger
+                size="sm"
+                className={`h-6 text-[11px] px-1.5 gap-1 border-0 bg-transparent hover:bg-zinc-800/50 ${
+                  isEditable ? 'text-zinc-400' : 'text-amber-400'
+                }`}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="min-w-[130px]">
+                {surfaces.map((s) => (
+                  <SelectItem key={s.id} value={s.id} className="text-xs">
+                    {t(`surfaces.${s.id}`, s.name)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </>
+        )}
         {page === 'home' && onWorkshop && (
           <Button
             variant="ghost"

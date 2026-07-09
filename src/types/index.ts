@@ -2,10 +2,12 @@ export type ToolType = 'brush' | 'erase' | 'pan' | 'fill' | 'select'
 export type TileCategory = 'wall' | 'floor' | 'water' | 'terrain' | 'vegetation' | 'furniture' | 'item' | 'decoration' | 'special'
 export type PresetCategory = 'rooms' | 'corridors' | 'features' | 'dungeon' | 'traps'
 
+/** Visual surface style for rendering the tilemap. */
+export type SurfaceStyle = 'ascii' | 'voronoi' | 'voxel' | 'pixel'
+
 export interface TileType {
   id: string
   name: string
-  char: string
   category: TileCategory
   sortOrder: number
 }

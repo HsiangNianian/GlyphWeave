@@ -1,4 +1,5 @@
 import { TILE_TYPES } from '@/constants/tiles'
+import { ASCII_GLYPHS } from '@/constants/ascii-glyphs'
 import { THEMES } from '@/constants/themes'
 import { normalizeTheme } from '@/lib/theme-registry'
 import type { Theme } from '@/types'
@@ -119,7 +120,7 @@ function parseHexColor(value: string | undefined): RGB | null {
 }
 
 function glyphWeight(tileId: string): number {
-  const char = TILE_TYPES[tileId]?.char
+  const char = ASCII_GLYPHS[tileId]
   if (!char || char === ' ') return 0
   if (char === '.' || char === ',' || char === "'" || char === ';') return 0.18
   if (char === '#' || char === '█') return 0.42

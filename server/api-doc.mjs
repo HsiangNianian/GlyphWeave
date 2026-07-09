@@ -1,7 +1,7 @@
 /**
  * API documentation page shared across development, Node server, and Cloudflare Worker.
  */
-import { THEMES, TILE_TYPES, TILE_SIZE } from './map-shared.mjs'
+import { THEMES, TILE_TYPES, ASCII_GLYPHS, TILE_SIZE } from './map-shared.mjs'
 
 export function apiDocPage(baseUrl) {
   const origin = baseUrl || 'https://glyphweave.hydroroll.team'
@@ -319,8 +319,7 @@ It is designed for both humans and LLMs to read and understand how to generate v
   }
 
   function glyphWeight(tileId) {
-    var tile = TILE_TYPES[tileId];
-    var char = tile && tile.char;
+    var char = ASCII_GLYPHS[tileId];
     if (!char || char === ' ') return 0;
     if (char === '.' || char === ',' || char === "'" || char === ';') return 0.18;
     if (char === '#' || char === '█') return 0.42;

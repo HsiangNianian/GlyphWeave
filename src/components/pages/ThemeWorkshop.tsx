@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import type { Theme, TileColors } from '@/types'
 import { TILE_TYPES } from '@/constants/tiles'
+import { ASCII_GLYPHS } from '@/constants/ascii-glyphs'
 import { THEMES } from '@/constants/themes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -204,7 +205,7 @@ export function ThemeWorkshop({ onUseTheme }: ThemeWorkshopProps) {
                         className="w-5 h-5 rounded flex items-center justify-center text-[11px] font-mono shrink-0"
                         style={{ background: tc.bgColor, color: tc.fgColor }}
                       >
-                        {TILE_TYPES[tileId]?.char || '?'}
+                        {ASCII_GLYPHS[tileId] || '?'}
                       </span>
                       <span className="truncate">{tileId}</span>
                     </button>
@@ -261,7 +262,7 @@ export function ThemeWorkshop({ onUseTheme }: ThemeWorkshopProps) {
                 className="w-7 h-7 rounded flex items-center justify-center text-sm font-mono"
                 style={{ background: selectedColors.bgColor, color: selectedColors.fgColor }}
               >
-                {TILE_TYPES[selectedTile]?.char || '?'}
+                {ASCII_GLYPHS[selectedTile] || '?'}
               </span>
             </div>
 

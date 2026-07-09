@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMapStore } from '@/stores/map-store'
 import { PRESETS, PRESET_CATEGORIES } from '@/constants/presets'
-import { TILE_TYPES } from '@/constants/tiles'
+import { ASCII_GLYPHS } from '@/constants/ascii-glyphs'
 import { resolveTheme, type ThemeRegistry } from '@/lib/theme-registry'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -22,7 +22,6 @@ function PresetPreview({ preset, themeId, customThemes }: { preset: Preset; them
     >
       {preset.grid.flat().map((cellId, i) => {
         const colors = theme.colors[cellId]
-        const tileDef = TILE_TYPES[cellId]
         return (
           <div
             key={i}
@@ -37,7 +36,7 @@ function PresetPreview({ preset, themeId, customThemes }: { preset: Preset; them
               fontFamily: "'JetBrains Mono', monospace",
             }}
           >
-            {tileDef?.char || ' '}
+            {ASCII_GLYPHS[cellId] || ' '}
           </div>
         )
       })}

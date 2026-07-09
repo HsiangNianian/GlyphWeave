@@ -3,7 +3,7 @@
  * Zero native dependencies — generates pure SVG strings.
  */
 
-import { flattenTiles, computeBounds, TILE_TYPES, THEMES, TILE_SIZE, MAX_OUTPUT_SIZE } from './map-shared.mjs'
+import { flattenTiles, computeBounds, ASCII_GLYPHS, THEMES, TILE_SIZE, MAX_OUTPUT_SIZE } from './map-shared.mjs'
 
 export function renderMapSVG(data, options = {}) {
   const themeId = options.themeId || 'ansi-16'
@@ -62,13 +62,13 @@ export function renderMapSVG(data, options = {}) {
 
     parts.push(`<rect x="${px}" y="${py}" width="${ts}" height="${ts}" fill="${colors.bgColor}"/>`)
 
-    const def = TILE_TYPES[tileTypeId]
-    if (def && def.char && def.char !== ' ') {
+    const ch = ASCII_GLYPHS[tileTypeId]
+    if (ch && ch !== ' ') {
       const fontSize = Math.round(TILE_SIZE * scale * 0.75)
       if (fontSize >= 4) {
         const cx = px + ts / 2
         const cy = py + ts / 2
-        const escaped = def.char.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        const escaped = ch.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         parts.push(`<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="${fontSize}" fill="${colors.fgColor}">${escaped}</text>`)
       }
     }

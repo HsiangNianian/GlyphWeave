@@ -295,23 +295,43 @@ src/
 ├── main.tsx                  # 应用入口
 ├── App.tsx                   # 根组件（Home ↔ Editor 路由）
 ├── index.css                 # Tailwind CSS 样式入口
+├── i18n.ts                   # i18next 国际化配置
+├── worker.ts                 # Web Worker
 ├── lib/
+│   ├── surfaces/             # 表面渲染系统
+│   │   ├── ascii.ts         # ASCII 字符渲染
+│   │   ├── index.ts         # 表面注册入口
+│   │   ├── pixel.ts         # 像素风格（占位）
+│   │   ├── register.ts      # 表面渲染器注册表
+│   │   ├── voronoi.ts       # Voronoi 风格（占位）
+│   │   └── voxel.ts         # Voxel 风格（占位）
 │   ├── image-convert.ts     # 浏览器端图片导入转换（Image → .gemap）
-│   └── utils.ts             # shadcn/ui 工具函数（cn）
+│   ├── image-convert.test.ts
+│   ├── map-core.ts          # 地图核心逻辑（flattenTiles, computeBounds）
+│   ├── map-core.test.ts
+│   ├── theme-registry.ts    # 主题注册与继承
+│   ├── theme-registry.test.ts
+│   ├── tile-history.ts      # 笔触历史记录（undo/redo）
+│   ├── tile-history.test.ts
+│   ├── utils.ts             # shadcn/ui 工具函数（cn）
+│   ├── viewport.ts          # 视口计算（zoom/pan/tile坐标）
+│   └── viewport.test.ts
 ├── types/
 │   └── index.ts             # 核心类型（TileType, TileColors, WorldConfig 等）
 ├── assets/                   # 静态资源
 │   ├── hero.png             # 首页 Hero 图
 │   ├── react.svg
 │   └── vite.svg
-├── constants/                # 纯数据：tiles, presets, themes, demo-map
+├── constants/                # 纯数据：tiles, presets, themes, demo-map, ascii-glyphs
 ├── stores/                   # Zustand 状态管理
 │   ├── map-store.ts          # 地图数据、历史栈、工具状态
+│   ├── map-store.test.ts
 │   └── ui-store.ts           # UI 可见性、面板状态
 ├── hooks/                    # 交互逻辑
 │   ├── useCanvas.ts          # 鼠标/键盘事件 → Konva Stage
 │   └── useKeyboard.ts        # 全局快捷键
 └── components/               # React UI
+    ├── Titlebar.tsx          # 全局标题栏
     ├── canvas/               # Konva 渲染层
     ├── toolbar/              # 工具栏
     ├── panels/               # 侧边面板

@@ -2,6 +2,7 @@
 import { useTranslation } from 'react-i18next'
 import { useMapStore } from '@/stores/map-store'
 import { TILE_TYPE_LIST, TILE_CATEGORIES } from '@/constants/tiles'
+import { ASCII_GLYPHS } from '@/constants/ascii-glyphs'
 import { resolveTheme } from '@/lib/theme-registry'
 
 export function TilePalette() {
@@ -56,7 +57,7 @@ export function TilePalette() {
                         className="text-base leading-none font-mono"
                         style={{ color: colors?.fgColor || '#fff' }}
                       >
-                        {tile.char}
+                        {ASCII_GLYPHS[tile.id] ?? ''}
                       </span>
                       <span className="text-[9px] text-zinc-500 truncate w-full text-center leading-tight">
                         {t(`tileType.${tile.id}`, tile.name)}

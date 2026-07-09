@@ -44,7 +44,15 @@
     "select": "选择",
     "undo": "撤销",
     "redo": "重做",
-    "shortcut": "快捷键"
+    "shortcut": "快捷键",
+    "viewOnlyHint": "仅查看 — 切换到 ASCII 风格可编辑"
+  },
+  "surfaces": {
+    "viewOnlyBadge": "仅查看",
+    "ascii": "ASCII",
+    "voronoi": "Voronoi",
+    "voxel": "Voxel",
+    "pixel": "Pixel"
   },
   "tilepalette": {
     "wall": "墙壁",
