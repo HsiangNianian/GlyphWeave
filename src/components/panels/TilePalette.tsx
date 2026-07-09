@@ -1,7 +1,7 @@
 'use client'
 import { useMapStore } from '@/stores/map-store'
 import { TILE_TYPE_LIST, TILE_CATEGORIES } from '@/constants/tiles'
-import { THEMES } from '@/constants/themes'
+import { resolveTheme } from '@/lib/theme-registry'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
 export function TilePalette() {
@@ -9,10 +9,11 @@ export function TilePalette() {
   const setActiveTileType = useMapStore((s) => s.setActiveTileType)
   const currentTool = useMapStore((s) => s.currentTool)
   const themeId = useMapStore((s) => s.themeId)
+  const customThemes = useMapStore((s) => s.customThemes)
   const setCurrentTool = useMapStore((s) => s.setCurrentTool)
   const setActivePreset = useMapStore((s) => s.setActivePreset)
 
-  const theme = THEMES[themeId]
+  const theme = resolveTheme(themeId, customThemes)
 
   const handleSelect = (id: string) => {
     setActiveTileType(id)

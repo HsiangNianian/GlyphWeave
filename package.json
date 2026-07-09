@@ -10,6 +10,7 @@
     "deploy": "pnpm run build && wrangler deploy",
     "preview": "wrangler dev",
     "lint": "oxlint",
+    "test": "vitest run",
     "typecheck": "tsc -b",
     "doc-tree": "node scripts/generate-tree.mjs",
     "doc-tree:check": "node scripts/generate-tree.mjs --check"
@@ -42,6 +43,7 @@
     "oxlint": "^1.71.0",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
+    "vitest": "^4.1.10",
     "wrangler": "^4.107.0"
   }
 }

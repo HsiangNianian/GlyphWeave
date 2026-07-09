@@ -1,7 +1,17 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
-import type { ToolType, Preset, WorldConfig, Layer } from '@/types'
+import type { ToolType, Preset, WorldConfig, Layer, Theme } from '@/types'
 import { TILE_TYPES } from '@/constants/tiles'
+import { flattenLayerTiles, formatTileKey } from '@/lib/map-core'
+import {
+  applyTileTransaction,
+  compactTileTransaction,
+  createTilePatch,
+  invertTileTransaction,
+  mergeStrokeTransaction,
+  type TileTransaction,
+} from '@/lib/tile-history'
+import { customThemeForExport, normalizeTheme, type ThemeRegistry } from '@/lib/theme-registry'
 
 const MAX_HISTORY = 50
 
@@ -9,6 +19,23 @@ let _layerCounter = 1
 function nextLayerId(): string {
   _layerCounter++
   return `layer-${_layerCounter}`
+}
+
+function pushTileTransaction(
+  history: TileTransaction[],
+  historyIndex: number,
+  transaction: TileTransaction,
+): { history: TileTransaction[]; historyIndex: number } {
+  const compacted = compactTileTransaction(transaction)
+  if (compacted.patches.length === 0) return { history, historyIndex }
+
+  const nextHistory = history.slice(0, historyIndex + 1)
+  nextHistory.push(compacted)
+  while (nextHistory.length > MAX_HISTORY) nextHistory.shift()
+  return {
+    history: nextHistory,
+    historyIndex: nextHistory.length - 1,
+  }
 }
 
 export interface MapStore {
@@ -21,7 +48,8 @@ export interface MapStore {
   worldName: string
   tileSize: number
   themeId: string
-  history: string[]
+  customThemes: ThemeRegistry
+  history: TileTransaction[]
   historyIndex: number
 
   setTile: (x: number, y: number, tileTypeId: string | null) => void
@@ -40,6 +68,7 @@ export interface MapStore {
     worldName?: string
     tileSize?: number
     themeId?: string
+    theme?: Theme
   }) => void
   exportMap: () => {
     tiles: Record<string, string | null>
@@ -48,11 +77,11 @@ export interface MapStore {
     worldName: string
     tileSize: number
     themeId: string
+    theme?: Theme
     version: number
   }
   getTile: (x: number, y: number) => string | null
   floodFill: (x: number, y: number, fillTileTypeId: string) => void
-  pushHistory: () => void
 
   addLayer: (name?: string) => void
   removeLayer: (index: number) => void
@@ -74,6 +103,7 @@ export const useMapStore = create<MapStore>()(
     worldName: 'Untitled',
     tileSize: 24,
     themeId: 'ansi-16',
+    customThemes: {},
     history: [],
     historyIndex: -1,
 
@@ -82,31 +112,27 @@ export const useMapStore = create<MapStore>()(
       return state.layers[state.activeLayer]?.locked ?? false
     },
 
-    pushHistory: () => {
-      const state = get()
-      const snapshot = JSON.stringify(state.tiles)
-      const newHistory = state.history.slice(0, state.historyIndex + 1)
-      newHistory.push(snapshot)
-      while (newHistory.length > MAX_HISTORY) newHistory.shift()
-      set((draft) => {
-        draft.history = newHistory
-        draft.historyIndex = newHistory.length - 1
-      })
-    },
-
     setTile: (x, y, tileTypeId) => {
       const state = get()
       const layerId = state.layers[state.activeLayer]?.id
       if (!layerId) return
-      get().pushHistory()
+      const key = formatTileKey(x, y)
+      const transaction = compactTileTransaction({
+        patches: [
+          createTilePatch({
+            layerId,
+            key,
+            before: state.tiles[layerId]?.[key],
+            after: tileTypeId,
+          }),
+        ],
+      })
+      if (transaction.patches.length === 0) return
       set((draft) => {
-        const key = `${x},${y}`
-        if (!draft.tiles[layerId]) draft.tiles[layerId] = {}
-        if (tileTypeId === null || tileTypeId === 'void') {
-          delete draft.tiles[layerId][key]
-        } else {
-          draft.tiles[layerId][key] = tileTypeId
-        }
+        const nextHistory = pushTileTransaction(draft.history, draft.historyIndex, transaction)
+        draft.history = nextHistory.history
+        draft.historyIndex = nextHistory.historyIndex
+        draft.tiles = applyTileTransaction(draft.tiles, transaction)
       })
     },
 
@@ -114,17 +140,25 @@ export const useMapStore = create<MapStore>()(
       const state = get()
       const layerId = state.layers[state.activeLayer]?.id
       if (!layerId) return
-      get().pushHistory()
+      let transaction: TileTransaction = { patches: [] }
+      for (const [x, y, tileTypeId] of entries) {
+        const key = formatTileKey(x, y)
+        transaction = mergeStrokeTransaction(
+          transaction,
+          createTilePatch({
+            layerId,
+            key,
+            before: state.tiles[layerId]?.[key],
+            after: tileTypeId,
+          }),
+        )
+      }
+      if (transaction.patches.length === 0) return
       set((draft) => {
-        if (!draft.tiles[layerId]) draft.tiles[layerId] = {}
-        for (const [x, y, tileTypeId] of entries) {
-          const key = `${x},${y}`
-          if (tileTypeId === null || tileTypeId === 'void') {
-            delete draft.tiles[layerId][key]
-          } else {
-            draft.tiles[layerId][key] = tileTypeId
-          }
-        }
+        const nextHistory = pushTileTransaction(draft.history, draft.historyIndex, transaction)
+        draft.history = nextHistory.history
+        draft.historyIndex = nextHistory.historyIndex
+        draft.tiles = applyTileTransaction(draft.tiles, transaction)
       })
     },
 
@@ -150,19 +184,19 @@ export const useMapStore = create<MapStore>()(
     undo: () => {
       const { historyIndex, history } = get()
       if (historyIndex < 0) return
-      const snapshot = history[historyIndex]
+      const transaction = history[historyIndex]
       set((draft) => {
-        draft.tiles = JSON.parse(snapshot)
+        draft.tiles = applyTileTransaction(draft.tiles, invertTileTransaction(transaction))
         draft.historyIndex = historyIndex - 1
       })
     },
 
     redo: () => {
       const { historyIndex, history } = get()
-      if (historyIndex >= history.length - 2) return
-      const snapshot = history[historyIndex + 2]
+      if (historyIndex >= history.length - 1) return
+      const transaction = history[historyIndex + 1]
       set((draft) => {
-        draft.tiles = JSON.parse(snapshot)
+        draft.tiles = applyTileTransaction(draft.tiles, transaction)
         draft.historyIndex = historyIndex + 1
       })
     },
@@ -171,6 +205,12 @@ export const useMapStore = create<MapStore>()(
       draft.worldName = config.worldName
       draft.tileSize = config.tileSize
       draft.themeId = config.themeId
+      draft.customThemes = {}
+      if (config.initialTheme) {
+        const theme = normalizeTheme(config.initialTheme)
+        draft.customThemes[theme.id] = theme
+        draft.themeId = theme.id
+      }
 
       if (config.initialLayerTiles && config.initialLayers && config.initialLayers.length > 0) {
         draft.tiles = {}
@@ -199,7 +239,6 @@ export const useMapStore = create<MapStore>()(
     }),
 
     importMap: (data) => {
-      get().pushHistory()
       set((draft) => {
         if (data.layerTiles && data.layers && data.layers.length > 0) {
           draft.tiles = {}
@@ -216,18 +255,21 @@ export const useMapStore = create<MapStore>()(
         }
         if (data.worldName) draft.worldName = data.worldName
         if (data.tileSize) draft.tileSize = data.tileSize
+        if (data.theme) {
+          const theme = normalizeTheme(data.theme)
+          draft.customThemes[theme.id] = theme
+          draft.themeId = theme.id
+        }
         if (data.themeId) draft.themeId = data.themeId
+        draft.history = []
+        draft.historyIndex = -1
       })
     },
 
     exportMap: () => {
       const state = get()
-      const flatTiles: Record<string, string | null> = {}
-      for (const layer of state.layers) {
-        if (state.tiles[layer.id]) {
-          Object.assign(flatTiles, state.tiles[layer.id])
-        }
-      }
+      const flatTiles = flattenLayerTiles(state.tiles, state.layers)
+      const customTheme = customThemeForExport(state.themeId, state.customThemes)
       return {
         tiles: flatTiles,
         layerTiles: { ...state.tiles },
@@ -235,6 +277,7 @@ export const useMapStore = create<MapStore>()(
         worldName: state.worldName,
         tileSize: state.tileSize,
         themeId: state.themeId,
+        ...(customTheme ? { theme: customTheme } : {}),
         version: 2,
       }
     },
@@ -260,15 +303,16 @@ export const useMapStore = create<MapStore>()(
       const targetTileType = layerTiles[key]
       if (!targetTileType || targetTileType === fillTileTypeId) return
 
-      get().pushHistory()
       const visited = new Set<string>()
       const queue: [number, number][] = [[startX, startY]]
       const dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]]
       const entries: [number, number, string | null][] = []
+      let cursor = 0
 
-      while (queue.length > 0) {
-        const [cx, cy] = queue.shift()!
-        const ck = `${cx},${cy}`
+      while (cursor < queue.length) {
+        const [cx, cy] = queue[cursor]!
+        cursor++
+        const ck = formatTileKey(cx, cy)
         if (visited.has(ck)) continue
         visited.add(ck)
 
@@ -280,7 +324,7 @@ export const useMapStore = create<MapStore>()(
         for (const [dx, dy] of dirs) {
           const nx = cx + dx
           const ny = cy + dy
-          const nk = `${nx},${ny}`
+          const nk = formatTileKey(nx, ny)
           if (!visited.has(nk)) {
             queue.push([nx, ny])
           }
@@ -288,17 +332,7 @@ export const useMapStore = create<MapStore>()(
       }
 
       if (entries.length > 0) {
-        set((draft) => {
-          if (!draft.tiles[layerId]) draft.tiles[layerId] = {}
-          for (const [x, y, tid] of entries) {
-            const k = `${x},${y}`
-            if (tid === null || tid === 'void') {
-              delete draft.tiles[layerId][k]
-            } else {
-              draft.tiles[layerId][k] = tid
-            }
-          }
-        })
+        get().setTiles(entries)
       }
     },
 
