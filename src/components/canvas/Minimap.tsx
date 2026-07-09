@@ -22,9 +22,8 @@ export function Minimap({ stageRef }: MinimapProps) {
   const customThemes = useMapStore((s) => s.customThemes)
   const tileSize = useMapStore((s) => s.tileSize)
   const worldName = useMapStore((s) => s.worldName)
-  const viewport = useUiStore((s) => s.viewport)
   const setViewport = useUiStore((s) => s.setViewport)
-  const viewportRef = useRef(viewport)
+  const viewportRef = useRef(useUiStore.getState().viewport)
 
   const theme = resolveTheme(themeId, customThemes)
 
@@ -130,9 +129,11 @@ export function Minimap({ stageRef }: MinimapProps) {
 
   // ── viewport rect overlay (evented, no permanent RAF loop) ──
   useEffect(() => {
-    viewportRef.current = viewport
-    drawViewport()
-  }, [drawViewport, viewport])
+    return useUiStore.subscribe((state) => {
+      viewportRef.current = state.viewport
+      drawViewport()
+    })
+  }, [drawViewport])
 
   // ── click to pan ──
   const handleClick = useCallback(

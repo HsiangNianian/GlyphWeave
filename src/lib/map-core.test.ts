@@ -1,9 +1,13 @@
 import {
+  buildVisibleTileChunkIndex,
   computeTileBounds,
   flattenLayerTiles,
+  formatTileChunkKey,
   formatTileKey,
+  iterateVisibleTileChunks,
   iterateVisibleTiles,
   parseTileKey,
+  tileCoordToChunk,
   tileInRange,
   type LayerTileMap,
   type MapLayer,
@@ -160,6 +164,51 @@ describeTest('map-core', () => {
         gridY: 0,
         tileTypeId: 'wall',
       },
+    ])
+  })
+
+  itTest('maps negative coordinates into stable tile chunks', () => {
+    expectTest(tileCoordToChunk({ x: 0, y: 31 }, 32)).toEqual({ x: 0, y: 0 })
+    expectTest(tileCoordToChunk({ x: 32, y: 32 }, 32)).toEqual({ x: 1, y: 1 })
+    expectTest(tileCoordToChunk({ x: -1, y: -32 }, 32)).toEqual({ x: -1, y: -1 })
+    expectTest(tileCoordToChunk({ x: -33, y: -33 }, 32)).toEqual({ x: -2, y: -2 })
+    expectTest(formatTileChunkKey(-2, 3)).toBe('-2,3')
+  })
+
+  itTest('indexes visible tiles by chunk and filters ranges without scanning all chunks', () => {
+    const layers: MapLayer[] = [
+      { id: 'ground', visible: true },
+      { id: 'hidden', visible: false },
+      { id: 'overlay', visible: true },
+    ]
+    const layerTiles: LayerTileMap = {
+      ground: {
+        '0,0': 'floor',
+        '31,31': 'wall',
+        '32,0': 'water',
+        '-1,-1': 'lava',
+      },
+      hidden: {
+        '0,0': 'door',
+      },
+      overlay: {
+        '0,0': 'grass',
+      },
+    }
+
+    const index = buildVisibleTileChunkIndex(layerTiles, layers, 32)
+
+    expectTest(Object.keys(index.chunks).sort()).toEqual(['-1,-1', '0,0', '1,0'])
+    expectTest(index.chunks['0,0']?.map((tile) => tile.key)).toEqual([
+      'ground:0,0',
+      'ground:31,31',
+      'overlay:0,0',
+    ])
+    expectTest(Array.from(iterateVisibleTileChunks(index, {
+      range: { minX: 0, minY: 0, maxX: 1, maxY: 1 },
+    })).map((tile) => tile.key)).toEqual([
+      'ground:0,0',
+      'overlay:0,0',
     ])
   })
 })

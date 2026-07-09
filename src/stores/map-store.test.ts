@@ -86,6 +86,55 @@ describe('map-store', () => {
     expect(useMapStore.getState().historyIndex).toBe(0)
   })
 
+  it('previews stroke tiles and commits them as one undo entry', () => {
+    useMapStore.getState().setTile(0, 0, 'floor')
+    useMapStore.getState().undo()
+    expect(useMapStore.getState().historyIndex).toBe(-1)
+
+    useMapStore.getState().setTilePreview('layer-1', 0, 0, 'wall')
+    useMapStore.getState().setTilePreview('layer-1', 1, 0, 'water')
+
+    expect(useMapStore.getState().tiles).toEqual({
+      'layer-1': {
+        '0,0': 'wall',
+        '1,0': 'water',
+      },
+    })
+    expect(useMapStore.getState().history).toHaveLength(1)
+    expect(useMapStore.getState().historyIndex).toBe(-1)
+
+    useMapStore.getState().commitTilePreview({
+      patches: [
+        { layerId: 'layer-1', key: '0,0', before: null, after: 'wall' },
+        { layerId: 'layer-1', key: '1,0', before: null, after: 'water' },
+      ],
+    })
+
+    expect(useMapStore.getState().history).toEqual([
+      {
+        patches: [
+          { layerId: 'layer-1', key: '0,0', before: null, after: 'wall' },
+          { layerId: 'layer-1', key: '1,0', before: null, after: 'water' },
+        ],
+      },
+    ])
+    expect(useMapStore.getState().historyIndex).toBe(0)
+
+    useMapStore.getState().undo()
+
+    expect(useMapStore.getState().tiles).toEqual({ 'layer-1': {} })
+    expect(useMapStore.getState().historyIndex).toBe(-1)
+
+    useMapStore.getState().redo()
+
+    expect(useMapStore.getState().tiles).toEqual({
+      'layer-1': {
+        '0,0': 'wall',
+        '1,0': 'water',
+      },
+    })
+  })
+
   it('stores floodFill as one history entry', () => {
     resetStore({
       ...testWorld,

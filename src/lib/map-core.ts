@@ -42,6 +42,20 @@ export type IterateVisibleTilesOptions = {
   range?: TileRange
 }
 
+export type TileChunkCoord = {
+  x: number
+  y: number
+}
+
+export type VisibleTileChunkIndex = {
+  chunkSize: number
+  chunks: Record<string, VisibleTile[]>
+}
+
+export type IterateVisibleTileChunkOptions = {
+  range?: TileRange
+}
+
 export const defaultTileBounds: TileBounds = {
   minX: 0,
   minY: 0,
@@ -50,6 +64,8 @@ export const defaultTileBounds: TileBounds = {
   w: 1,
   h: 1,
 }
+
+export const DEFAULT_TILE_CHUNK_SIZE = 32
 
 export function formatTileKey(x: number, y: number): string {
   return `${x},${y}`
@@ -70,6 +86,20 @@ export function tileInRange(coord: TileCoord, range: TileRange): boolean {
     coord.y >= range.minY &&
     coord.y <= range.maxY
   )
+}
+
+export function tileCoordToChunk(
+  coord: TileCoord,
+  chunkSize: number = DEFAULT_TILE_CHUNK_SIZE,
+): TileChunkCoord {
+  return {
+    x: Math.floor(coord.x / chunkSize),
+    y: Math.floor(coord.y / chunkSize),
+  }
+}
+
+export function formatTileChunkKey(x: number, y: number): string {
+  return `${x},${y}`
 }
 
 export function computeTileBounds(
@@ -154,6 +184,54 @@ export function* iterateVisibleTiles(
         gridX: coord.x,
         gridY: coord.y,
         tileTypeId,
+      }
+    }
+  }
+}
+
+export function buildVisibleTileChunkIndex(
+  layerTiles: Readonly<LayerTileMap> | undefined,
+  layers: readonly MapLayer[] | undefined,
+  chunkSize: number = DEFAULT_TILE_CHUNK_SIZE,
+): VisibleTileChunkIndex {
+  const index: VisibleTileChunkIndex = {
+    chunkSize,
+    chunks: {},
+  }
+
+  for (const tile of iterateVisibleTiles(layerTiles, layers)) {
+    const chunk = tileCoordToChunk({ x: tile.gridX, y: tile.gridY }, chunkSize)
+    const chunkKey = formatTileChunkKey(chunk.x, chunk.y)
+    index.chunks[chunkKey] ??= []
+    index.chunks[chunkKey].push(tile)
+  }
+
+  return index
+}
+
+export function* iterateVisibleTileChunks(
+  index: VisibleTileChunkIndex,
+  options: IterateVisibleTileChunkOptions = {},
+): Generator<VisibleTile, void, unknown> {
+  const range = options.range
+  if (!range) {
+    for (const chunkTiles of Object.values(index.chunks)) {
+      yield* chunkTiles
+    }
+    return
+  }
+
+  const minChunk = tileCoordToChunk({ x: range.minX, y: range.minY }, index.chunkSize)
+  const maxChunk = tileCoordToChunk({ x: range.maxX, y: range.maxY }, index.chunkSize)
+
+  for (let cy = minChunk.y; cy <= maxChunk.y; cy++) {
+    for (let cx = minChunk.x; cx <= maxChunk.x; cx++) {
+      const chunkTiles = index.chunks[formatTileChunkKey(cx, cy)]
+      if (!chunkTiles) continue
+
+      for (const tile of chunkTiles) {
+        if (!tileInRange({ x: tile.gridX, y: tile.gridY }, range)) continue
+        yield tile
       }
     }
   }

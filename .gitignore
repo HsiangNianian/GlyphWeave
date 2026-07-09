@@ -32,3 +32,7 @@ dist-ssr
 !.dev.vars.example
 !.env.example
 .next/
+
+# omx
+.omx/
+bevy/target/

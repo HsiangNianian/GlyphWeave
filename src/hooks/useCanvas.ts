@@ -2,6 +2,12 @@ import { useRef, useCallback, type MutableRefObject } from 'react'
 import Konva from 'konva'
 import { useMapStore } from '@/stores/map-store'
 import { useUiStore } from '@/stores/ui-store'
+import { formatTileKey } from '@/lib/map-core'
+import {
+  createTilePatch,
+  mergeStrokeTransaction,
+  type TileTransaction,
+} from '@/lib/tile-history'
 import { panViewport, pointerToTile as viewportPointerToTile, zoomAtPoint } from '@/lib/viewport'
 
 export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
@@ -9,8 +15,9 @@ export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
   const lastMousePos = useRef({ x: 0, y: 0 })
   const isDrawing = useRef(false)
   const lastDrawnTile = useRef<string | null>(null)
+  const strokeLayerId = useRef<string | null>(null)
+  const strokeTransaction = useRef<TileTransaction>({ patches: [] })
 
-  const setTile = useMapStore((s) => s.setTile)
   const currentTool = useMapStore((s) => s.currentTool)
   const activeTileType = useMapStore((s) => s.activeTileType)
   const activePreset = useMapStore((s) => s.activePreset)
@@ -18,6 +25,42 @@ export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
   const floodFill = useMapStore((s) => s.floodFill)
   const tileSize = useMapStore((s) => s.tileSize)
   const activeLayerLocked = useMapStore((s) => s.activeLayerLocked)
+
+  const resetStroke = useCallback((): void => {
+    isDrawing.current = false
+    lastDrawnTile.current = null
+    strokeLayerId.current = null
+    strokeTransaction.current = { patches: [] }
+  }, [])
+
+  const recordStrokeTile = useCallback((x: number, y: number, tileTypeId: string | null): void => {
+    const state = useMapStore.getState()
+    const layerId = strokeLayerId.current ?? state.layers[state.activeLayer]?.id
+    if (!layerId) return
+
+    strokeLayerId.current = layerId
+    const key = formatTileKey(x, y)
+    strokeTransaction.current = mergeStrokeTransaction(
+      strokeTransaction.current,
+      createTilePatch({
+        layerId,
+        key,
+        before: state.tiles[layerId]?.[key],
+        after: tileTypeId,
+      }),
+    )
+    state.setTilePreview(layerId, x, y, tileTypeId)
+  }, [])
+
+  const finishStroke = useCallback((): void => {
+    if (!isDrawing.current) return
+
+    const transaction = strokeTransaction.current
+    if (transaction.patches.length > 0) {
+      useMapStore.getState().commitTilePreview(transaction)
+    }
+    resetStroke()
+  }, [resetStroke])
 
   const pointerToTile = useCallback((pointer: { x: number; y: number }): [number, number] => {
     const stage = stageRef.current
@@ -83,11 +126,14 @@ export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
 
     if (currentTool === 'brush' || currentTool === 'erase') {
       isDrawing.current = true
+      strokeTransaction.current = { patches: [] }
+      const state = useMapStore.getState()
+      strokeLayerId.current = state.layers[state.activeLayer]?.id ?? null
       const tileId = currentTool === 'erase' ? null : activeTileType
-      setTile(tx, ty, tileId)
-      lastDrawnTile.current = `${tx},${ty}`
+      recordStrokeTile(tx, ty, tileId)
+      lastDrawnTile.current = formatTileKey(tx, ty)
     }
-  }, [activeLayerLocked, activePreset, activeTileType, currentTool, floodFill, placePreset, pointerToTile, setTile, stageRef])
+  }, [activeLayerLocked, activePreset, activeTileType, currentTool, floodFill, placePreset, pointerToTile, recordStrokeTile, stageRef])
 
   const handleMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
     const evt = e.evt
@@ -117,25 +163,23 @@ export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
     if (tileKey === lastDrawnTile.current) return
 
     const tileId = currentTool === 'erase' ? null : activeTileType
-    setTile(tx, ty, tileId)
+    recordStrokeTile(tx, ty, tileId)
     lastDrawnTile.current = tileKey
-  }, [activeLayerLocked, activeTileType, currentTool, pointerToTile, setTile, stageRef])
+  }, [activeLayerLocked, activeTileType, currentTool, pointerToTile, recordStrokeTile, stageRef])
 
   const handleMouseUp = useCallback(() => {
     isPanning.current = false
-    isDrawing.current = false
-    lastDrawnTile.current = null
+    finishStroke()
     const stage = stageRef.current
     if (stage) {
       stage.container().style.cursor = currentTool === 'pan' ? 'grab' : 'crosshair'
     }
-  }, [currentTool, stageRef])
+  }, [currentTool, finishStroke, stageRef])
 
   const handleMouseLeave = useCallback(() => {
     isPanning.current = false
-    isDrawing.current = false
-    lastDrawnTile.current = null
-  }, [])
+    finishStroke()
+  }, [finishStroke])
 
   return {
     stageRef,

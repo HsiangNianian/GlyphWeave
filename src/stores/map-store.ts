@@ -54,6 +54,8 @@ export interface MapStore {
 
   setTile: (x: number, y: number, tileTypeId: string | null) => void
   setTiles: (entries: [number, number, string | null][]) => void
+  setTilePreview: (layerId: string, x: number, y: number, tileTypeId: string | null) => void
+  commitTilePreview: (transaction: TileTransaction) => void
   setActiveTileType: (id: string) => void
   setCurrentTool: (tool: ToolType) => void
   setActivePreset: (preset: Preset | null) => void
@@ -159,6 +161,28 @@ export const useMapStore = create<MapStore>()(
         draft.history = nextHistory.history
         draft.historyIndex = nextHistory.historyIndex
         draft.tiles = applyTileTransaction(draft.tiles, transaction)
+      })
+    },
+
+    setTilePreview: (layerId, x, y, tileTypeId) => {
+      const key = formatTileKey(x, y)
+      set((draft) => {
+        if (!draft.tiles[layerId]) draft.tiles[layerId] = {}
+        if (tileTypeId === null) {
+          delete draft.tiles[layerId][key]
+          return
+        }
+        draft.tiles[layerId][key] = tileTypeId
+      })
+    },
+
+    commitTilePreview: (transaction) => {
+      const compacted = compactTileTransaction(transaction)
+      if (compacted.patches.length === 0) return
+      set((draft) => {
+        const nextHistory = pushTileTransaction(draft.history, draft.historyIndex, compacted)
+        draft.history = nextHistory.history
+        draft.historyIndex = nextHistory.historyIndex
       })
     },
 
