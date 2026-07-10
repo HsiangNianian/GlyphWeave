@@ -1,0 +1,369 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://glyphweave.dev/schemas/gemap-v3-region.schema.json",
+  "title": "GlyphWeave .gemap v3 region record",
+  "description": "A region.json entry referenced by a GlyphWeave .gemap v3 manifest.",
+  "type": "object",
+  "required": [
+    "format",
+    "version",
+    "region",
+    "sections",
+    "chunks"
+  ],
+  "properties": {
+    "format": {
+      "const": "glyphweave-region"
+    },
+    "version": {
+      "const": 1
+    },
+    "region": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "integer",
+          "minimum": -4194304,
+          "maximum": 4194303
+        },
+        {
+          "type": "integer",
+          "minimum": -4194304,
+          "maximum": 4194303
+        }
+      ],
+      "items": false,
+      "minItems": 2
+    },
+    "sections": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/sectionKey"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/chunkId"
+      }
+    },
+    "chunks": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "#/$defs/chunkId"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/chunkRecord"
+      }
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "sectionKey": {
+      "type": "string",
+      "pattern": "^(?:0|-?[1-9][0-9]*),(?:[0-9]|[12][0-9]|3[01]),(?:[0-9]|[12][0-9]|3[01])$"
+    },
+    "chunkId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "chunkDataPath": {
+      "type": "string",
+      "pattern": "^chunks/[0-9a-f]{64}\\.bin$"
+    },
+    "globalBlockId": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    },
+    "palette": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4096,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/globalBlockId"
+      },
+      "not": {
+        "const": [
+          0
+        ]
+      }
+    },
+    "chunkRecord": {
+      "type": "object",
+      "required": [
+        "bits",
+        "palette",
+        "data"
+      ],
+      "properties": {
+        "bits": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        },
+        "palette": {
+          "$ref": "#/$defs/palette"
+        },
+        "data": {
+          "$ref": "#/$defs/chunkDataPath"
+        }
+      },
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "refCount"
+            ]
+          },
+          {
+            "required": [
+              "subpalette"
+            ]
+          }
+        ]
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "bits": {
+                "const": 1
+              }
+            },
+            "required": [
+              "bits"
+            ]
+          },
+          "then": {
+            "properties": {
+              "palette": {
+                "minItems": 1,
+                "maxItems": 2
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "bits": {
+                "const": 2
+              }
+            },
+            "required": [
+              "bits"
+            ]
+          },
+          "then": {
+            "properties": {
+              "palette": {
+                "minItems": 3,
+                "maxItems": 4
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "bits": {
+                "const": 3
+              }
+            },
+            "required": [
+              "bits"
+            ]
+          },
+          "then": {
+            "properties": {
+              "palette": {
+                "minItems": 5,
+                "maxItems": 8
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "bits": {
+                "const": 4
+              }
+            },
+            "required": [
+              "bits"
+            ]
+          },
+          "then": {
+            "properties": {
+              "palette": {
+                "minItems": 9,
+                "maxItems": 16
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "bits": {
+                "const": 5
+              }
+            },
+            "required": [
+              "bits"
+            ]
+          },
+          "then": {
+            "properties": {
+              "palette": {
+                "minItems": 17,
+                "maxItems": 32
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "bits": {
+                "const": 6
+              }
+            },
+            "required": [
+              "bits"
+            ]
+          },
+          "then": {
+            "properties": {
+              "palette": {
+                "minItems": 33,
+                "maxItems": 64
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "bits": {
+                "const": 7
+              }
+            },
+            "required": [
+              "bits"
+            ]
+          },
+          "then": {
+            "properties": {
+              "palette": {
+                "minItems": 65,
+                "maxItems": 128
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "bits": {
+                "const": 8
+              }
+            },
+            "required": [
+              "bits"
+            ]
+          },
+          "then": {
+            "properties": {
+              "palette": {
+                "minItems": 129,
+                "maxItems": 256
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "bits": {
+                "const": 9
+              }
+            },
+            "required": [
+              "bits"
+            ]
+          },
+          "then": {
+            "properties": {
+              "palette": {
+                "minItems": 257,
+                "maxItems": 512
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "bits": {
+                "const": 10
+              }
+            },
+            "required": [
+              "bits"
+            ]
+          },
+          "then": {
+            "properties": {
+              "palette": {
+                "minItems": 513,
+                "maxItems": 1024
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "bits": {
+                "const": 11
+              }
+            },
+            "required": [
+              "bits"
+            ]
+          },
+          "then": {
+            "properties": {
+              "palette": {
+                "minItems": 1025,
+                "maxItems": 2048
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "bits": {
+                "const": 12
+              }
+            },
+            "required": [
+              "bits"
+            ]
+          },
+          "then": {
+            "properties": {
+              "palette": {
+                "minItems": 2049,
+                "maxItems": 4096
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,17 +1,17 @@
 export type TileHistoryValue = string | null
 export type TileHistoryInputValue = string | null | undefined
-export type TileLayerTiles = Record<string, TileHistoryValue>
-export type TileLayers = Record<string, TileLayerTiles>
+export type TileSliceTiles = Record<string, TileHistoryValue>
+export type TileSlices = Record<string, TileSliceTiles>
 
 export type TileEdit = {
-  layerId: string
+  sliceId: string
   key: string
   before: TileHistoryInputValue
   after: TileHistoryInputValue
 }
 
 export type TileDelta = {
-  layerId: string
+  sliceId: string
   key: string
   before: TileHistoryValue
   after: TileHistoryValue
@@ -28,37 +28,37 @@ function normalizeTileValue(value: TileHistoryInputValue): TileHistoryValue {
 }
 
 function transactionKey(patch: TilePatch): string {
-  return `${patch.layerId}\u0000${patch.key}`
+  return `${patch.sliceId}\u0000${patch.key}`
 }
 
-function applyTileValue(layerTiles: TileLayerTiles, key: string, value: TileHistoryValue): TileLayerTiles {
-  const nextLayerTiles = { ...layerTiles }
+function applyTileValue(sliceTiles: TileSliceTiles, key: string, value: TileHistoryValue): TileSliceTiles {
+  const nextSliceTiles = { ...sliceTiles }
   if (value === null) {
-    delete nextLayerTiles[key]
-    return nextLayerTiles
+    delete nextSliceTiles[key]
+    return nextSliceTiles
   }
 
-  nextLayerTiles[key] = value
-  return nextLayerTiles
+  nextSliceTiles[key] = value
+  return nextSliceTiles
 }
 
 export function createTilePatch(edit: TileEdit): TilePatch {
   return {
-    layerId: edit.layerId,
+    sliceId: edit.sliceId,
     key: edit.key,
     before: normalizeTileValue(edit.before),
     after: normalizeTileValue(edit.after),
   }
 }
 
-export function applyTilePatch(tiles: TileLayers, patch: TilePatch): TileLayers {
+export function applyTilePatch(tiles: TileSlices, patch: TilePatch): TileSlices {
   return {
     ...tiles,
-    [patch.layerId]: applyTileValue(tiles[patch.layerId] ?? {}, patch.key, patch.after),
+    [patch.sliceId]: applyTileValue(tiles[patch.sliceId] ?? {}, patch.key, patch.after),
   }
 }
 
-export function applyTileTransaction(tiles: TileLayers, transaction: TileTransaction): TileLayers {
+export function applyTileTransaction(tiles: TileSlices, transaction: TileTransaction): TileSlices {
   return transaction.patches.reduce(
     (nextTiles, patch) => applyTilePatch(nextTiles, patch),
     tiles,
@@ -67,7 +67,7 @@ export function applyTileTransaction(tiles: TileLayers, transaction: TileTransac
 
 export function invertTilePatch(patch: TilePatch): TilePatch {
   return {
-    layerId: patch.layerId,
+    sliceId: patch.sliceId,
     key: patch.key,
     before: patch.after,
     after: patch.before,

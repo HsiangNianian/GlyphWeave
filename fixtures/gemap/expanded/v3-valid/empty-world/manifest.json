@@ -1,0 +1,25 @@
+{
+  "axisOrder": "z,x,y",
+  "blockRegistry": {
+    "0": "glyphweave:air"
+  },
+  "chunkShape": [
+    16,
+    16,
+    16
+  ],
+  "format": "glyphweave-map",
+  "metadata": {
+    "fixture": "empty-world"
+  },
+  "regionShape": [
+    "infinite",
+    32,
+    32
+  ],
+  "regions": {},
+  "version": 3,
+  "world": {
+    "name": "Empty World"
+  }
+}

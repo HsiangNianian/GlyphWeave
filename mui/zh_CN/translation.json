@@ -30,6 +30,8 @@
     "tiles": "瓦片",
     "presets": "预设",
     "layers": "图层",
+    "elevation": "高度",
+    "slice": "切片",
     "export": "导出",
     "settings": "设置",
     "zoomOut": "缩小",
@@ -65,23 +67,26 @@
     "traps": "陷阱",
     "placeHint": "点击画布放置 \"{{name}}\""
   },
-  "layers": {
-    "title": "图层",
-    "addLayer": "添加图层",
-    "showLayer": "显示图层",
-    "hideLayer": "隐藏图层",
-    "lockLayer": "锁定图层",
-    "unlockLayer": "解锁图层",
-    "deleteLayer": "删除图层"
+  "elevation": {
+    "title": "高度层位",
+    "description": "逐层编辑真实体素高度。这是空间海拔，不是绘制图层。",
+    "current": "当前层位",
+    "lower": "下降一层",
+    "raise": "上升一层",
+    "zInput": "当前体素高度",
+    "returnZero": "返回基准面 Z 0",
+    "verticalWell": "垂直井",
+    "occupiedCount": "{{count}} 个非空层",
+    "cells": "格"
   },
   "exportPanel": {
     "title": "导入 / 导出",
-    "desc": "将地图导出为 .gemap JSON 文件，或导入已有地图继续编辑。",
+    "desc": "将体素世界导出为 .gemap ZIP 容器，或导入 v3 与旧版地图。",
     "exportGemap": "导出 .gemap",
     "importGemap": "导入 .gemap",
     "importImage": "导入图片",
     "render": "渲染",
-    "renderDesc": "通过 API 将完整地图渲染为图片。",
+    "renderDesc": "通过 API 将当前高度切片渲染为图片。",
     "exportSvg": "导出 SVG"
   },
   "settings": {

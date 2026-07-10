@@ -1,23 +1,36 @@
 //! Bevy resources wrapping the core world model and shared editor state.
 use bevy::ecs::message::Message;
 use bevy::prelude::Resource;
-use glyphweave_core::world::World;
+use glyphweave_core::voxel::VoxelWorld;
 
-/// Newtype around `core::World` to avoid a name clash with `bevy::prelude::World`.
+/// Authoritative editable voxel world plus editor-only display scale.
 #[derive(Resource)]
-pub struct WorldModel(pub World);
+pub struct WorldModel {
+    pub world: VoxelWorld,
+    pub tile_size: u32,
+}
+
+impl WorldModel {
+    pub const fn new(world: VoxelWorld, tile_size: u32) -> Self {
+        Self { world, tile_size }
+    }
+}
 
 impl std::ops::Deref for WorldModel {
-    type Target = World;
-    fn deref(&self) -> &World {
-        &self.0
+    type Target = VoxelWorld;
+    fn deref(&self) -> &VoxelWorld {
+        &self.world
     }
 }
 impl std::ops::DerefMut for WorldModel {
-    fn deref_mut(&mut self) -> &mut World {
-        &mut self.0
+    fn deref_mut(&mut self) -> &mut VoxelWorld {
+        &mut self.world
     }
 }
+
+/// The z slice currently shown and edited. This is editor state, not `.gemap` data.
+#[derive(Resource, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ActiveZ(pub i32);
 
 /// Monotonic world-content revision used by cached UI projections.
 #[derive(Resource, Debug, Clone, Copy, Default)]
@@ -26,6 +39,7 @@ pub struct WorldRevision(pub u64);
 /// Tile coordinate changed in the core world and should be mirrored to render state.
 #[derive(Message, Clone, Copy, Debug)]
 pub struct EditEvent {
+    pub z: i32,
     pub x: i32,
     pub y: i32,
 }
@@ -81,19 +95,18 @@ impl Default for EditorViewSettings {
     }
 }
 
-/// Full-world snapshots for undo/redo. This is intentionally coarse for now:
-/// the Bevy port still uses bounded tilemaps, so whole-world restore plus a
-/// render refresh is simpler and safer than trying to replay structural edits.
+/// Full-voxel-world snapshots for undo/redo. This remains intentionally coarse
+/// while the editor transition prioritizes a correct z-slice storage loop.
 #[derive(Resource, Debug, Default)]
 pub struct EditorHistory {
-    undo_stack: Vec<World>,
-    redo_stack: Vec<World>,
+    undo_stack: Vec<VoxelWorld>,
+    redo_stack: Vec<VoxelWorld>,
 }
 
 impl EditorHistory {
     const MAX_HISTORY: usize = 50;
 
-    pub fn push_snapshot(&mut self, world: &World) {
+    pub fn push_snapshot(&mut self, world: &VoxelWorld) {
         self.undo_stack.push(world.clone());
         if self.undo_stack.len() > Self::MAX_HISTORY {
             self.undo_stack.remove(0);
@@ -101,7 +114,7 @@ impl EditorHistory {
         self.redo_stack.clear();
     }
 
-    pub fn undo(&mut self, world: &mut World) -> bool {
+    pub fn undo(&mut self, world: &mut VoxelWorld) -> bool {
         let Some(previous) = self.undo_stack.pop() else {
             return false;
         };
@@ -110,7 +123,7 @@ impl EditorHistory {
         true
     }
 
-    pub fn redo(&mut self, world: &mut World) -> bool {
+    pub fn redo(&mut self, world: &mut VoxelWorld) -> bool {
         let Some(next) = self.redo_stack.pop() else {
             return false;
         };
@@ -125,5 +138,30 @@ impl EditorHistory {
 
     pub fn can_redo(&self) -> bool {
         !self.redo_stack.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use glyphweave_core::voxel::VoxelCoord;
+
+    #[test]
+    fn history_restores_edits_across_z_slices() {
+        let mut world = VoxelWorld::new("history");
+        let wall = world.intern_block("glyphweave:wall").unwrap();
+        let base = VoxelCoord::new(0, 2, 3);
+        let upper = VoxelCoord::new(4, 2, 3);
+        world.set(base, wall).unwrap();
+
+        let mut history = EditorHistory::default();
+        history.push_snapshot(&world);
+        world.set(upper, wall).unwrap();
+
+        assert!(history.undo(&mut world));
+        assert_eq!(world.get(base), wall);
+        assert!(world.get(upper).is_air());
+        assert!(history.redo(&mut world));
+        assert_eq!(world.get(upper), wall);
     }
 }

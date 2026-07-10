@@ -15,7 +15,7 @@ import { SettingsPanel } from '@/components/panels/SettingsPanel'
 import { ExportPanel } from '@/components/panels/ExportPanel'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { Download, PanelRightClose, PanelRightOpen, Settings, Plus, Minus } from 'lucide-react'
+import { Download, Layers, PanelRightClose, PanelRightOpen, Settings, Plus, Minus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { zoomAtPoint } from '@/lib/viewport'
 
@@ -27,6 +27,7 @@ interface EditorPageProps {
 export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
   const { t } = useTranslation()
   const initWorld = useMapStore((s) => s.initWorld)
+  const activeZ = useMapStore((s) => s.activeZ)
   const sidePanelOpen = useUiStore((s) => s.sidePanelOpen)
   const toggleSidePanel = useUiStore((s) => s.toggleSidePanel)
   const sidePanelTab = useUiStore((s) => s.sidePanelTab)
@@ -124,6 +125,13 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
             >
               {t('editor.home')}
             </Button>
+            <div className="flex h-6 items-center gap-1.5 border border-zinc-800 bg-black/70 px-2 font-mono text-[10px] text-zinc-500 backdrop-blur-sm">
+              <Layers className="h-3 w-3 text-amber-400/80" />
+              <span>{t('editor.slice')}</span>
+              <span className="font-semibold tabular-nums text-amber-300">
+                Z {activeZ >= 0 ? '+' : ''}{activeZ}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -144,13 +152,15 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
             >
               <Minus className="w-3 h-3" />
             </Button>
-            <button
+            <Button
+              variant="ghost"
+              size="sm"
               className="text-[11px] font-mono text-zinc-400 hover:text-zinc-200 px-1.5 min-w-[48px] text-center cursor-pointer select-none"
               title={t('editor.zoomReset')}
               onClick={resetZoom}
             >
               {Math.round(zoomScale * 100)}%
-            </button>
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -191,7 +201,7 @@ export function EditorPage({ worldConfig, onBack }: EditorPageProps) {
               <TabsList className="bg-zinc-900 border-b border-zinc-800 rounded-none px-1 h-9 justify-start gap-0 overflow-x-auto flex-nowrap">
                 <TabsTrigger value="tiles" className="text-xs h-8 px-2 data-[state=active]:bg-zinc-800 rounded-none shrink-0">{t('editor.tiles')}</TabsTrigger>
                 <TabsTrigger value="presets" className="text-xs h-8 px-2 data-[state=active]:bg-zinc-800 rounded-none shrink-0">{t('editor.presets')}</TabsTrigger>
-                <TabsTrigger value="layers" className="text-xs h-8 px-2 data-[state=active]:bg-zinc-800 rounded-none shrink-0">{t('editor.layers')}</TabsTrigger>
+                <TabsTrigger value="layers" className="text-xs h-8 px-2 data-[state=active]:bg-zinc-800 rounded-none shrink-0">{t('editor.elevation')}</TabsTrigger>
                 <TabsTrigger value="export" className="text-xs h-8 px-2 data-[state=active]:bg-zinc-800 rounded-none shrink-0">
                   <Download className="w-3.5 h-3.5" />
                 </TabsTrigger>

@@ -11,6 +11,7 @@ mod scenario;
 mod tool;
 mod ui;
 mod viewport;
+mod voxel_adapter;
 
 use bevy::asset::{AssetMetaCheck, AssetPlugin};
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
@@ -19,11 +20,13 @@ use bevy::window::PresentMode;
 use bevy::winit::WinitSettings;
 use bevy_ecs_tilemap::prelude::TilemapPlugin;
 use bevy_egui::{EguiPlugin, EguiPrimaryContextPass};
-use glyphweave_core::gemap::load_world;
+use glyphweave_core::migration::{MigrationMode, migrate_legacy_json};
+use glyphweave_core::storage::archive::ArchiveLimits;
+use glyphweave_core::storage::codec::decode_world;
 use glyphweave_core::tile::TileKind;
 use perf::StartupOptions;
 use resource::{
-    ActivePreset, ActiveTheme, CursorTile, EditEvent, EditorHistory, EditorTool,
+    ActivePreset, ActiveTheme, ActiveZ, CursorTile, EditEvent, EditorHistory, EditorTool,
     EditorViewSettings, WorldModel, WorldRevision,
 };
 
@@ -77,6 +80,7 @@ fn main() {
     .init_resource::<CursorTile>()
     .init_resource::<EditorTool>()
     .init_resource::<ActivePreset>()
+    .init_resource::<ActiveZ>()
     .init_resource::<EditorHistory>()
     .init_resource::<EditorViewSettings>()
     .init_resource::<WorldRevision>()
@@ -114,7 +118,6 @@ fn main() {
             perf::perf_motion_system,
             render::tilemap::sync_render_chunks,
             render::tilemap::set_theme,
-            render::tilemap::sync_layer_visibility,
         )
             .chain(),
     )
@@ -234,19 +237,36 @@ fn asset_meta_check() -> AssetMetaCheck {
 
 fn load_initial_world(mut commands: Commands, startup_options: Res<StartupOptions>) {
     let (world, path) = match &startup_options.map_path {
-        Some(path) => match load_world(path) {
+        Some(path) => match std::fs::read(path)
+            .map_err(|error| error.to_string())
+            .and_then(|bytes| {
+                if bytes.iter().find(|byte| !byte.is_ascii_whitespace()) == Some(&b'{') {
+                    migrate_legacy_json(&bytes, MigrationMode::Flatten)
+                        .map(|result| {
+                            eprintln!(
+                                "glyphweave: migrated legacy v{} map ({} voxels, {} overwritten)",
+                                result.report.source_version,
+                                result.report.output_voxel_count,
+                                result.report.overwritten_tile_count,
+                            );
+                            result.world
+                        })
+                        .map_err(|error| error.to_string())
+                } else {
+                    decode_world(&bytes, ArchiveLimits::default())
+                        .map_err(|error| error.to_string())
+                }
+            }) {
             Ok(world) => (world, Some(path.clone())),
             Err(err) => {
                 eprintln!("glyphweave: failed to load {}: {err}", path.display());
                 std::process::exit(2);
             }
         },
-        None => (glyphweave_core::world::World::default(), None),
+        None => (glyphweave_core::voxel::VoxelWorld::default(), None),
     };
-    let theme_id = world.theme_id.clone();
 
     commands.insert_resource(ui::CurrentMapPath(path));
-    commands.insert_resource(ActiveTheme(theme_id));
-    commands.insert_resource(WorldModel(world));
+    commands.insert_resource(WorldModel::new(world, voxel_adapter::DEFAULT_TILE_SIZE));
     commands.insert_resource(WorldRevision(1));
 }

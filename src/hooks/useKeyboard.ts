@@ -7,6 +7,8 @@ export function useKeyboard() {
   const undo = useMapStore((s) => s.undo)
   const redo = useMapStore((s) => s.redo)
   const setCurrentTool = useMapStore((s) => s.setCurrentTool)
+  const activeZ = useMapStore((s) => s.activeZ)
+  const setActiveZ = useMapStore((s) => s.setActiveZ)
   const setShowGrid = useUiStore((s) => s.setShowGrid)
   const showGrid = useUiStore((s) => s.showGrid)
   const zoomIn = useUiStore((s) => s.zoomIn)
@@ -64,8 +66,18 @@ export function useKeyboard() {
         setShowGrid(!showGrid)
         return
       }
+
+      if (e.key === 'PageUp') {
+        e.preventDefault()
+        setActiveZ(activeZ + 1)
+        return
+      }
+      if (e.key === 'PageDown') {
+        e.preventDefault()
+        setActiveZ(activeZ - 1)
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [undo, redo, setCurrentTool, setShowGrid, showGrid, zoomIn, zoomOut, resetZoom])
+  }, [activeZ, redo, resetZoom, setActiveZ, setCurrentTool, setShowGrid, showGrid, undo, zoomIn, zoomOut])
 }

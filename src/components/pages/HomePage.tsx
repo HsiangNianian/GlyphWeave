@@ -5,6 +5,7 @@ import { THEME_LIST } from '@/constants/themes'
 import { TILE_TYPES } from '@/constants/tiles'
 import { generateDemoMap } from '@/constants/demo-map'
 import { convertImageFileToMap, DEFAULT_IMAGE_CONVERT_WIDTH } from '@/lib/image-convert'
+import { importGemapBytes } from '@/lib/gemap-import'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,7 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Card } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 
-import { Image as ImageIcon, MapIcon, Upload } from 'lucide-react'
+import { Code2, Image as ImageIcon, MapIcon, Settings, Upload } from 'lucide-react'
 
 const TILE_SIZES = [16, 20, 24, 32]
 
@@ -46,31 +47,25 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
     const file = e.target.files?.[0]
     if (!file) return
     try {
-      const text = await file.text()
-      const data = JSON.parse(text)
-
-      // Build world name from filename if not in data
-      const mapWorldName = data.worldName || file.name.replace(/\.(gemap|json)$/i, '')
-
-      // Detect format: v2 layered or v1 flat
-      if (data.layerTiles && data.layers && data.layers.length > 0) {
-        onStart({
-          worldName: mapWorldName,
-          tileSize: tileSize,
-          themeId: themeId,
-          initialLayerTiles: data.layerTiles,
-          initialLayers: data.layers,
-        })
-      } else if (data.tiles) {
-        onStart({
-          worldName: mapWorldName,
-          tileSize: tileSize,
-          themeId: themeId,
-          initialTiles: data.tiles,
-        })
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      const imported = importGemapBytes(bytes)
+      onStart({
+        worldName: imported.worldName || file.name.replace(/\.(gemap|json)$/i, ''),
+        tileSize,
+        themeId,
+        initialVoxels: imported.voxels,
+      })
+      if (imported.migrationReport) {
+        const report = imported.migrationReport
+        window.alert(
+          `Legacy map migrated with ${report.mode}: ${report.outputVoxelCount} voxels, `
+          + `${report.overwrittenTileCount} overwritten tiles, `
+          + `${report.unknownTileIds.length} unknown tile IDs.`,
+        )
       }
     } catch (err) {
       console.error('Failed to import map:', err)
+      window.alert(err instanceof Error ? err.message : 'Failed to import map')
     }
     e.target.value = ''
   }, [onStart, tileSize, themeId])
@@ -91,7 +86,7 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
         worldName: data.worldName || mapWorldName,
         tileSize,
         themeId: data.themeId || themeId,
-        initialTiles: data.tiles,
+        initialSlices: { 'z:0': data.tiles },
       })
     } catch (err) {
       console.error('Failed to import image:', err)
@@ -242,22 +237,26 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
         </div>
 
         <div className="flex justify-center gap-3 pt-2">
-          <a
-            href="/api"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5 text-xs text-zinc-600 hover:text-zinc-400"
           >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
-            API Docs
-          </a>
-          <button
+            <a href="/api" target="_blank" rel="noopener noreferrer">
+              <Code2 className="h-3.5 w-3.5" />
+              API Docs
+            </a>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5 text-xs text-zinc-600 hover:text-zinc-400"
             onClick={onWorkshop}
-            className="inline-flex items-center gap-1.5 text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
           >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <Settings className="h-3.5 w-3.5" />
             {t('home.themeWorkshop')}
-          </button>
+          </Button>
         </div>
 
         <input

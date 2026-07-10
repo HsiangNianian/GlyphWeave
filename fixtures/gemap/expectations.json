@@ -1,0 +1,935 @@
+{
+  "corpusVersion": 1,
+  "legacy": {
+    "flat-v1": {
+      "accept": true,
+      "input": "v2/flat-v1.gemap",
+      "migrations": {
+        "flatten": {
+          "logicalVoxels": [
+            {
+              "block": "glyphweave:wall",
+              "coord": [
+                0,
+                -1,
+                -1
+              ]
+            },
+            {
+              "block": "glyphweave:floor",
+              "coord": [
+                0,
+                0,
+                0
+              ]
+            },
+            {
+              "block": "legacy:mystery-tile",
+              "coord": [
+                0,
+                4,
+                5
+              ]
+            }
+          ],
+          "report": {
+            "mode": "flatten",
+            "outputVoxelCount": 3,
+            "overwrittenTileCount": 0,
+            "skippedHiddenLayers": [],
+            "sourceVersion": 1,
+            "unknownTileIds": [
+              "mysteryTile"
+            ]
+          }
+        },
+        "preserve-layers": {
+          "layerZ": {
+            "layer-1": 0
+          },
+          "logicalVoxels": [
+            {
+              "block": "glyphweave:wall",
+              "coord": [
+                0,
+                -1,
+                -1
+              ]
+            },
+            {
+              "block": "glyphweave:floor",
+              "coord": [
+                0,
+                0,
+                0
+              ]
+            },
+            {
+              "block": "legacy:mystery-tile",
+              "coord": [
+                0,
+                4,
+                5
+              ]
+            }
+          ],
+          "report": {
+            "mode": "preserve-layers",
+            "outputVoxelCount": 3,
+            "overwrittenTileCount": 0,
+            "skippedHiddenLayers": [],
+            "sourceVersion": 1,
+            "unknownTileIds": [
+              "mysteryTile"
+            ]
+          }
+        }
+      }
+    },
+    "layered-v2": {
+      "accept": true,
+      "input": "v2/layered-v2.gemap",
+      "migrations": {
+        "flatten": {
+          "logicalVoxels": [
+            {
+              "block": "glyphweave:floor-alt",
+              "coord": [
+                0,
+                -1,
+                -1
+              ]
+            },
+            {
+              "block": "glyphweave:blood",
+              "coord": [
+                0,
+                0,
+                0
+              ]
+            },
+            {
+              "block": "glyphweave:grass",
+              "coord": [
+                0,
+                1,
+                0
+              ]
+            },
+            {
+              "block": "glyphweave:door",
+              "coord": [
+                0,
+                2,
+                0
+              ]
+            },
+            {
+              "block": "legacy:mystery-tile",
+              "coord": [
+                0,
+                5,
+                0
+              ]
+            }
+          ],
+          "report": {
+            "mode": "flatten",
+            "outputVoxelCount": 5,
+            "overwrittenTileCount": 2,
+            "skippedHiddenLayers": [
+              {
+                "id": "secrets",
+                "name": "Hidden Secrets",
+                "tileCount": 2
+              }
+            ],
+            "sourceVersion": 2,
+            "unknownTileIds": [
+              "mysteryTile"
+            ]
+          }
+        },
+        "preserve-layers": {
+          "layerZ": {
+            "details": 3,
+            "secrets": 2,
+            "structures": 1,
+            "terrain": 0
+          },
+          "logicalVoxels": [
+            {
+              "block": "glyphweave:floor-alt",
+              "coord": [
+                0,
+                -1,
+                -1
+              ]
+            },
+            {
+              "block": "glyphweave:floor",
+              "coord": [
+                0,
+                0,
+                0
+              ]
+            },
+            {
+              "block": "glyphweave:grass",
+              "coord": [
+                0,
+                1,
+                0
+              ]
+            },
+            {
+              "block": "glyphweave:wall",
+              "coord": [
+                1,
+                0,
+                0
+              ]
+            },
+            {
+              "block": "glyphweave:door",
+              "coord": [
+                1,
+                2,
+                0
+              ]
+            },
+            {
+              "block": "glyphweave:treasure",
+              "coord": [
+                2,
+                0,
+                0
+              ]
+            },
+            {
+              "block": "glyphweave:tree",
+              "coord": [
+                2,
+                4,
+                0
+              ]
+            },
+            {
+              "block": "glyphweave:blood",
+              "coord": [
+                3,
+                0,
+                0
+              ]
+            },
+            {
+              "block": "legacy:mystery-tile",
+              "coord": [
+                3,
+                5,
+                0
+              ]
+            }
+          ],
+          "report": {
+            "mode": "preserve-layers",
+            "outputVoxelCount": 9,
+            "overwrittenTileCount": 0,
+            "skippedHiddenLayers": [],
+            "sourceVersion": 2,
+            "unknownTileIds": [
+              "mysteryTile"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "v3Invalid": {
+    "bad-path": {
+      "accept": false,
+      "archive": "v3-invalid/bad-path.gemap",
+      "archiveSha256": "5ba4a504d2d8404f165e9ddcf2cf7d9539ca4aa33b289cc122c7048b9b01d94f",
+      "expectedError": "container.unsafe_path"
+    },
+    "corrupt-hash": {
+      "accept": false,
+      "archive": "v3-invalid/corrupt-hash.gemap",
+      "archiveSha256": "807483a492df5e06174bf1eda05f584c8e7f5eeabc0dae4fa12462dc5c7581fa",
+      "expectedError": "integrity.chunk_hash_mismatch"
+    },
+    "duplicate-entry": {
+      "accept": false,
+      "archive": "v3-invalid/duplicate-entry.gemap",
+      "archiveSha256": "08a0cfff7bc58a64a524ad83fe64eea7b6babca7dd56dc5ff2f1491faffc195d",
+      "expectedError": "container.duplicate_entry"
+    },
+    "truncated-binary": {
+      "accept": false,
+      "archive": "v3-invalid/truncated-binary.gemap",
+      "archiveSha256": "6385b2bd32377e38c0128a1eea874535b4410dff1d073f24f44c6c62ab571579",
+      "expectedError": "integrity.chunk_binary_length"
+    },
+    "zip-bomb-limit": {
+      "accept": false,
+      "archive": "v3-invalid/zip-bomb-limit.gemap",
+      "archiveSha256": "efeea41416e7133b908baad39a538d09801849ac2a702a46a0a576b9c03670db",
+      "conformanceLimits": {
+        "maxCompressionRatio": 100,
+        "maxEntries": 128,
+        "maxEntryUncompressedBytes": 262144,
+        "maxTotalUncompressedBytes": 524288
+      },
+      "expectedError": "container.resource_limit"
+    }
+  },
+  "v3Valid": {
+    "empty-world": {
+      "accept": true,
+      "archive": "v3-valid/empty-world.gemap",
+      "archiveSha256": "75afca191da9ccaa336829fb451237bfb0070ca724be3ae0ec7961912a6ba988",
+      "expanded": "expanded/v3-valid/empty-world",
+      "logicalVoxels": [],
+      "regions": {}
+    },
+    "independent-regions": {
+      "accept": true,
+      "archive": "v3-valid/independent-regions.gemap",
+      "archiveSha256": "ccc9880be0bb45e06c23b4317e3609b60e622a1fd93ba6d60fe2825955618525",
+      "expanded": "expanded/v3-valid/independent-regions",
+      "logicalVoxels": [
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            0,
+            512,
+            0
+          ]
+        }
+      ],
+      "regions": {
+        "0,0": {
+          "chunks": {
+            "6fb8aa806afb1aa7595e3c076df1971ed4e26468ef9daf10e4fc3857901bee91": {
+              "bits": 1,
+              "byteLength": 512,
+              "dataSha256": "d839a3521723b8a55d09d8eed9848940b284828e4d09218202c3ee11046bc16d",
+              "packedPrefixHex": "01000000000000000000000000000000",
+              "palette": [
+                0,
+                1
+              ],
+              "referenceCount": 1
+            }
+          },
+          "sections": {
+            "0,0,0": "6fb8aa806afb1aa7595e3c076df1971ed4e26468ef9daf10e4fc3857901bee91"
+          }
+        },
+        "1,0": {
+          "chunks": {
+            "6fb8aa806afb1aa7595e3c076df1971ed4e26468ef9daf10e4fc3857901bee91": {
+              "bits": 1,
+              "byteLength": 512,
+              "dataSha256": "d839a3521723b8a55d09d8eed9848940b284828e4d09218202c3ee11046bc16d",
+              "packedPrefixHex": "01000000000000000000000000000000",
+              "palette": [
+                0,
+                1
+              ],
+              "referenceCount": 1
+            }
+          },
+          "sections": {
+            "0,0,0": "6fb8aa806afb1aa7595e3c076df1971ed4e26468ef9daf10e4fc3857901bee91"
+          }
+        }
+      }
+    },
+    "multi-palette-cross-byte": {
+      "accept": true,
+      "archive": "v3-valid/multi-palette-cross-byte.gemap",
+      "archiveSha256": "61f8eceeee3d0068906df446eaf4dadf9381aeee7411b6c140be18c2cbdd6c82",
+      "expanded": "expanded/v3-valid/multi-palette-cross-byte",
+      "logicalVoxels": [
+        {
+          "block": "glyphweave:floor",
+          "coord": [
+            0,
+            0,
+            1
+          ]
+        },
+        {
+          "block": "glyphweave:floor",
+          "coord": [
+            0,
+            1,
+            0
+          ]
+        },
+        {
+          "block": "glyphweave:water",
+          "coord": [
+            0,
+            1,
+            1
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            0,
+            2,
+            0
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            0,
+            2,
+            1
+          ]
+        },
+        {
+          "block": "glyphweave:water",
+          "coord": [
+            0,
+            3,
+            0
+          ]
+        },
+        {
+          "block": "glyphweave:tree",
+          "coord": [
+            0,
+            3,
+            1
+          ]
+        },
+        {
+          "block": "glyphweave:tree",
+          "coord": [
+            0,
+            4,
+            0
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            0,
+            5,
+            0
+          ]
+        },
+        {
+          "block": "glyphweave:tree",
+          "coord": [
+            0,
+            6,
+            0
+          ]
+        },
+        {
+          "block": "glyphweave:floor",
+          "coord": [
+            0,
+            7,
+            0
+          ]
+        },
+        {
+          "block": "glyphweave:water",
+          "coord": [
+            0,
+            8,
+            0
+          ]
+        },
+        {
+          "block": "glyphweave:tree",
+          "coord": [
+            0,
+            10,
+            0
+          ]
+        },
+        {
+          "block": "glyphweave:water",
+          "coord": [
+            0,
+            11,
+            0
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            0,
+            12,
+            0
+          ]
+        },
+        {
+          "block": "glyphweave:floor",
+          "coord": [
+            0,
+            13,
+            0
+          ]
+        },
+        {
+          "block": "glyphweave:tree",
+          "coord": [
+            0,
+            15,
+            0
+          ]
+        }
+      ],
+      "regions": {
+        "0,0": {
+          "chunks": {
+            "61323af0c75c20bf183fb8e623d75cb1d02b3bdd078a67e5ee59b2fef6d447c2": {
+              "bits": 3,
+              "byteLength": 1536,
+              "dataSha256": "8a2dd63e36c991aeebfbfbe249499de249fd803aa8866f696022dffe2eb31b3e",
+              "packedPrefixHex": "88463103a78099080000000000000000",
+              "palette": [
+                0,
+                5,
+                9,
+                17,
+                42
+              ],
+              "referenceCount": 1
+            }
+          },
+          "sections": {
+            "0,0,0": "61323af0c75c20bf183fb8e623d75cb1d02b3bdd078a67e5ee59b2fef6d447c2"
+          }
+        }
+      }
+    },
+    "negative-boundaries": {
+      "accept": true,
+      "archive": "v3-valid/negative-boundaries.gemap",
+      "archiveSha256": "9865c92782e00241981a56a728a6c99eaa4708a0413d7a14d74589cd0a13d0d8",
+      "expanded": "expanded/v3-valid/negative-boundaries",
+      "logicalVoxels": [
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            -513,
+            2,
+            2
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            -512,
+            2,
+            2
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            -17,
+            2,
+            2
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            -16,
+            2,
+            2
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            -1,
+            2,
+            2
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            3,
+            -513,
+            3
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            3,
+            -512,
+            3
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            3,
+            -17,
+            3
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            3,
+            -16,
+            3
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            3,
+            -1,
+            3
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            4,
+            4,
+            -513
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            4,
+            4,
+            -512
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            4,
+            4,
+            -17
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            4,
+            4,
+            -16
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            4,
+            4,
+            -1
+          ]
+        }
+      ],
+      "regions": {
+        "-1,0": {
+          "chunks": {
+            "2d1fd4459102b1e567846f35bc31589dfad3a9bda9785825d40955bb354492a4": {
+              "bits": 1,
+              "byteLength": 512,
+              "dataSha256": "e72e8678596357704c7a02e5a2f009c54f3c8fe31cd5be0808bebab7790b5b42",
+              "packedPrefixHex": "00000000000000000000000000000000",
+              "palette": [
+                0,
+                1
+              ],
+              "referenceCount": 1
+            },
+            "8b5fa2826f1c7e97af70a9a857ffd14857f20f592d8ff6443e6a09ecb541112d": {
+              "bits": 1,
+              "byteLength": 512,
+              "dataSha256": "fb54b52abb761a4e214f267fc26ac347a1d31225a4a6186a1919ef2e90c24c9e",
+              "packedPrefixHex": "00000000000000000000000000000000",
+              "palette": [
+                0,
+                1
+              ],
+              "referenceCount": 1
+            },
+            "e38f80a1c7152e314254a4ab8e8bf88e6eaf631a9826a34bd984d602b036363f": {
+              "bits": 1,
+              "byteLength": 512,
+              "dataSha256": "ca1c292519f1ce4e05f20108ac9b9a7e9cbad09721fb3a28d5de6b5942da1c7f",
+              "packedPrefixHex": "00000000000000000000000000000000",
+              "palette": [
+                0,
+                1
+              ],
+              "referenceCount": 1
+            }
+          },
+          "sections": {
+            "0,0,0": "2d1fd4459102b1e567846f35bc31589dfad3a9bda9785825d40955bb354492a4",
+            "0,30,0": "8b5fa2826f1c7e97af70a9a857ffd14857f20f592d8ff6443e6a09ecb541112d",
+            "0,31,0": "e38f80a1c7152e314254a4ab8e8bf88e6eaf631a9826a34bd984d602b036363f"
+          }
+        },
+        "-2,0": {
+          "chunks": {
+            "8b5fa2826f1c7e97af70a9a857ffd14857f20f592d8ff6443e6a09ecb541112d": {
+              "bits": 1,
+              "byteLength": 512,
+              "dataSha256": "fb54b52abb761a4e214f267fc26ac347a1d31225a4a6186a1919ef2e90c24c9e",
+              "packedPrefixHex": "00000000000000000000000000000000",
+              "palette": [
+                0,
+                1
+              ],
+              "referenceCount": 1
+            }
+          },
+          "sections": {
+            "0,31,0": "8b5fa2826f1c7e97af70a9a857ffd14857f20f592d8ff6443e6a09ecb541112d"
+          }
+        },
+        "0,-1": {
+          "chunks": {
+            "1ee14108c79ff2ef6f254b0e5c8f566fe66f574e6a6748a53b0f9528a623f86b": {
+              "bits": 1,
+              "byteLength": 512,
+              "dataSha256": "668e13682381bad29a7d5bb369cbe8248d9b99345fd882474a1d945b63aa2d9b",
+              "packedPrefixHex": "00000000000000000000000000000000",
+              "palette": [
+                0,
+                1
+              ],
+              "referenceCount": 1
+            },
+            "67d7f513cbfd8b62f8d85466bbe9288b99f773c298db0235c8ba292d7175096e": {
+              "bits": 1,
+              "byteLength": 512,
+              "dataSha256": "9d0138d777b7cd3c7636225fe3e2dbc85aa7e2d697ed9996a55183ac7f9bfffc",
+              "packedPrefixHex": "00000000000000000000000000000000",
+              "palette": [
+                0,
+                1
+              ],
+              "referenceCount": 1
+            },
+            "be3955c23d668fa7b65a4052381143dc25d4a2f06c7079483da276f17aa74fa0": {
+              "bits": 1,
+              "byteLength": 512,
+              "dataSha256": "6f19bb24cacdc8077824ff504650bd488b070f627c532f8d6f4b6286edd3b0e6",
+              "packedPrefixHex": "00000000000000000000000000000000",
+              "palette": [
+                0,
+                1
+              ],
+              "referenceCount": 1
+            }
+          },
+          "sections": {
+            "0,0,0": "be3955c23d668fa7b65a4052381143dc25d4a2f06c7079483da276f17aa74fa0",
+            "0,0,30": "67d7f513cbfd8b62f8d85466bbe9288b99f773c298db0235c8ba292d7175096e",
+            "0,0,31": "1ee14108c79ff2ef6f254b0e5c8f566fe66f574e6a6748a53b0f9528a623f86b"
+          }
+        },
+        "0,-2": {
+          "chunks": {
+            "67d7f513cbfd8b62f8d85466bbe9288b99f773c298db0235c8ba292d7175096e": {
+              "bits": 1,
+              "byteLength": 512,
+              "dataSha256": "9d0138d777b7cd3c7636225fe3e2dbc85aa7e2d697ed9996a55183ac7f9bfffc",
+              "packedPrefixHex": "00000000000000000000000000000000",
+              "palette": [
+                0,
+                1
+              ],
+              "referenceCount": 1
+            }
+          },
+          "sections": {
+            "0,0,31": "67d7f513cbfd8b62f8d85466bbe9288b99f773c298db0235c8ba292d7175096e"
+          }
+        },
+        "0,0": {
+          "chunks": {
+            "05ec363901d940aebad6961a1f67803320a5894e7e3557b3cf08b26a9dd841a1": {
+              "bits": 1,
+              "byteLength": 512,
+              "dataSha256": "ed57a66f224448548069c9a852b522cac11a57fb6eb2ea4dcee86b8d63351de6",
+              "packedPrefixHex": "00000000040000000000000000000000",
+              "palette": [
+                0,
+                1
+              ],
+              "referenceCount": 1
+            },
+            "60f2cf6165af0fbe322f04ac1a87d4ec21d0979d33f16c8cf89fec42fb191972": {
+              "bits": 1,
+              "byteLength": 512,
+              "dataSha256": "9202e5c8364aba6dfd8f9c5ee67232d563369762f739c69557f7eb343588307d",
+              "packedPrefixHex": "00000000000000000000000000000000",
+              "palette": [
+                0,
+                1
+              ],
+              "referenceCount": 2
+            },
+            "a519835337b3e534e62530cc8b2b21bf2ccb3b0d845f4c33a4a341cb0ba6199a": {
+              "bits": 1,
+              "byteLength": 512,
+              "dataSha256": "c14848c18bf896e508fbe4bb7a7b128c69cb0601cf65220a0793dccf57bac297",
+              "packedPrefixHex": "00000000040000000000000000000000",
+              "palette": [
+                0,
+                1
+              ],
+              "referenceCount": 1
+            }
+          },
+          "sections": {
+            "-1,0,0": "05ec363901d940aebad6961a1f67803320a5894e7e3557b3cf08b26a9dd841a1",
+            "-2,0,0": "60f2cf6165af0fbe322f04ac1a87d4ec21d0979d33f16c8cf89fec42fb191972",
+            "-32,0,0": "a519835337b3e534e62530cc8b2b21bf2ccb3b0d845f4c33a4a341cb0ba6199a",
+            "-33,0,0": "60f2cf6165af0fbe322f04ac1a87d4ec21d0979d33f16c8cf89fec42fb191972"
+          }
+        }
+      }
+    },
+    "one-block-origin": {
+      "accept": true,
+      "archive": "v3-valid/one-block-origin.gemap",
+      "archiveSha256": "a49bf2dbe52d5774b0461e94becbb5f0b390dfe6b9bb0632becd58d95038850b",
+      "expanded": "expanded/v3-valid/one-block-origin",
+      "logicalVoxels": [
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "regions": {
+        "0,0": {
+          "chunks": {
+            "6fb8aa806afb1aa7595e3c076df1971ed4e26468ef9daf10e4fc3857901bee91": {
+              "bits": 1,
+              "byteLength": 512,
+              "dataSha256": "d839a3521723b8a55d09d8eed9848940b284828e4d09218202c3ee11046bc16d",
+              "packedPrefixHex": "01000000000000000000000000000000",
+              "palette": [
+                0,
+                1
+              ],
+              "referenceCount": 1
+            }
+          },
+          "sections": {
+            "0,0,0": "6fb8aa806afb1aa7595e3c076df1971ed4e26468ef9daf10e4fc3857901bee91"
+          }
+        }
+      }
+    },
+    "shared-sections": {
+      "accept": true,
+      "archive": "v3-valid/shared-sections.gemap",
+      "archiveSha256": "bacd3d48fe4161d495abe325643a308dc1aa116f6e309893a2cc1969f03532c2",
+      "expanded": "expanded/v3-valid/shared-sections",
+      "logicalVoxels": [
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "block": "glyphweave:wall",
+          "coord": [
+            0,
+            16,
+            0
+          ]
+        }
+      ],
+      "regions": {
+        "0,0": {
+          "chunks": {
+            "6fb8aa806afb1aa7595e3c076df1971ed4e26468ef9daf10e4fc3857901bee91": {
+              "bits": 1,
+              "byteLength": 512,
+              "dataSha256": "d839a3521723b8a55d09d8eed9848940b284828e4d09218202c3ee11046bc16d",
+              "packedPrefixHex": "01000000000000000000000000000000",
+              "palette": [
+                0,
+                1
+              ],
+              "referenceCount": 2
+            }
+          },
+          "sections": {
+            "0,0,0": "6fb8aa806afb1aa7595e3c076df1971ed4e26468ef9daf10e4fc3857901bee91",
+            "0,1,0": "6fb8aa806afb1aa7595e3c076df1971ed4e26468ef9daf10e4fc3857901bee91"
+          }
+        }
+      }
+    },
+    "unknown-namespaced-block": {
+      "accept": true,
+      "archive": "v3-valid/unknown-namespaced-block.gemap",
+      "archiveSha256": "fdcbb926bd2e20f23d3110c75470e1349304051177f9d1b5a377193ada65c35b",
+      "expanded": "expanded/v3-valid/unknown-namespaced-block",
+      "logicalVoxels": [
+        {
+          "block": "mystery.mod:forgotten/relic",
+          "coord": [
+            0,
+            0,
+            0
+          ]
+        }
+      ],
+      "regions": {
+        "0,0": {
+          "chunks": {
+            "39a149112660d7c0eb85ff79fffa9f6f9a61b99a65d9241cd41b7b070f7dfd27": {
+              "bits": 1,
+              "byteLength": 512,
+              "dataSha256": "d839a3521723b8a55d09d8eed9848940b284828e4d09218202c3ee11046bc16d",
+              "packedPrefixHex": "01000000000000000000000000000000",
+              "palette": [
+                0,
+                77
+              ],
+              "referenceCount": 1
+            }
+          },
+          "sections": {
+            "0,0,0": "39a149112660d7c0eb85ff79fffa9f6f9a61b99a65d9241cd41b7b070f7dfd27"
+          }
+        }
+      }
+    }
+  }
+}

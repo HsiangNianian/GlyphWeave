@@ -3,7 +3,15 @@
  * Zero native dependencies — generates pure SVG strings.
  */
 
-import { flattenTiles, computeBounds, TILE_TYPES, THEMES, TILE_SIZE, MAX_OUTPUT_SIZE } from './map-shared.mjs'
+import {
+  MAX_OUTPUT_SIZE,
+  THEMES,
+  TILE_SIZE,
+  colorsForTileToken,
+  computeBounds,
+  flattenTiles,
+  glyphForTileToken,
+} from './map-shared.mjs'
 
 export function renderMapSVG(data, options = {}) {
   const themeId = options.themeId || 'ansi-16'
@@ -53,7 +61,7 @@ export function renderMapSVG(data, options = {}) {
     const x = parseInt(sx, 10) - bounds.minX
     const y = parseInt(sy, 10) - bounds.minY
 
-    const colors = theme.colors[tileTypeId]
+    const colors = colorsForTileToken(theme, tileTypeId)
     if (!colors) continue
 
     const px = ox + x * TILE_SIZE * scale
@@ -62,13 +70,13 @@ export function renderMapSVG(data, options = {}) {
 
     parts.push(`<rect x="${px}" y="${py}" width="${ts}" height="${ts}" fill="${colors.bgColor}"/>`)
 
-    const def = TILE_TYPES[tileTypeId]
-    if (def && def.char && def.char !== ' ') {
+    const glyph = glyphForTileToken(tileTypeId)
+    if (glyph && glyph !== ' ') {
       const fontSize = Math.round(TILE_SIZE * scale * 0.75)
       if (fontSize >= 4) {
         const cx = px + ts / 2
         const cy = py + ts / 2
-        const escaped = def.char.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        const escaped = glyph.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
         parts.push(`<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-size="${fontSize}" fill="${colors.fgColor}">${escaped}</text>`)
       }
     }

@@ -1,5 +1,13 @@
 import { renderMapSVG } from '../server/map-render-svg.mjs'
 import { apiDocPage } from '../server/api-doc.mjs'
+import {
+  ApiHttpError,
+  MAX_API_BODY_BYTES,
+  decodeRenderGet,
+  decodeRenderPost,
+  ensureBodySize,
+} from '../server/gemap-api.mjs'
+import * as gemapRuntime from '../server/gemap-runtime.ts'
 
 interface Env {
   ASSETS: { fetch: (request: Request) => Promise<Response> }
@@ -27,6 +35,41 @@ function renderFormat(queryFormat: unknown, bodyFormat: unknown): RenderFormat {
   const value = stringValue(queryFormat) || stringValue(bodyFormat) || 'svg'
   if (value === 'svg' || value === 'png') return value
   throw new Error(`Unsupported render format: ${value}`)
+}
+
+async function readRequestBody(request: Request): Promise<Uint8Array> {
+  const declared = request.headers.get('Content-Length')
+  if (declared !== null) {
+    const length = Number(declared)
+    if (!Number.isSafeInteger(length) || length < 0) {
+      throw new ApiHttpError(400, 'Invalid Content-Length header')
+    }
+    ensureBodySize(length, MAX_API_BODY_BYTES)
+  }
+
+  const reader = request.body?.getReader()
+  if (reader === undefined) return new Uint8Array()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    try {
+      ensureBodySize(total, MAX_API_BODY_BYTES)
+    } catch (error) {
+      await reader.cancel(error)
+      throw error
+    }
+    chunks.push(value)
+  }
+  const body = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    body.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return body
 }
 
 export default {
@@ -63,20 +106,18 @@ export default {
         let format: RenderFormat = 'svg'
 
         if (method === 'POST') {
-          const parsed = await request.json() as unknown
-          if (!isRecord(parsed)) throw new Error('Request body must be a JSON object')
-          data = parsed
+          data = decodeRenderPost(
+            await readRequestBody(request),
+            request.headers.get('Content-Type') || '',
+            Object.fromEntries(url.searchParams),
+            gemapRuntime,
+          )
           themeId = url.searchParams.get('theme') || stringValue(data.themeId) || 'ansi-16'
           padding = numberValue(url.searchParams.get('padding')) ?? numberValue(data.padding) ?? 1
           scale = numberValue(url.searchParams.get('scale')) ?? numberValue(data.scale)
           format = renderFormat(url.searchParams.get('format'), data.format)
         } else if (method === 'GET') {
-          const dataB64 = url.searchParams.get('data')
-          if (!dataB64) return new Response('Missing "data" parameter', { status: 400 })
-          const json = atob(dataB64)
-          const parsed = JSON.parse(json) as unknown
-          if (!isRecord(parsed)) throw new Error('Decoded data must be a JSON object')
-          data = parsed
+          data = decodeRenderGet(url.searchParams.get('data') || undefined)
           themeId = url.searchParams.get('theme') || 'ansi-16'
           padding = numberValue(url.searchParams.get('padding')) ?? 1
           scale = numberValue(url.searchParams.get('scale'))
@@ -98,7 +139,10 @@ export default {
         })
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
-        return new Response(`Error: ${msg}`, { status: 400 })
+        return new Response(`Error: ${msg}`, {
+          status: e instanceof ApiHttpError ? e.status : 400,
+          headers: corsHeaders,
+        })
       }
     }
 

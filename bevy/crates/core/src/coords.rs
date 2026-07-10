@@ -74,10 +74,24 @@ mod tests {
 
     #[test]
     fn round_trip_via_tile_from_chunk_local() {
-        for (x, y) in [(0i32, 0i32), (5, 7), (31, 31), (32, 0), (-1, -1), (-32, -33), (-100, 250)] {
+        for (x, y) in [
+            (0i32, 0i32),
+            (5, 7),
+            (31, 31),
+            (32, 0),
+            (-1, -1),
+            (-32, -33),
+            (-100, 250),
+        ] {
             let (cx, cy) = chunk_of(x, y);
             let (lx, ly) = local_of(x, y);
-            assert_eq!(tile_from_chunk_local(cx, cy, lx, ly), (x, y), "round-trip ({},{})", x, y);
+            assert_eq!(
+                tile_from_chunk_local(cx, cy, lx, ly),
+                (x, y),
+                "round-trip ({},{})",
+                x,
+                y
+            );
         }
     }
 

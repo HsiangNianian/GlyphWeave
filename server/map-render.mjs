@@ -1,4 +1,12 @@
-import { TILE_TYPES, THEMES, MAX_OUTPUT_SIZE, TILE_SIZE, flattenTiles, computeBounds } from './map-shared.mjs'
+import {
+  MAX_OUTPUT_SIZE,
+  THEMES,
+  TILE_SIZE,
+  colorsForTileToken,
+  computeBounds,
+  flattenTiles,
+  glyphForTileToken,
+} from './map-shared.mjs'
 import { createCanvas } from '@napi-rs/canvas'
 
 export function renderMap(data, options = {}) {
@@ -53,7 +61,7 @@ export function renderMap(data, options = {}) {
     const x = parseInt(sx, 10) - bounds.minX
     const y = parseInt(sy, 10) - bounds.minY
 
-    const colors = theme.colors[tileTypeId]
+    const colors = colorsForTileToken(theme, tileTypeId)
     if (!colors) continue
 
     const px = ox + x * TILE_SIZE * scale
@@ -65,8 +73,8 @@ export function renderMap(data, options = {}) {
     ctx.fillRect(px, py, ts, ts)
 
     // Character
-    const def = TILE_TYPES[tileTypeId]
-    if (def && def.char && def.char !== ' ') {
+    const glyph = glyphForTileToken(tileTypeId)
+    if (glyph && glyph !== ' ') {
       ctx.fillStyle = colors.fgColor
       const fontSize = Math.round(TILE_SIZE * scale * 0.75)
       if (fontSize >= 4) {
@@ -74,7 +82,7 @@ export function renderMap(data, options = {}) {
         ctx.font = `${fontSize}px monospace`
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
-        ctx.fillText(def.char, px + ts / 2, py + ts / 2)
+        ctx.fillText(glyph, px + ts / 2, py + ts / 2)
       }
     }
   }

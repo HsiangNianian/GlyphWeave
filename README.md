@@ -63,7 +63,7 @@ The Bevy port is the active development direction (desktop-first, heading toward
 - **Multi-layer editing** — separate Terrain, Structures, and Details onto different layers. Hide, lock, add, or delete layers freely.
 - **Brush / Eraser / Flood Fill / Pan / Select** tools.
 - **Undo / Redo** (Ctrl+Z / Ctrl+Shift+Z) — step back through your last 50 edits.
-- **Export / Import** as `.gemap` JSON — preserves layers, theme, and world name.
+- **Export / Import** as `.gemap` v3 ZIP — sparse 3D voxels shared by the web and Bevy runtimes.
 - **Minimap** — real-time overview with viewport rectangle. Click to jump.
 - **View Distance** — configurable render padding for smooth panning.
 - **Render API** — generate PNG/SVG images from any map via `GET /api/render` or `POST /api/render`.
@@ -155,7 +155,9 @@ while Cloudflare serves the generated files as static assets.
 
 ## Render API
 
-The Render API converts tilemaps to images. It's available in three environments:
+The Render API renders an explicit z slice from a v3 `.gemap` ZIP. Legacy v1/v2
+JSON remains accepted as input during a compatibility window. It's available in
+three environments:
 
 | Environment | Command | URL | Output |
 |---|---|---|---|
@@ -163,15 +165,18 @@ The Render API converts tilemaps to images. It's available in three environments
 | Production (Node) | `pnpm build && pnpm start` | `http://localhost:3001/api/render` | PNG default or SVG (`?format=svg`) |
 | Production (Cloudflare) | `pnpm deploy` | `https://glyphweave.hydroroll.team/api/render` | SVG |
 
-### POST (recommended for large maps)
+### POST a v3 `.gemap` ZIP
 
 ```bash
-curl -X POST https://glyphweave.hydroroll.team/api/render \
-  -H "Content-Type: application/json" \
-  -d @my-map.gemap > map.svg
+curl -X POST "https://glyphweave.hydroroll.team/api/render?z=0" \
+  -H "Content-Type: application/vnd.glyphweave.gemap+zip" \
+  --data-binary @my-map.gemap > map.svg
 ```
 
-### GET (small maps)
+`application/zip` is also accepted. The signed 32-bit `z` query is mandatory
+for v3 so rendering always selects one exact elevation.
+
+### GET (small legacy JSON maps only)
 
 ```bash
 DATA=$(echo -n '{"tiles":{"0,0":"wall"}}' | base64)
@@ -180,6 +185,7 @@ curl "https://glyphweave.hydroroll.team/api/render?data=$DATA" > map.svg
 
 Parameters:
 
+- `z` — exact elevation; required for v3 ZIP requests
 - `theme` — `ansi-16` (default) or `cogmind`
 - `padding` — extra tiles around bounds (default: `1`)
 - `scale` — pixels per tile (default: auto-fit ≤ 4096px)
@@ -191,14 +197,18 @@ Parameters:
 pnpm dev                           # dev server, http://localhost:5173
 pnpm build && pnpm start           # production, http://localhost:3001
 
-curl -X POST http://localhost:3001/api/render \
-  -H "Content-Type: application/json" \
-  -d @my-map.gemap > map.png
+curl -X POST "http://localhost:3001/api/render?z=0" \
+  -H "Content-Type: application/vnd.glyphweave.gemap+zip" \
+  --data-binary @my-map.gemap > map.png
 
-curl -X POST "http://localhost:3001/api/render?format=svg" \
-  -H "Content-Type: application/json" \
-  -d @my-map.gemap > map.svg
+curl -X POST "http://localhost:3001/api/render?z=-1&format=svg" \
+  -H "Content-Type: application/zip" \
+  --data-binary @my-map.gemap > map.svg
 ```
+
+Render and Convert bodies are limited to 16 MiB; legacy Render JSON is limited
+to 2 MiB. ZIP parsing additionally bounds entry count, expanded size, per-entry
+size, and compression ratio.
 
 ---
 
@@ -226,6 +236,14 @@ curl -X POST "http://localhost:3001/api/convert?themeId=ansi-16&width=160&format
   --data-binary @input.png > converted.svg
 ```
 
+Generate a v3 ZIP directly:
+
+```bash
+curl -X POST "http://localhost:3001/api/convert?themeId=ansi-16&width=160&format=gemap" \
+  -H "Content-Type: image/png" \
+  --data-binary @input.png > converted.gemap
+```
+
 Multipart uploads can pass a custom theme object:
 
 ```bash
@@ -233,6 +251,11 @@ curl -X POST "http://localhost:3001/api/convert?width=160&format=both" \
   -F "image=@input.webp" \
   -F "theme=@my-theme.json" > converted.json
 ```
+
+`format=gemap` returns a binary v3 ZIP with media type
+`application/vnd.glyphweave.gemap+zip`. `format=both` returns JSON containing an
+SVG plus `gemap: { mediaType, encoding: "base64", data }`; base64-decode
+`gemap.data` to recover the exact ZIP bytes.
 
 Parameters:
 

@@ -48,7 +48,7 @@ tr:nth-child(even){background:#161616}
 
 <h1>GlyphWeave Render / Convert API &amp; Map Format</h1>
 
-<p>This page documents the GlyphWeave tilemap format (<strong>.gemap</strong>), Render API, and Convert API.
+<p>This page documents the GlyphWeave v3 voxel ZIP format (<strong>.gemap</strong>), Render API, and Convert API.
 It is designed for both humans and LLMs to read and understand how to generate valid maps.</p>
 
 <div id="playground" style="background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:1.5rem;margin:1.5rem 0">
@@ -492,6 +492,21 @@ It is designed for both humans and LLMs to read and understand how to generate v
       });
   }
 
+  function requestServerConversion(file, format) {
+    var form = new FormData();
+    form.append('image', file, file.name);
+    form.append('format', format);
+    form.append('worldName', fileBaseName(file));
+    var width = convertWidth.value.trim();
+    var height = convertHeight.value.trim();
+    if (width) form.append('width', width);
+    if (height) form.append('height', height);
+    var customTheme = convertCustomTheme.value.trim();
+    if (customTheme) form.append('theme', customTheme);
+    else form.append('themeId', convertTheme.value || 'ansi-16');
+    return fetch(origin + '/api/convert', { method: 'POST', body: form });
+  }
+
   function render() {
     clearDownload();
     var json;
@@ -545,26 +560,40 @@ It is designed for both humans and LLMs to read and understand how to generate v
     var baseName = fileBaseName(file);
     convertPreview.innerHTML = '<span style="color:#555;font-size:.85em">Converting...</span>';
 
+    if (format === 'gemap' || format === 'both') {
+      requestServerConversion(file, format)
+        .then(function(response) {
+          if (!response.ok) {
+            return response.text().then(function(message) {
+              throw new Error('Error ' + response.status + ': ' + (message || 'unknown'));
+            });
+          }
+          return format === 'gemap'
+            ? response.blob().then(function(blob) {
+                convertOutput.value = response.headers.get('Content-Type') + ' · ' + blob.size + ' bytes';
+                setDownload(blob, baseName + '.gemap');
+                convertPreview.innerHTML = '<span style="color:#8cf;font-size:.82em">v3 ZIP map generated</span>';
+              })
+            : response.json().then(function(bundle) {
+                var bundleJson = JSON.stringify(bundle, null, 2);
+                convertOutput.value = bundleJson;
+                setDownload(new Blob([bundleJson], { type: 'application/json' }), baseName + '.json');
+                if (typeof bundle.svg === 'string') {
+                  showBlobImage(convertPreview, new Blob([bundle.svg], { type: 'image/svg+xml' }), 'converted map');
+                }
+              });
+        })
+        .catch(function(error) {
+          convertPreview.innerHTML = '<span style="color:#f88;font-size:.82em">' + error.message + '</span>';
+        });
+      return;
+    }
+
     convertFileToMap(file)
       .then(function(map) {
-        if (format === 'gemap') {
-          var mapJson = JSON.stringify(map, null, 2);
-          convertOutput.value = mapJson;
-          setDownload(new Blob([mapJson], { type: 'application/json' }), baseName + '.gemap');
-          convertPreview.innerHTML = '<span style="color:#8cf;font-size:.82em">Map JSON generated</span>';
-          return null;
-        }
-
         return renderConvertedSvg(map).then(function(svg) {
           var svgBlob = new Blob([svg], { type: 'image/svg+xml' });
           showBlobImage(convertPreview, svgBlob, 'converted map');
-
-          if (format === 'both') {
-            var bundleJson = JSON.stringify({ map: map, svg: svg }, null, 2);
-            convertOutput.value = bundleJson;
-            setDownload(new Blob([bundleJson], { type: 'application/json' }), baseName + '.json');
-            return null;
-          }
 
           convertOutput.value = 'image/svg+xml · ' + svgBlob.size + ' bytes\\n' + JSON.stringify(map.conversion, null, 2);
           setDownload(svgBlob, baseName + '.svg');
@@ -610,49 +639,47 @@ It is designed for both humans and LLMs to read and understand how to generate v
   });
 })();
 </script>
-<h2>1. Map Data Format (.gemap JSON)</h2>
+<h2>1. Map Data Format (.gemap v3 ZIP)</h2>
 
-<p>A GlyphWeave map is a JSON object with the following structure. The only strictly required field is <code>tiles</code> or <code>layerTiles</code>.</p>
+<p>A <code>.gemap</code> file is a ZIP container whose required entry is
+<code>manifest.json</code>. It stores a sparse, unbounded 3D voxel world. It is
+not a JSON file and layers are not part of the v3 world model.</p>
 
-<h3>Top-level Schema</h3>
+<h3>Manifest outline</h3>
 <pre><code>{
-  "tiles":       {&lt;coord&gt;: &lt;tileId&gt;|null, ...},   // Flat tile map (required unless layerTiles used)
-  "layerTiles":  {&lt;layerId&gt;: {&lt;coord&gt;: &lt;tileId&gt;|null, ...}, ...},  // Per-layer tiles
-  "layers":      [{&lt;layer&gt;}, ...],               // Layer definitions
-  "worldName":   "My Dungeon",                     // Map name (optional)
-  "tileSize":    24,                               // Pixels per tile (optional, default 24)
-  "themeId":     "ansi-16",                         // Theme ID (optional, default "ansi-16")
-  "version":     2                                  // Format version (optional)
+  "format": "glyphweave-map",
+  "version": 3,
+  "world": { "name": "My World" },
+  "axisOrder": "z,x,y",
+  "chunkShape": [16, 16, 16],
+  "regionShape": ["infinite", 32, 32],
+  "blockRegistry": {
+    "0": "glyphweave:air",
+    "1": "glyphweave:wall",
+    "2": "glyphweave:floor"
+  },
+  "regions": { "0,0": "regions/0.0/region.json" }
 }</code></pre>
 
+<p>Region JSON entries reference canonical palette-packed chunk binaries. Block
+names such as <code>glyphweave:wall</code> are stable identities; numeric IDs are
+local to one archive. Public voxel coordinates are always ordered
+<code>[z, x, y]</code>, where <code>z</code> is elevation.</p>
+
 <div class="note">
-<strong>LLM Note:</strong> The simplest valid map only needs a <code>tiles</code> object.
-Omitted/void tiles render as empty space. All coordinates not present in <code>tiles</code> are treated as void.
+<strong>Legacy compatibility window:</strong> The Render API still accepts v1/v2
+JSON containing <code>tiles</code> or <code>layerTiles</code>. This JSON is input-only.
+All newly generated <code>.gemap</code> responses are v3 ZIP containers.
 </div>
-
-<h3>Coordinate System</h3>
-<pre><code>"{x},{y}": "{tileId}"
-
-Examples:
-"0,0": "wall"       // Top-left corner, a wall tile
-"5,3": "floor"      // Column 5, row 3, a floor tile
-"10,7": "door"      // A door at (10, 7)
-"2,4": null          // Erase tile at (2, 4) — set to void</code></pre>
-
-<ul>
-  <li>Coordinates are integer grid positions, <strong>0-indexed</strong> from the top-left</li>
-  <li>Key format: <code>"{x},{y}"</code> (no spaces)</li>
-  <li>Negative coordinates are valid — the map bounds auto-detect from min/max keys</li>
-  <li>The <code>tiles</code> object is sparse: only non-void tiles need to be listed</li>
-  <li>Setting a tile to <code>null</code> explicitly removes it (same as omitting it)</li>
-</ul>
 
 <!-- ============================================================ -->
 <h2>2. Tile Type Reference</h2>
 
-<p>Each tile in the map references a <strong>tile type ID</strong>. Below is the complete list.
-The <code>char</code> column shows the glyph rendered on the map.
-The <code>category</code> groups tiles by function.</p>
+<p>Each v3 voxel references a namespaced block such as
+<code>glyphweave:floor-alt</code>. The table below shows the corresponding legacy
+renderer IDs used by the JSON compatibility API. The <code>char</code> column shows
+the glyph rendered for recognized built-in blocks; unknown namespaced blocks
+remain valid world data but are omitted by this legacy SVG/PNG renderer.</p>
 
 <div class="category-label">Walls</div>
 <div class="map-legend">
@@ -763,10 +790,10 @@ The <code>category</code> groups tiles by function.</p>
 "stairsUp"   // <  — Stairs leading up</code></pre>
 
 <!-- ============================================================ -->
-<h2>3. Layer System (Multi-layer Maps)</h2>
+<h2>3. Legacy JSON Layers (Compatibility Only)</h2>
 
-<p>Maps can have multiple layers. When layers are used, the renderer flattens them:
-visible layers are composited top-to-bottom, with later layers overwriting earlier ones at the same coordinates.</p>
+<p>Legacy v2 JSON can have multiple layers. When legacy layers are used, the renderer flattens them:
+visible layers are traversed bottom-to-top, with later layers overwriting earlier ones at the same coordinates.</p>
 
 <pre><code>{
   "layerTiles": {
@@ -785,7 +812,9 @@ visible layers are composited top-to-bottom, with later layers overwriting earli
   ]
 }</code></pre>
 
-<p>For simple single-layer maps, just use the flat <code>tiles</code> field.</p>
+<p>This model is accepted only during the compatibility window. It is not the
+v3 height model: production <code>.gemap</code> files contain real voxels at explicit
+z coordinates.</p>
 
 <!-- ============================================================ -->
 <h2>4. API Endpoints</h2>
@@ -793,28 +822,34 @@ visible layers are composited top-to-bottom, with later layers overwriting earli
 <table>
 <thead><tr><th>Path</th><th>Methods</th><th>Description</th></tr></thead>
 <tbody>
-<tr><td><code>/api/render</code></td><td>GET, POST</td><td>Render a tilemap to PNG or SVG</td></tr>
-<tr><td><code>/api/convert</code></td><td>POST</td><td>Convert an image to a theme-matched GlyphWeave map (Node only)</td></tr>
+<tr><td><code>/api/render</code></td><td>GET, POST</td><td>Render an explicit v3 z slice, or legacy JSON, to PNG/SVG</td></tr>
+<tr><td><code>/api/convert</code></td><td>POST</td><td>Convert an image to SVG/PNG or a v3 ZIP map (Node only)</td></tr>
 <tr><td><code>/api/health</code></td><td>GET</td><td><code>{"ok":true,"version":1}</code></td></tr>
 <tr><td><code>/api</code></td><td>GET</td><td>This documentation page</td></tr>
 </tbody>
 </table>
 
-<h3>POST /api/render (recommended, any size map)</h3>
-<pre><code>POST ${origin}/api/render
+<h3>POST /api/render (v3 ZIP)</h3>
+<pre><code>POST ${origin}/api/render?z=0&amp;format=svg
+Content-Type: application/vnd.glyphweave.gemap+zip
+
+&lt;binary .gemap ZIP bytes&gt;</code></pre>
+
+<p><code>application/zip</code> is also accepted. The <code>z</code> query is
+mandatory for v3, even when rendering z=0, so callers never accidentally
+receive a top-surface projection instead of a requested slice.</p>
+
+<h3>POST /api/render (legacy JSON compatibility)</h3>
+<pre><code>POST ${origin}/api/render?format=svg
 Content-Type: application/json
 
-{
-  "tiles": { "0,0": "wall", "1,0": "floor", ... },
-  "themeId": "ansi-16",
-  "padding": 1,
-  "scale": 24
-}</code></pre>
+{ "tiles": { "0,0": "wall", "1,0": "floor" }, "themeId": "ansi-16" }</code></pre>
 
-<p>Query parameters override JSON body fields:</p>
+<p>Query parameters override legacy JSON body fields and v3 metadata:</p>
 <table>
 <thead><tr><th>Parameter</th><th>Type</th><th>Default</th><th>Description</th></tr></thead>
 <tbody>
+<tr><td><code>z</code></td><td>int32</td><td>required for v3</td><td>Exact elevation slice to render; ignored for legacy JSON</td></tr>
 <tr><td><code>theme</code></td><td>string</td><td><code>ansi-16</code></td><td>Theme ID for rendering colors</td></tr>
 <tr><td><code>padding</code></td><td>number</td><td><code>1</code></td><td>Extra tile-width border around the map bounds</td></tr>
 <tr><td><code>scale</code></td><td>number</td><td>auto</td><td>Pixels per tile (auto-fits to ≤4096px output)</td></tr>
@@ -825,8 +860,8 @@ Content-Type: application/json
 <h3>GET /api/render (small maps, via base64)</h3>
 <pre><code>GET ${origin}/api/render?data=&lt;base64-urlencoded-json&gt;&amp;theme=ansi-16</code></pre>
 
-<p>The <code>data</code> parameter is the entire map JSON, base64-encoded and URL-encoded.
-Best for small maps; use POST for larger maps.</p>
+<p>The <code>data</code> parameter is legacy map JSON, base64-encoded and URL-encoded.
+GET does not accept v3 ZIP. Use POST for v3 and larger legacy maps.</p>
 
 <h3>GET /api/health</h3>
 <pre><code>GET ${origin}/api/health</code></pre>
@@ -856,7 +891,7 @@ color from the supplied theme. Either <code>themeId</code> or <code>theme</code>
 <tr><td><code>width</code></td><td>integer</td><td><code>160</code></td><td>Output map width, max 512</td></tr>
 <tr><td><code>height</code></td><td>integer</td><td>auto</td><td>Output map height, max 512</td></tr>
 <tr><td><code>format</code></td><td>string</td><td><code>svg</code></td><td><code>svg</code>, <code>png</code>, <code>gemap</code>, or <code>both</code></td></tr>
-<tr><td><code>worldName</code></td><td>string</td><td><code>converted-image</code></td><td>Name stored in generated map JSON</td></tr>
+<tr><td><code>worldName</code></td><td>string</td><td><code>converted-image</code></td><td>Name stored in the generated v3 manifest</td></tr>
 <tr><td><code>alphaThreshold</code></td><td>number</td><td><code>16</code></td><td>Pixels at or below this alpha become void</td></tr>
 </tbody>
 </table>
@@ -865,6 +900,16 @@ color from the supplied theme. Either <code>themeId</code> or <code>theme</code>
 <code>image/webp</code>; <code>multipart/form-data</code> with an <code>image</code> file
 and theme fields; or JSON with <code>imageBase64</code>.</p>
 
+<p><code>format=gemap</code> returns binary v3 ZIP with media type
+<code>application/vnd.glyphweave.gemap+zip</code>. <code>format=both</code> returns a
+JSON bundle with <code>format: "glyphweave-convert-bundle"</code>, an SVG string,
+and <code>gemap: { mediaType, encoding: "base64", data }</code>. Decode
+<code>gemap.data</code> from base64 to obtain the exact ZIP bytes.</p>
+
+<p>Render and Convert request bodies are limited to 16 MiB. Legacy Render JSON
+is additionally limited to 2 MiB, and v3 ZIP parsing enforces entry-count,
+expanded-size, per-entry-size, and compression-ratio limits.</p>
+
 <h3>GET /api</h3>
 <p>This page.</p>
 
@@ -872,14 +917,14 @@ and theme fields; or JSON with <code>imageBase64</code>.</p>
 <h2>5. curl Examples</h2>
 
 <h3>Render a map from a .gemap file</h3>
-<pre><code>curl -X POST "${origin}/api/render?format=svg" \\
-  -H "Content-Type: application/json" \\
-  -d @my-map.gemap > my-map.svg</code></pre>
+<pre><code>curl -X POST "${origin}/api/render?z=0&amp;format=svg" \\
+  -H "Content-Type: application/vnd.glyphweave.gemap+zip" \\
+  --data-binary @my-map.gemap > my-map.svg</code></pre>
 
 <h3>Render with theme override</h3>
-<pre><code>curl -X POST "${origin}/api/render?theme=cogmind&amp;format=svg" \\
-  -H "Content-Type: application/json" \\
-  -d @my-map.gemap > my-map-cogmind.svg</code></pre>
+<pre><code>curl -X POST "${origin}/api/render?z=-2&amp;theme=cogmind&amp;format=svg" \\
+  -H "Content-Type: application/zip" \\
+  --data-binary @my-map.gemap > my-map-cogmind.svg</code></pre>
 
 <h3>Render a small inline map (GET)</h3>
 <pre><code># Generate the base64 data first:
@@ -898,7 +943,12 @@ curl "${origin}/api/render?data=eyJ0aWxlcyI6eyIwLDAiOiJ3YWxsIn19&amp;theme=ansi-
   -H "Content-Type: image/png" \\
   --data-binary @input.png > converted.svg</code></pre>
 
-<h3>Convert an image to map JSON and SVG</h3>
+<h3>Convert an image to v3 .gemap ZIP</h3>
+<pre><code>curl -X POST "${origin}/api/convert?themeId=ansi-16&amp;width=160&amp;format=gemap" \\
+  -H "Content-Type: image/png" \\
+  --data-binary @input.png > converted.gemap</code></pre>
+
+<h3>Convert an image to a base64-ZIP JSON bundle and SVG</h3>
 <pre><code>curl -X POST "${origin}/api/convert?width=160&amp;format=both" \\
   -F "image=@input.webp" \\
   -F "theme=@my-theme.json" > converted.json</code></pre>
@@ -907,15 +957,18 @@ curl "${origin}/api/render?data=eyJ0aWxlcyI6eyIwLDAiOiJ3YWxsIn19&amp;theme=ansi-
 <pre><code># With rsvg-convert (Linux)
 curl -s -X POST "${origin}/api/render?format=svg" \\
   -H "Content-Type: application/json" \\
-  -d @map.gemap | rsvg-convert > map.png
+  -d @legacy-map.json | rsvg-convert > map.png
 
 # With Inkscape
 curl -s -X POST "${origin}/api/render?format=svg" \\
   -H "Content-Type: application/json" \\
-  -d @map.gemap | inkscape --pipe --export-type=png -o map.png</code></pre>
+  -d @legacy-map.json | inkscape --pipe --export-type=png -o map.png</code></pre>
 
 <!-- ============================================================ -->
-<h2>6. Complete Map Examples</h2>
+<h2>6. Legacy JSON Authoring Examples</h2>
+
+<p>These examples exercise the temporary JSON compatibility API. Convert them
+to v3 ZIP before treating them as persisted <code>.gemap</code> worlds.</p>
 
 <h3>Minimal: A 3×3 Room</h3>
 <pre><code>{
@@ -998,14 +1051,15 @@ curl -s -X POST "${origin}/api/render?format=svg" \\
 </tbody>
 </table>
 
-<p>Each theme defines foreground and background colors for every tile type.
-The theme ID is passed as a top-level field in the map JSON or as a query parameter.</p>
+<p>Each theme defines foreground and background colors for every recognized block.
+For v3 rendering, pass the theme as a query parameter or store it as optional
+appearance metadata. A top-level <code>themeId</code> remains legacy JSON behavior.</p>
 
 <!-- ============================================================ -->
 <h2>8. LLM Authoring Guide</h2>
 
 <div class="note">
-<strong>For LLMs generating maps:</strong> Follow these guidelines to produce valid, visually coherent maps.
+<strong>For LLMs generating legacy JSON previews:</strong> Follow these guidelines to produce visually coherent maps, then migrate the result to v3 ZIP.
 </div>
 
 <h3>Design Principles</h3>

@@ -28,16 +28,28 @@ pub struct GemapFile {
     pub theme_id: String,
 }
 
-fn default_world_name() -> String { "Untitled".into() }
-fn default_tile_size() -> u32 { 24 }
-fn default_theme_id() -> String { "ansi-16".into() }
+fn default_world_name() -> String {
+    "Untitled".into()
+}
+fn default_tile_size() -> u32 {
+    24
+}
+fn default_theme_id() -> String {
+    "ansi-16".into()
+}
 
 pub fn parse_coord_key(key: &str) -> Result<(i32, i32)> {
     let (a, b) = key
         .split_once(',')
         .ok_or_else(|| CoreError::InvalidCoordKey(key.into()))?;
-    let x: i32 = a.trim().parse().map_err(|_| CoreError::InvalidCoordKey(key.into()))?;
-    let y: i32 = b.trim().parse().map_err(|_| CoreError::InvalidCoordKey(key.into()))?;
+    let x: i32 = a
+        .trim()
+        .parse()
+        .map_err(|_| CoreError::InvalidCoordKey(key.into()))?;
+    let y: i32 = b
+        .trim()
+        .parse()
+        .map_err(|_| CoreError::InvalidCoordKey(key.into()))?;
     Ok((x, y))
 }
 
@@ -119,7 +131,9 @@ impl GemapFile {
 
 fn ingest(grid: &mut crate::chunk::ChunkGrid, map: HashMap<String, String>) {
     for (key, id) in map {
-        let Ok((x, y)) = parse_coord_key(&key) else { continue };
+        let Ok((x, y)) = parse_coord_key(&key) else {
+            continue;
+        };
         match TileKind::from_id(&id) {
             Some(kind) => {
                 if !matches!(kind, TileKind::Void) {
@@ -162,7 +176,10 @@ mod tests {
 
     #[test]
     fn tiny_round_trip() {
-        let mut w = World { world_name: "Tiny".into(), ..World::default() };
+        let mut w = World {
+            world_name: "Tiny".into(),
+            ..World::default()
+        };
         let layer = w.active_layer.clone();
         w.set(&layer, 0, 0, TileKind::Wall);
         w.set(&layer, -1, 5, TileKind::FloorAlt);
@@ -228,7 +245,10 @@ mod tests {
         let _ = std::fs::remove_file(&tmp);
         assert_eq!(world2.layers, world.layers);
         for layer in &world.layers {
-            assert_eq!(world.grid(&layer.id).unwrap().len(), world2.grid(&layer.id).unwrap().len());
+            assert_eq!(
+                world.grid(&layer.id).unwrap().len(),
+                world2.grid(&layer.id).unwrap().len()
+            );
             assert_eq!(world2.get(&layer.id, 0, 0), world.get(&layer.id, 0, 0));
         }
     }
@@ -257,58 +277,12 @@ mod tests {
         let raw = std::fs::read_to_string(&tmp).unwrap();
         let _ = std::fs::remove_file(&tmp);
         assert!(raw.contains("\"layerTiles\""), "must write layerTiles");
-        assert!(raw.contains("\"tiles\""), "must write flat tiles for back-compat");
+        assert!(
+            raw.contains("\"tiles\""),
+            "must write flat tiles for back-compat"
+        );
         let parsed: serde_json::Value = serde_json::from_str(&raw).unwrap();
         assert_eq!(parsed["tiles"]["2,3"], "door");
         assert_eq!(parsed["layerTiles"]["layer-1"]["2,3"], "door");
-    }
-
-    fn example_path() -> std::path::PathBuf {
-        // CARGO_MANIFEST_DIR = .../bevy/crates/core -> repo root is 3 levels up.
-        let mut p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        p.pop(); p.pop(); p.pop();
-        p.push("examples");
-        p.push("aethra-mega.gemap");
-        p
-    }
-
-    #[test]
-    fn integration_loads_real_large_map() {
-        let path = example_path();
-        assert!(path.exists(), "missing example map at {}", path.display());
-        let world = load_world(&path).expect("load real gemap");
-        assert!(world.world_name.contains("South China Sea Archipelago"));
-        assert_eq!(world.tile_size, 24);
-        assert_eq!(world.layers.len(), 3, "real map has 3 layers (Terrain/Structures/Details)");
-        assert!(!world.active_grid().unwrap().is_empty(), "active layer should have tiles");
-    }
-
-    #[test]
-    fn integration_round_trip_real_large_map() {
-        let path = example_path();
-        assert!(path.exists(), "missing example map at {}", path.display());
-        let world = load_world(&path).expect("load");
-        let tmp = std::env::temp_dir().join("glyphweave_large_map_roundtrip.gemap");
-        save_world(&world, &tmp).expect("save");
-        let world2 = load_world(&tmp).expect("reload");
-        let _ = std::fs::remove_file(&tmp);
-
-        assert_eq!(world.world_name, world2.world_name);
-        assert_eq!(world.tile_size, world2.tile_size);
-        assert_eq!(world.theme_id, world2.theme_id);
-        assert_eq!(world.layers, world2.layers);
-        for layer in &world.layers {
-            let a: std::collections::BTreeSet<_> = world
-                .grid(&layer.id)
-                .unwrap()
-                .iter_tiles()
-                .collect();
-            let b: std::collections::BTreeSet<_> = world2
-                .grid(&layer.id)
-                .unwrap()
-                .iter_tiles()
-                .collect();
-            assert_eq!(a, b, "layer {} differs after round-trip", layer.id);
-        }
     }
 }

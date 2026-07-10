@@ -1,0 +1,21 @@
+{
+  "chunks": {
+    "67d7f513cbfd8b62f8d85466bbe9288b99f773c298db0235c8ba292d7175096e": {
+      "bits": 1,
+      "data": "chunks/67d7f513cbfd8b62f8d85466bbe9288b99f773c298db0235c8ba292d7175096e.bin",
+      "palette": [
+        0,
+        1
+      ]
+    }
+  },
+  "format": "glyphweave-region",
+  "region": [
+    0,
+    -2
+  ],
+  "sections": {
+    "0,0,31": "67d7f513cbfd8b62f8d85466bbe9288b99f773c298db0235c8ba292d7175096e"
+  },
+  "version": 1
+}

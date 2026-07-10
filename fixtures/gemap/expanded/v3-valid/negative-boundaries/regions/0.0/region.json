@@ -1,0 +1,40 @@
+{
+  "chunks": {
+    "05ec363901d940aebad6961a1f67803320a5894e7e3557b3cf08b26a9dd841a1": {
+      "bits": 1,
+      "data": "chunks/05ec363901d940aebad6961a1f67803320a5894e7e3557b3cf08b26a9dd841a1.bin",
+      "palette": [
+        0,
+        1
+      ]
+    },
+    "60f2cf6165af0fbe322f04ac1a87d4ec21d0979d33f16c8cf89fec42fb191972": {
+      "bits": 1,
+      "data": "chunks/60f2cf6165af0fbe322f04ac1a87d4ec21d0979d33f16c8cf89fec42fb191972.bin",
+      "palette": [
+        0,
+        1
+      ]
+    },
+    "a519835337b3e534e62530cc8b2b21bf2ccb3b0d845f4c33a4a341cb0ba6199a": {
+      "bits": 1,
+      "data": "chunks/a519835337b3e534e62530cc8b2b21bf2ccb3b0d845f4c33a4a341cb0ba6199a.bin",
+      "palette": [
+        0,
+        1
+      ]
+    }
+  },
+  "format": "glyphweave-region",
+  "region": [
+    0,
+    0
+  ],
+  "sections": {
+    "-1,0,0": "05ec363901d940aebad6961a1f67803320a5894e7e3557b3cf08b26a9dd841a1",
+    "-2,0,0": "60f2cf6165af0fbe322f04ac1a87d4ec21d0979d33f16c8cf89fec42fb191972",
+    "-32,0,0": "a519835337b3e534e62530cc8b2b21bf2ccb3b0d845f4c33a4a341cb0ba6199a",
+    "-33,0,0": "60f2cf6165af0fbe322f04ac1a87d4ec21d0979d33f16c8cf89fec42fb191972"
+  },
+  "version": 1
+}

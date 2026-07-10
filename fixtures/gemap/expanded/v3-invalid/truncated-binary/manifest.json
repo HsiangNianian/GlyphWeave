@@ -1,0 +1,28 @@
+{
+  "axisOrder": "z,x,y",
+  "blockRegistry": {
+    "0": "glyphweave:air",
+    "1": "glyphweave:wall"
+  },
+  "chunkShape": [
+    16,
+    16,
+    16
+  ],
+  "format": "glyphweave-map",
+  "metadata": {
+    "fixture": "one-block-origin"
+  },
+  "regionShape": [
+    "infinite",
+    32,
+    32
+  ],
+  "regions": {
+    "0,0": "regions/0.0/region.json"
+  },
+  "version": 3,
+  "world": {
+    "name": "One Block at Origin"
+  }
+}

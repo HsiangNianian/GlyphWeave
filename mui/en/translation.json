@@ -30,6 +30,8 @@
     "tiles": "Tiles",
     "presets": "Presets",
     "layers": "Layers",
+    "elevation": "Elevation",
+    "slice": "SLICE",
     "export": "Export",
     "settings": "Settings",
     "zoomOut": "Zoom Out",
@@ -65,23 +67,26 @@
     "traps": "Traps",
     "placeHint": "Click on the canvas to place \"{{name}}\""
   },
-  "layers": {
-    "title": "Layers",
-    "addLayer": "Add Layer",
-    "showLayer": "Show layer",
-    "hideLayer": "Hide layer",
-    "lockLayer": "Lock layer",
-    "unlockLayer": "Unlock layer",
-    "deleteLayer": "Delete layer"
+  "elevation": {
+    "title": "Elevation",
+    "description": "Edit one true voxel height at a time. This is spatial altitude, not a paint layer.",
+    "current": "Current",
+    "lower": "Move down one level",
+    "raise": "Move up one level",
+    "zInput": "Active voxel elevation",
+    "returnZero": "Return to datum Z 0",
+    "verticalWell": "Vertical well",
+    "occupiedCount": "{{count}} occupied",
+    "cells": "cells"
   },
   "exportPanel": {
     "title": "Export / Import",
-    "desc": "Export your map as a .gemap JSON file, or import one to continue editing.",
+    "desc": "Export the voxel world as a .gemap ZIP archive, or import v3 and legacy maps.",
     "exportGemap": "Export .gemap",
     "importGemap": "Import .gemap",
     "importImage": "Import Image",
     "render": "Render",
-    "renderDesc": "Render the full map to an image via the API.",
+    "renderDesc": "Render the active elevation slice to an image via the API.",
     "exportSvg": "Export SVG"
   },
   "settings": {

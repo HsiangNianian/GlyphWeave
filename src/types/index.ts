@@ -31,13 +31,17 @@ export interface Preset {
   grid: string[][]
 }
 
-export interface WorldConfig {
+export type WorldConfig = {
   worldName: string
   tileSize: number
   themeId: string
+  activeZ?: number
   initialTiles?: Record<string, string | null>
-  initialLayerTiles?: Record<string, Record<string, string | null>>
-  initialLayers?: Layer[]
+  initialSlices?: Record<string, Record<string, string | null>>
+  initialVoxels?: Array<{
+    block: string
+    coord: [number, number, number]
+  }>
   initialTheme?: Theme
 }
 

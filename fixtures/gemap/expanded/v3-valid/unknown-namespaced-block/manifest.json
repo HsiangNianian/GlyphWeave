@@ -1,0 +1,28 @@
+{
+  "axisOrder": "z,x,y",
+  "blockRegistry": {
+    "0": "glyphweave:air",
+    "77": "mystery.mod:forgotten/relic"
+  },
+  "chunkShape": [
+    16,
+    16,
+    16
+  ],
+  "format": "glyphweave-map",
+  "metadata": {
+    "fixture": "unknown-namespaced-block"
+  },
+  "regionShape": [
+    "infinite",
+    32,
+    32
+  ],
+  "regions": {
+    "0,0": "regions/0.0/region.json"
+  },
+  "version": 3,
+  "world": {
+    "name": "Unknown Namespaced Block"
+  }
+}

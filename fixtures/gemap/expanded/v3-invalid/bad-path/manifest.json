@@ -1,0 +1,24 @@
+{
+  "axisOrder": "z,x,y",
+  "blockRegistry": {
+    "0": "glyphweave:air"
+  },
+  "chunkShape": [
+    16,
+    16,
+    16
+  ],
+  "format": "glyphweave-map",
+  "regionShape": [
+    "infinite",
+    32,
+    32
+  ],
+  "regions": {
+    "0,0": "../escape/region.json"
+  },
+  "version": 3,
+  "world": {
+    "name": "Unsafe Path"
+  }
+}

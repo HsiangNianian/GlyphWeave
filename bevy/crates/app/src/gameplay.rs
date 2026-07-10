@@ -4,7 +4,8 @@
 //! maps Bevy input/UI/render resources onto those core commands and ticks.
 
 use crate::render::tilemap::RenderRefresh;
-use crate::resource::{CursorTile, EditEvent, WorldModel, WorldRevision};
+use crate::resource::{ActiveZ, CursorTile, EditEvent, WorldModel, WorldRevision};
+use crate::voxel_adapter::{DEFAULT_TILE_SIZE, GAMEPLAY_Z, set_tile, voxel_slice_to_legacy};
 use bevy::ecs::message::MessageWriter;
 use bevy::prelude::*;
 use glyphweave_core::gameplay::{
@@ -12,6 +13,7 @@ use glyphweave_core::gameplay::{
     GameCommand, GameState, ResourceKind, RuleBasedTextCommandSource, SimulationConfig, TileArea,
     TileCoord, tick_gameplay,
 };
+use glyphweave_core::voxel::VoxelWorld;
 use glyphweave_core::world::World;
 use std::collections::{HashMap, HashSet};
 
@@ -134,16 +136,17 @@ pub fn is_play_mode(mode: Res<GameMode>) -> bool {
 
 pub fn init_gameplay_state(mut commands: Commands, world_model: Res<WorldModel>) {
     commands.insert_resource(GameplayModel(GameState::new_with_worker(
-        spawn_coord_for_world(&world_model.0),
+        spawn_coord_for_world(&world_model.world),
     )));
 }
 
-pub fn reset_gameplay_for_world(gameplay: &mut GameplayModel, world: &World) {
+pub fn reset_gameplay_for_world(gameplay: &mut GameplayModel, world: &VoxelWorld) {
     gameplay.0 = GameState::new_with_worker(spawn_coord_for_world(world));
 }
 
-pub fn seed_perf_gameplay_entities(gameplay: &mut GameplayModel, world: &World, count: usize) {
+pub fn seed_perf_gameplay_entities(gameplay: &mut GameplayModel, world: &VoxelWorld, count: usize) {
     let anchor = spawn_coord_for_world(world);
+    let projected = voxel_slice_to_legacy(world, GAMEPLAY_Z, DEFAULT_TILE_SIZE, "ansi-16");
     gameplay.0 = GameState::default();
     gameplay
         .stockpiles
@@ -154,7 +157,7 @@ pub fn seed_perf_gameplay_entities(gameplay: &mut GameplayModel, world: &World, 
     for index in 0..count {
         let coord = perf_coord(anchor, index);
         let coord = if glyphweave_core::gameplay::is_passable(
-            glyphweave_core::gameplay::rendered_tile_at(world, coord),
+            glyphweave_core::gameplay::rendered_tile_at(&projected, coord),
         ) {
             coord
         } else {
@@ -223,14 +226,15 @@ pub fn command_for_order(
 pub fn dispatch_text_command(
     text: &str,
     focus: TileCoord,
-    world: &World,
+    world: &VoxelWorld,
     gameplay: &mut GameplayModel,
 ) -> Result<(), String> {
+    let projected = voxel_slice_to_legacy(world, GAMEPLAY_Z, DEFAULT_TILE_SIZE, "ansi-16");
     let mut source = RuleBasedTextCommandSource::from_text(text, focus)?;
-    let Some(envelope) = source.next_command(world, &gameplay.0) else {
+    let Some(envelope) = source.next_command(&projected, &gameplay.0) else {
         return Err("text command produced no order".into());
     };
-    dispatch_envelope(world, gameplay, envelope).map(|_| ())
+    dispatch_envelope(&projected, gameplay, envelope).map(|_| ())
 }
 
 pub fn gameplay_order_input(
@@ -238,9 +242,13 @@ pub fn gameplay_order_input(
     keys: Res<ButtonInput<KeyCode>>,
     cursor: Res<CursorTile>,
     active_order: Res<ActiveGameOrder>,
+    active_z: Res<ActiveZ>,
     world_model: Res<WorldModel>,
     mut gameplay: ResMut<GameplayModel>,
 ) {
+    if active_z.0 != GAMEPLAY_Z {
+        return;
+    }
     if !buttons.just_pressed(MouseButton::Left) || !cursor.valid {
         return;
     }
@@ -253,11 +261,14 @@ pub fn gameplay_order_input(
     let Some(command) = command_for_order(*active_order, focus, area_radius, &gameplay.0) else {
         return;
     };
-    if let Err(err) = dispatch_envelope(
-        &world_model.0,
-        &mut gameplay,
-        CommandEnvelope::human(command),
-    ) {
+    let projected = voxel_slice_to_legacy(
+        &world_model.world,
+        GAMEPLAY_Z,
+        world_model.tile_size,
+        "ansi-16",
+    );
+    if let Err(err) = dispatch_envelope(&projected, &mut gameplay, CommandEnvelope::human(command))
+    {
         gameplay.emit(format!("Command rejected: {err}."));
     }
 }
@@ -307,18 +318,24 @@ pub fn tick_gameplay_system(
         return;
     }
 
-    let result = tick_gameplay(
-        &mut world_model.0,
-        &mut gameplay.0,
-        SimulationConfig::default(),
+    let mut projected = voxel_slice_to_legacy(
+        &world_model.world,
+        GAMEPLAY_Z,
+        world_model.tile_size,
+        "ansi-16",
     );
+    let result = tick_gameplay(&mut projected, &mut gameplay.0, SimulationConfig::default());
     if result.tile_changes.is_empty() {
         return;
     }
 
     world_revision.0 = world_revision.0.wrapping_add(1);
     for coord in result.tile_changes {
+        let kind = glyphweave_core::gameplay::rendered_tile_at(&projected, coord)
+            .unwrap_or(glyphweave_core::tile::TileKind::Void);
+        let _ = set_tile(&mut world_model.world, GAMEPLAY_Z, coord.x, coord.y, kind);
         writer.write(EditEvent {
+            z: GAMEPLAY_Z,
             x: coord.x,
             y: coord.y,
         });
@@ -329,10 +346,23 @@ pub fn tick_gameplay_system(
 pub fn sync_gameplay_entities(
     mut commands: Commands,
     world_model: Res<WorldModel>,
+    active_z: Res<ActiveZ>,
     gameplay: Res<GameplayModel>,
     mut visuals: ResMut<GameplayVisualEntities>,
     mut transforms: Query<(&mut Transform, &mut Sprite), With<GameplayVisual>>,
+    mut visibility: Query<&mut Visibility, With<GameplayVisual>>,
 ) {
+    let slice_visible = active_z.0 == GAMEPLAY_Z;
+    for mut value in &mut visibility {
+        *value = if slice_visible {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
+    if !slice_visible {
+        return;
+    }
     let tile_px = world_model.tile_size.max(1) as f32;
 
     let worker_ids: HashSet<_> = gameplay.workers.keys().copied().collect();
@@ -398,10 +428,11 @@ pub fn sync_gameplay_entities(
 pub fn draw_gameplay_overlays(
     mode: Res<GameMode>,
     world_model: Res<WorldModel>,
+    active_z: Res<ActiveZ>,
     gameplay: Res<GameplayModel>,
     mut gizmos: Gizmos,
 ) {
-    if *mode != GameMode::Play {
+    if *mode != GameMode::Play || active_z.0 != GAMEPLAY_Z {
         return;
     }
     let tile_px = world_model.tile_size.max(1) as f32;
@@ -486,21 +517,24 @@ fn command_error_label(err: CommandError) -> String {
     }
 }
 
-fn spawn_coord_for_world(world: &World) -> TileCoord {
+fn spawn_coord_for_world(world: &VoxelWorld) -> TileCoord {
+    let projected = voxel_slice_to_legacy(world, GAMEPLAY_Z, DEFAULT_TILE_SIZE, "ansi-16");
     let origin = TileCoord::new(0, 0);
     if glyphweave_core::gameplay::is_passable(glyphweave_core::gameplay::rendered_tile_at(
-        world, origin,
+        &projected, origin,
     )) {
         return origin;
     }
 
     world
-        .layers
-        .iter()
-        .filter_map(|layer| world.grid(&layer.id))
-        .flat_map(|grid| grid.iter_tiles())
-        .find_map(|((x, y), kind)| {
-            glyphweave_core::gameplay::is_passable(Some(kind)).then_some(TileCoord::new(x, y))
+        .iter_voxels()
+        .filter(|(coord, _)| coord.z == GAMEPLAY_Z)
+        .find_map(|(coord, _)| {
+            let kind = glyphweave_core::gameplay::rendered_tile_at(
+                &projected,
+                TileCoord::new(coord.x, coord.y),
+            );
+            glyphweave_core::gameplay::is_passable(kind).then_some(TileCoord::new(coord.x, coord.y))
         })
         .unwrap_or(origin)
 }
@@ -619,9 +653,15 @@ mod tests {
 
     #[test]
     fn text_command_queues_jobs_via_shared_dispatcher() {
-        let mut world = World::default();
-        let layer = world.active_layer.clone();
-        world.set(&layer, 0, 0, glyphweave_core::tile::TileKind::Tree);
+        let mut world = VoxelWorld::default();
+        set_tile(
+            &mut world,
+            GAMEPLAY_Z,
+            0,
+            0,
+            glyphweave_core::tile::TileKind::Tree,
+        )
+        .unwrap();
         let mut gameplay = GameplayModel(GameState::new_with_worker(TileCoord::new(1, 0)));
 
         dispatch_text_command("砍树", TileCoord::new(0, 0), &world, &mut gameplay).unwrap();

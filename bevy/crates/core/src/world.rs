@@ -33,16 +33,24 @@ impl Default for World {
 }
 
 impl World {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn layer(&self, id: &str) -> Option<&Layer> {
         self.layers.iter().find(|l| l.id == id)
     }
 
-    pub fn grid(&self, layer_id: &str) -> Option<&ChunkGrid> { self.grids.get(layer_id) }
-    pub fn grid_mut(&mut self, layer_id: &str) -> Option<&mut ChunkGrid> { self.grids.get_mut(layer_id) }
+    pub fn grid(&self, layer_id: &str) -> Option<&ChunkGrid> {
+        self.grids.get(layer_id)
+    }
+    pub fn grid_mut(&mut self, layer_id: &str) -> Option<&mut ChunkGrid> {
+        self.grids.get_mut(layer_id)
+    }
 
-    pub fn active_grid(&self) -> Option<&ChunkGrid> { self.grid(&self.active_layer) }
+    pub fn active_grid(&self) -> Option<&ChunkGrid> {
+        self.grid(&self.active_layer)
+    }
 
     pub fn get(&self, layer_id: &str, x: i32, y: i32) -> Option<TileKind> {
         self.grid(layer_id).and_then(|g| g.get(x, y))

@@ -10,25 +10,31 @@ use crate::preset::{PRESETS, PresetCategory};
 use crate::render::MapBounds;
 use crate::render::tilemap::RenderRefresh;
 use crate::resource::{
-    ActivePreset, ActiveTheme, CursorTile, EditorHistory, EditorTool, EditorViewSettings,
+    ActivePreset, ActiveTheme, ActiveZ, CursorTile, EditorHistory, EditorTool, EditorViewSettings,
     WorldModel, WorldRevision,
 };
 use crate::scenario::{FloodFortressPreset, create_flood_fortress_preset};
 use crate::viewport::world_viewport_bounds_current;
+use crate::voxel_adapter::{legacy_world_to_voxel, tile_at};
 use bevy::diagnostic::DiagnosticsStore;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 use glyphweave_core::gameplay::{BuildKind, ChallengeStatus, GameCommand, ResourceKind, TileCoord};
 #[cfg(not(target_arch = "wasm32"))]
-use glyphweave_core::gemap::{load_world, save_world};
-use glyphweave_core::layer::Layer;
+use glyphweave_core::migration::{MigrationMode, MigrationReport, migrate_legacy_json};
+#[cfg(not(target_arch = "wasm32"))]
+use glyphweave_core::storage::archive::ArchiveLimits;
+#[cfg(not(target_arch = "wasm32"))]
+use glyphweave_core::storage::codec::{decode_world, encode_world};
 use glyphweave_core::tile::TileKind;
-use glyphweave_core::world::World;
+use glyphweave_core::voxel::VoxelWorld;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
+use std::{fs::OpenOptions, io::Write, time::SystemTime};
 
 /// Where the most recent load came from / where Save writes.
 #[derive(Resource, Debug, Clone, Default)]
@@ -78,12 +84,14 @@ struct MinimapCache {
 struct MinimapSignature {
     world_revision: u64,
     theme_id: String,
+    active_z: i32,
 }
 
 #[derive(SystemParam)]
 pub struct UiWorldParams<'w> {
     world_model: ResMut<'w, WorldModel>,
     world_revision: ResMut<'w, WorldRevision>,
+    active_z: ResMut<'w, ActiveZ>,
 }
 
 #[derive(SystemParam)]
@@ -176,6 +184,7 @@ pub fn ui_overlay(
             ctx,
             &mut ui_state,
             &mut world.world_model,
+            &mut world.active_z,
             &mut active_theme,
             &mut active_brush,
             &mut active_preset,
@@ -233,13 +242,13 @@ pub fn ui_overlay(
                 ui.add_space(6.0);
 
                 if tool_button_enabled(ui, false, "U", "Undo", history.can_undo()).clicked()
-                    && history.undo(&mut world.world_model.0)
+                    && history.undo(&mut world.world_model.world)
                 {
                     bump_world_revision(&mut world.world_revision);
                     refresh.0 = true;
                 }
                 if tool_button_enabled(ui, false, "R", "Redo", history.can_redo()).clicked()
-                    && history.redo(&mut world.world_model.0)
+                    && history.redo(&mut world.world_model.world)
                 {
                     bump_world_revision(&mut world.world_revision);
                     refresh.0 = true;
@@ -273,30 +282,21 @@ pub fn ui_overlay(
                     SideTab::Presets => {
                         presets_tab(ui, &mut ui_state, &mut active_preset, &mut tool)
                     }
-                    SideTab::Layers => layers_tab(
-                        ui,
-                        &mut world.world_model,
-                        &mut history,
-                        &mut refresh,
-                        &mut world.world_revision,
-                    ),
+                    SideTab::Layers => {
+                        layers_tab(ui, &world.world_model, &mut refresh, &mut world.active_z)
+                    }
                     SideTab::Export => export_tab(
                         ui,
                         &mut ui_state,
                         &mut world.world_model,
-                        &mut active_theme,
+                        &mut world.active_z,
                         &mut path,
                         &mut history,
                         &mut refresh,
                         &mut world.world_revision,
                         &mut gameplay.gameplay_model,
                     ),
-                    SideTab::Settings => settings_tab(
-                        ui,
-                        &mut world.world_model,
-                        &mut active_theme,
-                        &mut view_settings,
-                    ),
+                    SideTab::Settings => settings_tab(ui, &mut active_theme, &mut view_settings),
                 }
             });
     }
@@ -332,12 +332,12 @@ pub fn ui_overlay(
                         gameplay.game_mode.toggle();
                     }
                     ui.separator();
-                    ui.label(egui::RichText::new(&world.world_model.world_name).strong());
+                    ui.label(egui::RichText::new(&world.world_model.name).strong());
                     ui.separator();
                     ui.label(format!("FPS {fps}"));
                     ui.separator();
                     if cursor.valid {
-                        ui.label(format!("{}, {}", cursor.x, cursor.y));
+                        ui.label(format!("z{} {}, {}", world.active_z.0, cursor.x, cursor.y));
                     } else {
                         ui.label("tile --");
                     }
@@ -387,6 +387,7 @@ pub fn ui_overlay(
             &mut camera_position,
             *window,
             world.world_revision.0,
+            world.active_z.0,
             &mut ui_state.minimap_cache,
         );
     }
@@ -547,6 +548,7 @@ fn home_screen(
     ctx: &egui::Context,
     ui_state: &mut EditorUiState,
     world_model: &mut ResMut<WorldModel>,
+    active_z: &mut ResMut<ActiveZ>,
     active_theme: &mut ResMut<ActiveTheme>,
     active_brush: &mut ResMut<ActiveBrush>,
     active_preset: &mut ResMut<ActivePreset>,
@@ -648,15 +650,10 @@ fn home_screen(
                             )
                             .clicked()
                         {
-                            let mut world = World {
-                                world_name: ui_state.home_world_name.trim().into(),
-                                tile_size: ui_state.home_tile_size,
-                                theme_id: ui_state.home_theme_id.clone(),
-                                ..World::default()
-                            };
-                            name_first_layer_ground(&mut world);
+                            let world = VoxelWorld::new(ui_state.home_world_name.trim());
                             enter_editor(
                                 world_model,
+                                active_z,
                                 ui_state,
                                 active_theme,
                                 active_brush,
@@ -668,6 +665,8 @@ fn home_screen(
                                 world_revision,
                                 gameplay_model,
                                 world,
+                                ui_state.home_tile_size,
+                                ui_state.home_theme_id.clone(),
                                 None,
                             );
                             ui_state.path_text.clear();
@@ -692,9 +691,13 @@ fn home_screen(
                                 )
                                 .clicked()
                             {
-                                let (world, state) = create_flood_fortress_preset(preset);
+                                let (legacy, state) = create_flood_fortress_preset(preset);
+                                let tile_size = legacy.tile_size;
+                                let theme_id = legacy.theme_id.clone();
+                                let world = legacy_world_to_voxel(&legacy);
                                 enter_editor(
                                     world_model,
+                                    active_z,
                                     ui_state,
                                     active_theme,
                                     active_brush,
@@ -706,6 +709,8 @@ fn home_screen(
                                     world_revision,
                                     gameplay_model,
                                     world,
+                                    tile_size,
+                                    theme_id,
                                     None,
                                 );
                                 gameplay_model.0 = state;
@@ -725,12 +730,13 @@ fn home_screen(
                                 .clicked()
                             {
                                 let demo_path = demo_map_path();
-                                match load_world(&demo_path) {
-                                    Ok(world) => {
-                                        ui_state.home_tile_size = world.tile_size;
-                                        ui_state.home_theme_id = world.theme_id.clone();
+                                match load_editor_path(&demo_path) {
+                                    Ok((world, report)) => {
+                                        let migration_status =
+                                            report.as_ref().map(migration_status);
                                         enter_editor(
                                             world_model,
+                                            active_z,
                                             ui_state,
                                             active_theme,
                                             active_brush,
@@ -742,10 +748,13 @@ fn home_screen(
                                             world_revision,
                                             gameplay_model,
                                             world,
+                                            ui_state.home_tile_size,
+                                            ui_state.home_theme_id.clone(),
                                             Some(demo_path.clone()),
                                         );
                                         ui_state.path_text = demo_path.display().to_string();
-                                        ui_state.status_message.clear();
+                                        ui_state.status_message =
+                                            migration_status.unwrap_or_default();
                                     }
                                     Err(e) => {
                                         ui_state.status_message = format!("Demo load failed: {e}");
@@ -758,13 +767,14 @@ fn home_screen(
                                 if import_path.as_os_str().is_empty() {
                                     ui_state.status_message = "Enter an import path first.".into();
                                 } else {
-                                    match load_world(&import_path) {
-                                        Ok(world) => {
-                                            ui_state.home_world_name = world.world_name.clone();
-                                            ui_state.home_tile_size = world.tile_size;
-                                            ui_state.home_theme_id = world.theme_id.clone();
+                                    match load_editor_path(&import_path) {
+                                        Ok((world, report)) => {
+                                            let migration_status =
+                                                report.as_ref().map(migration_status);
+                                            ui_state.home_world_name = world.name.clone();
                                             enter_editor(
                                                 world_model,
+                                                active_z,
                                                 ui_state,
                                                 active_theme,
                                                 active_brush,
@@ -776,10 +786,13 @@ fn home_screen(
                                                 world_revision,
                                                 gameplay_model,
                                                 world,
+                                                ui_state.home_tile_size,
+                                                ui_state.home_theme_id.clone(),
                                                 Some(import_path.clone()),
                                             );
                                             ui_state.path_text = import_path.display().to_string();
-                                            ui_state.status_message.clear();
+                                            ui_state.status_message =
+                                                migration_status.unwrap_or_default();
                                         }
                                         Err(e) => {
                                             ui_state.status_message = format!("Import failed: {e}");
@@ -854,6 +867,7 @@ fn theme_row(
 #[allow(clippy::too_many_arguments)]
 fn enter_editor(
     world_model: &mut ResMut<WorldModel>,
+    active_z: &mut ResMut<ActiveZ>,
     ui_state: &mut EditorUiState,
     active_theme: &mut ResMut<ActiveTheme>,
     active_brush: &mut ResMut<ActiveBrush>,
@@ -864,12 +878,15 @@ fn enter_editor(
     path: &mut ResMut<CurrentMapPath>,
     world_revision: &mut ResMut<WorldRevision>,
     gameplay_model: &mut ResMut<GameplayModel>,
-    world: World,
+    world: VoxelWorld,
+    tile_size: u32,
+    theme_id: String,
     current_path: Option<PathBuf>,
 ) {
-    let theme_id = world.theme_id.clone();
     reset_gameplay_for_world(gameplay_model, &world);
-    world_model.0 = world;
+    world_model.world = world;
+    world_model.tile_size = tile_size;
+    active_z.0 = 0;
     active_theme.0 = theme_id;
     active_brush.0 = TileKind::Wall;
     active_preset.0 = None;
@@ -893,16 +910,8 @@ fn demo_map_path() -> PathBuf {
     path
 }
 
-fn empty_ground_world() -> World {
-    let mut world = World::default();
-    name_first_layer_ground(&mut world);
-    world
-}
-
-fn name_first_layer_ground(world: &mut World) {
-    if let Some(layer) = world.layers.first_mut() {
-        layer.name = "Ground".into();
-    }
+fn empty_world() -> VoxelWorld {
+    VoxelWorld::default()
 }
 
 fn bump_world_revision(world_revision: &mut ResMut<WorldRevision>) {
@@ -914,7 +923,7 @@ fn side_tabs(ui: &mut egui::Ui, active: &mut SideTab) {
         tab_button(ui, active, SideTab::Play, "Play");
         tab_button(ui, active, SideTab::Tiles, "Tiles");
         tab_button(ui, active, SideTab::Presets, "Presets");
-        tab_button(ui, active, SideTab::Layers, "Layers");
+        tab_button(ui, active, SideTab::Layers, "Z Levels");
         tab_button(ui, active, SideTab::Export, "Export");
         tab_button(ui, active, SideTab::Settings, "Settings");
     });
@@ -997,7 +1006,7 @@ fn play_tab(
             match dispatch_text_command(
                 &ui_state.command_text,
                 focus,
-                &world_model.0,
+                &world_model.world,
                 gameplay_model,
             ) {
                 Ok(()) => {
@@ -1255,105 +1264,39 @@ fn presets_tab(
 
 fn layers_tab(
     ui: &mut egui::Ui,
-    world_model: &mut ResMut<WorldModel>,
-    history: &mut ResMut<EditorHistory>,
+    world_model: &WorldModel,
     refresh: &mut ResMut<RenderRefresh>,
-    world_revision: &mut ResMut<WorldRevision>,
+    active_z: &mut ResMut<ActiveZ>,
 ) {
-    ui.heading("Layers");
-    ui.add_space(2.0);
+    ui.heading("Elevation");
+    ui.add_space(6.0);
 
-    if ui.button("+ Add Layer").clicked() {
-        history.push_snapshot(&world_model.0);
-        let next = next_layer_id(&world_model.0);
-        let name = format!("Layer {}", world_model.layers.len());
-        world_model.layers.push(Layer::new(next.clone(), name));
-        world_model.ensure_grid(&next);
-        bump_world_revision(world_revision);
+    let before = active_z.0;
+    ui.horizontal(|ui| {
+        if ui.button("z-").clicked() {
+            active_z.0 = active_z.0.saturating_sub(1);
+        }
+        ui.add(egui::DragValue::new(&mut active_z.0).prefix("z = "));
+        if ui.button("z+").clicked() {
+            active_z.0 = active_z.0.saturating_add(1);
+        }
+    });
+    if active_z.0 != before {
         refresh.0 = true;
     }
-    ui.add_space(4.0);
 
-    let active = world_model.active_layer.clone();
-    let mut rows: Vec<(usize, String, String, bool, bool, bool)> = world_model
-        .layers
-        .iter()
-        .enumerate()
-        .map(|(i, l)| (i, l.id.clone(), l.name.clone(), l.visible, l.locked, false))
-        .collect();
-    let mut new_active: Option<String> = None;
-
-    let can_remove = rows.len() > 1;
-    for (_, id, name, vis, lock, remove) in &mut rows {
-        let is_active = id.as_str() == active;
-        egui::Frame::new()
-            .fill(if is_active { zinc(850) } else { zinc(950) })
-            .stroke(egui::Stroke::new(
-                1.0,
-                if is_active { zinc(700) } else { zinc(900) },
-            ))
-            .corner_radius(egui::CornerRadius::same(4))
-            .inner_margin(egui::Margin::symmetric(6, 5))
-            .show(ui, |ui| {
-                if ui
-                    .add(
-                        egui::Button::new(name.as_str())
-                            .selected(is_active)
-                            .corner_radius(3),
-                    )
-                    .clicked()
-                {
-                    new_active = Some(id.clone());
-                }
-                ui.horizontal(|ui| {
-                    ui.checkbox(vis, "vis");
-                    ui.checkbox(lock, "lock");
-                    if can_remove && ui.button("Delete").clicked() {
-                        *remove = true;
-                    }
-                });
-            });
-    }
-
-    let remove_index = rows
-        .iter()
-        .find_map(|(index, _, _, _, _, remove)| remove.then_some(*index));
-    if let Some(index) = remove_index {
-        history.push_snapshot(&world_model.0);
-        if let Some(layer) = world_model.layers.get(index).cloned() {
-            world_model.layers.remove(index);
-            world_model.grids.remove(&layer.id);
-            if world_model.active_layer == layer.id {
-                world_model.active_layer = world_model
-                    .layers
-                    .get(index.saturating_sub(1))
-                    .or_else(|| world_model.layers.first())
-                    .map(|l| l.id.clone())
-                    .unwrap_or_else(|| "layer-1".into());
-            }
-            bump_world_revision(world_revision);
-            refresh.0 = true;
-        }
-        return;
-    }
-
-    let mut layer_state_changed = false;
-    for (i, _, _, vis, lock, _) in rows {
-        if let Some(layer) = world_model.layers.get_mut(i)
-            && (layer.visible != vis || layer.locked != lock)
-        {
-            layer.visible = vis;
-            layer.locked = lock;
-            layer_state_changed = true;
-        }
-    }
-    if layer_state_changed {
-        bump_world_revision(world_revision);
-        refresh.0 = true;
-    }
-    if let Some(active_layer) = new_active {
-        world_model.active_layer = active_layer;
-    }
+    let voxel_count = world_model
+        .world
+        .iter_voxels()
+        .filter(|(coord, _)| coord.z == active_z.0)
+        .count();
+    ui.label(format!("{voxel_count} voxels on this slice"));
+    ui.add_space(8.0);
+    ui.label(
+        egui::RichText::new("Z is real world height; legacy drawing layers are not preserved.")
+            .size(10.0)
+            .color(zinc(500)),
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1361,7 +1304,7 @@ fn export_tab(
     ui: &mut egui::Ui,
     ui_state: &mut EditorUiState,
     world_model: &mut ResMut<WorldModel>,
-    active_theme: &mut ResMut<ActiveTheme>,
+    active_z: &mut ResMut<ActiveZ>,
     path: &mut ResMut<CurrentMapPath>,
     history: &mut ResMut<EditorHistory>,
     refresh: &mut ResMut<RenderRefresh>,
@@ -1391,14 +1334,14 @@ fn export_tab(
                 .0
                 .clone()
                 .unwrap_or_else(|| PathBuf::from("glyphweave_save.gemap"));
-            save_to_path(&world_model.0, &target, &mut ui_state.status_message);
+            save_to_path(&world_model.world, &target, &mut ui_state.status_message);
         }
         if ui.button("Export Path").clicked() {
             let target = PathBuf::from(ui_state.path_text.trim());
             if target.as_os_str().is_empty() {
                 ui_state.status_message = "Enter an export path first.".into();
             } else {
-                save_to_path(&world_model.0, &target, &mut ui_state.status_message);
+                save_to_path(&world_model.world, &target, &mut ui_state.status_message);
                 path.0 = Some(target);
             }
         }
@@ -1407,16 +1350,18 @@ fn export_tab(
             if target.as_os_str().is_empty() {
                 ui_state.status_message = "Enter an import path first.".into();
             } else {
-                match load_world(&target) {
-                    Ok(world) => {
-                        history.push_snapshot(&world_model.0);
+                match load_editor_path(&target) {
+                    Ok((world, report)) => {
+                        history.push_snapshot(&world_model.world);
                         reset_gameplay_for_world(gameplay_model, &world);
-                        world_model.0 = world;
-                        active_theme.0 = world_model.theme_id.clone();
+                        world_model.world = world;
+                        active_z.0 = 0;
                         path.0 = Some(target);
                         bump_world_revision(world_revision);
                         refresh.0 = true;
-                        ui_state.status_message = "Imported map.".into();
+                        ui_state.status_message = report
+                            .as_ref()
+                            .map_or_else(|| "Imported v3 map.".to_owned(), migration_status);
                     }
                     Err(e) => {
                         ui_state.status_message = format!("Import failed: {e}");
@@ -1428,11 +1373,11 @@ fn export_tab(
 
     ui.horizontal_wrapped(|ui| {
         if ui.button("New Empty").clicked() {
-            history.push_snapshot(&world_model.0);
-            let world = empty_ground_world();
+            history.push_snapshot(&world_model.world);
+            let world = empty_world();
             reset_gameplay_for_world(gameplay_model, &world);
-            world_model.0 = world;
-            active_theme.0 = world_model.theme_id.clone();
+            world_model.world = world;
+            active_z.0 = 0;
             path.0 = None;
             bump_world_revision(world_revision);
             refresh.0 = true;
@@ -1461,7 +1406,6 @@ fn export_tab(
 
 fn settings_tab(
     ui: &mut egui::Ui,
-    world_model: &mut ResMut<WorldModel>,
     active_theme: &mut ResMut<ActiveTheme>,
     view_settings: &mut ResMut<EditorViewSettings>,
 ) {
@@ -1475,21 +1419,18 @@ fn settings_tab(
             .clicked()
         {
             active_theme.0 = "ansi-16".into();
-            world_model.theme_id = "ansi-16".into();
         }
         if ui
             .add(egui::Button::new("Cogmind").selected(active_theme.0 == "cogmind"))
             .clicked()
         {
             active_theme.0 = "cogmind".into();
-            world_model.theme_id = "cogmind".into();
         }
         if ui
             .add(egui::Button::new("Fortress Pixel").selected(active_theme.0 == "fortress-pixel"))
             .clicked()
         {
             active_theme.0 = "fortress-pixel".into();
-            world_model.theme_id = "fortress-pixel".into();
         }
     });
 
@@ -1568,6 +1509,7 @@ fn minimap_overlay(
     camera_position: &mut Transform,
     window: &Window,
     world_revision: u64,
+    active_z: i32,
     minimap_cache: &mut MinimapCache,
 ) {
     egui::Area::new(egui::Id::new("editor_minimap"))
@@ -1577,25 +1519,27 @@ fn minimap_overlay(
             floating_frame().show(ui, |ui| {
                 let size = egui::vec2(MINIMAP_WIDTH as f32, MINIMAP_HEIGHT as f32);
                 let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
-                let response = response.on_hover_text(&world_model.world_name);
+                let response = response.on_hover_text(&world_model.name);
                 let painter = ui.painter_at(rect);
                 painter.rect_filled(rect, 0.0, egui::Color32::BLACK);
 
                 let signature = MinimapSignature {
                     world_revision,
                     theme_id: active_theme.0.clone(),
+                    active_z,
                 };
 
                 let cache_stale = minimap_cache.texture.is_none()
                     || minimap_cache.signature.as_ref() != Some(&signature);
                 if cache_stale {
-                    let Some(projection) = minimap_projection(&world_model.0) else {
+                    let Some(projection) = minimap_projection(&world_model.world, active_z) else {
                         minimap_cache.texture = None;
                         minimap_cache.projection = None;
                         minimap_cache.signature = Some(signature);
                         return;
                     };
-                    let image = minimap_image(&world_model.0, &active_theme.0, projection);
+                    let image =
+                        minimap_image(&world_model.world, active_z, &active_theme.0, projection);
                     if let Some(texture) = minimap_cache.texture.as_mut() {
                         texture.set(image, egui::TextureOptions::NEAREST);
                     } else {
@@ -1667,8 +1611,8 @@ fn minimap_overlay(
         });
 }
 
-fn minimap_projection(world: &World) -> Option<MinimapProjection> {
-    let (min_x, min_y, max_x, max_y) = visible_tile_bounds(world)?;
+fn minimap_projection(world: &VoxelWorld, z: i32) -> Option<MinimapProjection> {
+    let (min_x, min_y, max_x, max_y) = visible_tile_bounds(world, z)?;
     let width = (max_x - min_x + 1).max(1) as f32;
     let height = (max_y - min_y + 1).max(1) as f32;
     let scale = (MINIMAP_WIDTH as f32 / width).min(MINIMAP_HEIGHT as f32 / height);
@@ -1685,22 +1629,28 @@ fn minimap_projection(world: &World) -> Option<MinimapProjection> {
     })
 }
 
-fn minimap_image(world: &World, theme_id: &str, projection: MinimapProjection) -> egui::ColorImage {
+fn minimap_image(
+    world: &VoxelWorld,
+    z: i32,
+    theme_id: &str,
+    projection: MinimapProjection,
+) -> egui::ColorImage {
     let mut image = egui::ColorImage::filled([MINIMAP_WIDTH, MINIMAP_HEIGHT], egui::Color32::BLACK);
 
-    for layer in &world.layers {
-        if !layer.visible {
+    for (coord, _) in world.iter_voxels() {
+        if coord.z != z {
             continue;
         }
-        let Some(grid) = world.grid(&layer.id) else {
+        let Some(kind) = tile_at(world, z, coord.x, coord.y) else {
             continue;
         };
-        for ((x, y), kind) in grid.iter_tiles() {
-            if matches!(kind, TileKind::Void) {
-                continue;
-            }
-            fill_minimap_tile(&mut image, projection, x, y, tile_bg(kind, theme_id));
-        }
+        fill_minimap_tile(
+            &mut image,
+            projection,
+            coord.x,
+            coord.y,
+            tile_bg(kind, theme_id),
+        );
     }
 
     image
@@ -1820,35 +1770,58 @@ fn fill_positive_rect(painter: &egui::Painter, rect: egui::Rect, color: egui::Co
     }
 }
 
-fn visible_tile_bounds(world: &World) -> Option<(i32, i32, i32, i32)> {
+fn visible_tile_bounds(world: &VoxelWorld, z: i32) -> Option<(i32, i32, i32, i32)> {
     let mut min_x = i32::MAX;
     let mut min_y = i32::MAX;
     let mut max_x = i32::MIN;
     let mut max_y = i32::MIN;
     let mut any = false;
 
-    for layer in &world.layers {
-        if !layer.visible {
+    for (coord, _) in world.iter_voxels() {
+        if coord.z != z {
             continue;
         }
-        let Some(grid) = world.grid(&layer.id) else {
-            continue;
-        };
-        for ((x, y), _) in grid.iter_tiles() {
-            any = true;
-            min_x = min_x.min(x);
-            min_y = min_y.min(y);
-            max_x = max_x.max(x);
-            max_y = max_y.max(y);
-        }
+        any = true;
+        min_x = min_x.min(coord.x);
+        min_y = min_y.min(coord.y);
+        max_x = max_x.max(coord.x);
+        max_y = max_y.max(coord.y);
     }
 
     any.then_some((min_x, min_y, max_x, max_y))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn save_to_path(world: &World, target: &Path, status: &mut String) {
-    match save_world(world, target) {
+fn load_editor_path(path: &Path) -> Result<(VoxelWorld, Option<MigrationReport>), String> {
+    let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
+    if bytes.iter().find(|byte| !byte.is_ascii_whitespace()) == Some(&b'{') {
+        let result = migrate_legacy_json(&bytes, MigrationMode::Flatten)
+            .map_err(|error| error.to_string())?;
+        return Ok((result.world, Some(result.report)));
+    }
+    decode_world(&bytes, ArchiveLimits::default())
+        .map(|world| (world, None))
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn migration_status(report: &MigrationReport) -> String {
+    format!(
+        "Migrated legacy v{} with flatten: {} voxels, {} overwritten, {} hidden layers skipped, {} unknown tile IDs.",
+        report.source_version,
+        report.output_voxel_count,
+        report.overwritten_tile_count,
+        report.skipped_hidden_layers.len(),
+        report.unknown_tile_ids.len(),
+    )
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn save_to_path(world: &VoxelWorld, target: &Path, status: &mut String) {
+    let result = encode_world(world)
+        .map_err(|error| error.to_string())
+        .and_then(|bytes| atomic_replace(target, &bytes).map_err(|error| error.to_string()));
+    match result {
         Ok(()) => {
             println!("[glyphweave] saved {}", target.display());
             *status = format!("Saved {}", target.display());
@@ -1860,16 +1833,40 @@ fn save_to_path(world: &World, target: &Path, status: &mut String) {
     }
 }
 
-fn next_layer_id(world: &World) -> String {
-    let next = world
-        .layers
-        .iter()
-        .filter_map(|layer| layer.id.strip_prefix("layer-"))
-        .filter_map(|suffix| suffix.parse::<usize>().ok())
-        .max()
-        .unwrap_or(0)
-        + 1;
-    format!("layer-{next}")
+#[cfg(not(target_arch = "wasm32"))]
+fn atomic_replace(target: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let parent = target
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let filename = target
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("world.gemap");
+    let nonce = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_err(std::io::Error::other)?
+        .as_nanos();
+    let temporary = parent.join(format!(".{filename}.{}.{}.tmp", std::process::id(), nonce));
+
+    let write_result = (|| {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&temporary, target)?;
+        #[cfg(unix)]
+        std::fs::File::open(parent)?.sync_all()?;
+        Ok(())
+    })();
+
+    if write_result.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    write_result
 }
 
 fn zinc(shade: u16) -> egui::Color32 {
@@ -2142,6 +2139,51 @@ mod tests {
                 .iter()
                 .any(|path| path.contains("NotoSansCJK"))
         );
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn legacy_path_loads_through_flatten_migration() {
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../..")
+            .join("fixtures/gemap/v2/layered-v2.gemap");
+
+        let (world, report) = load_editor_path(&fixture).unwrap();
+        let report = report.expect("legacy input must produce a migration report");
+
+        assert_eq!(report.mode, MigrationMode::Flatten);
+        assert_eq!(report.source_version, 2);
+        assert_eq!(world.len(), report.output_voxel_count);
+        assert!(migration_status(&report).contains("Migrated legacy v2"));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn native_save_atomically_replaces_with_v3_archive() {
+        let nonce = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "glyphweave-app-save-test-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let target = directory.join("world.gemap");
+        let mut status = String::new();
+
+        let first = VoxelWorld::new("first");
+        save_to_path(&first, &target, &mut status);
+        assert!(status.starts_with("Saved"));
+
+        let second = VoxelWorld::new("second");
+        save_to_path(&second, &target, &mut status);
+        let bytes = std::fs::read(&target).unwrap();
+        let loaded = decode_world(&bytes, ArchiveLimits::default()).unwrap();
+        assert_eq!(loaded.name, "second");
+
+        std::fs::remove_file(target).unwrap();
+        std::fs::remove_dir(directory).unwrap();
     }
 
     #[cfg(target_arch = "wasm32")]

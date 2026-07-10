@@ -1,0 +1,32 @@
+{
+  "axisOrder": "z,x,y",
+  "blockRegistry": {
+    "0": "glyphweave:air",
+    "1": "glyphweave:wall"
+  },
+  "chunkShape": [
+    16,
+    16,
+    16
+  ],
+  "format": "glyphweave-map",
+  "metadata": {
+    "fixture": "negative-boundaries"
+  },
+  "regionShape": [
+    "infinite",
+    32,
+    32
+  ],
+  "regions": {
+    "-1,0": "regions/-1.0/region.json",
+    "-2,0": "regions/-2.0/region.json",
+    "0,-1": "regions/0.-1/region.json",
+    "0,-2": "regions/0.-2/region.json",
+    "0,0": "regions/0.0/region.json"
+  },
+  "version": 3,
+  "world": {
+    "name": "Negative Coordinate Boundaries"
+  }
+}

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/app"]
+members = ["crates/core", "crates/app", "crates/cli"]
 
 [workspace.package]
 version = "0.1.0"
@@ -39,6 +39,9 @@ bevy_egui = { version = "0.39.1", default-features = false, features = [
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+blake3 = "1"
+sha2 = "0.11"
+zip = { version = "8.6", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 glyphweave-core = { path = "crates/core" }
 
 [profile.wasm-release]

@@ -1,0 +1,6 @@
+{
+  "entry": "metadata/padding.bin",
+  "fillByteHex": "00",
+  "note": "Bounded synthetic compression bomb; never expand this entry into the repository.",
+  "uncompressedBytes": 1048576
+}

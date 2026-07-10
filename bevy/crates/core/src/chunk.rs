@@ -1,4 +1,4 @@
-use crate::coords::{chunk_of, local_index, CHUNK_AREA, CHUNK_SIZE};
+use crate::coords::{CHUNK_AREA, CHUNK_SIZE, chunk_of, local_index};
 use crate::tile::TileKind;
 use std::collections::HashMap;
 
@@ -10,12 +10,16 @@ pub struct Chunk {
 impl Default for Chunk {
     fn default() -> Self {
         // `Box::new([None; N])` needs Copy; Option<TileKind> is Copy.
-        Self { tiles: Box::new([None; CHUNK_AREA]) }
+        Self {
+            tiles: Box::new([None; CHUNK_AREA]),
+        }
     }
 }
 
 impl Chunk {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn get(&self, x: i32, y: i32) -> Option<TileKind> {
         self.tiles[local_index(x, y)]
@@ -41,7 +45,9 @@ pub struct ChunkGrid {
 }
 
 impl ChunkGrid {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn get(&self, x: i32, y: i32) -> Option<TileKind> {
         let key = chunk_of(x, y);
@@ -80,10 +86,15 @@ impl ChunkGrid {
     }
 
     pub fn len(&self) -> usize {
-        self.chunks.values().map(|c| c.tiles.iter().filter(|t| t.is_some()).count()).sum()
+        self.chunks
+            .values()
+            .map(|c| c.tiles.iter().filter(|t| t.is_some()).count())
+            .sum()
     }
 
-    pub fn is_empty(&self) -> bool { self.len() == 0 }
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 #[cfg(test)]

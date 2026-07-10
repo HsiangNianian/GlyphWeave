@@ -45,7 +45,7 @@
 - **マルチレイヤー編集** — 地形、建造物、詳細を別々のレイヤーに分割。非表示、ロック、追加、削除は自由自在。
 - **ブラシ / 消しゴム / 塗りつぶし / パン / 選択** ツール。
 - **元に戻す / やり直し**（Ctrl+Z / Ctrl+Shift+Z）— 過去50ステップまで。
-- **エクスポート / インポート** `.gemap` JSON 形式 — レイヤー、テーマ、ワールド名を保持。
+- **エクスポート / インポート** `.gemap` v3 ZIP 形式 — Web と Bevy が同じ疎な3Dボクセル世界を共有。
 - **ミニマップ** — ビューポート矩形付きのリアルタイム概要。クリックでジャンプ。
 - **視距離** — スムーズなパンのための設定可能なレンダリング余白。
 - **レンダリングAPI** — `GET /api/render` または `POST /api/render` で地図をSVGまたはPNG画像に変換。
@@ -69,45 +69,46 @@ pnpm dev
 
 `http://localhost:5173` を開き、ワールド名、タイルサイズ、テーマを選択して描き始めましょう。
 
-> **レンダリングAPI** は開発モードで自動的に同一ポートで利用可能です——`GET /api/render?data=<base64>` または `POST /api/render`（JSON body）。
+> **レンダリングAPI** は開発モードで同一ポートから利用できます。v3 ZIP は `POST /api/render?z=<高さ>`、GET/base64 と JSON POST は旧形式の互換入力専用です。
 
 ## Render API
 
-タイルマップを画像に変換するAPIです。3つの動作環境に対応しています：
+v3 `.gemap` ZIP の指定 z スライスを画像に変換します。互換期間中は旧JSONも入力できます：
 
 | 環境 | コマンド | URL | 出力 |
 |---|---|---|---|
 | 開発 | `pnpm dev` | `http://localhost:5173/api/render` | PNG (`@napi-rs/canvas`) |
 | 本番 (Node) | `pnpm build && pnpm start` | `http://localhost:3001/api/render` | PNG (`@napi-rs/canvas`) |
-| 本番 (Cloudflare) | `pnpm deploy` | `https://glyphweave.hydroroll.team/api/render` | SVG（デフォルト）または PNG（`?format=png`） |
+| 本番 (Cloudflare) | `pnpm deploy` | `https://glyphweave.hydroroll.team/api/render` | SVG |
 
-### POST（大きなマップに推奨）
+### v3 `.gemap` ZIP をPOST
 
 ```bash
 # SVG出力（デフォルト）
-curl -X POST https://glyphweave.hydroroll.team/api/render \
-  -H "Content-Type: application/json" \
-  -d @my-map.gemap > map.svg
+curl -X POST "https://glyphweave.hydroroll.team/api/render?z=0" \
+  -H "Content-Type: application/vnd.glyphweave.gemap+zip" \
+  --data-binary @my-map.gemap > map.svg
 
 # PNG出力
-curl -X POST "https://glyphweave.hydroroll.team/api/render?format=png" \
-  -H "Content-Type: application/json" \
-  -d @my-map.gemap > map.png
+curl -X POST "http://localhost:3001/api/render?z=0&format=png" \
+  -H "Content-Type: application/zip" \
+  --data-binary @my-map.gemap > map.png
 ```
 
-### GET（小さなマップ向け）
+### GET（小さな旧JSONマップのみ）
 
 ```bash
 DATA=$(echo -n '{"tiles":{"0,0":"wall"}}' | base64)
-curl "https://glyphweave.hydroroll.team/api/render?data=$DATA&format=png" > map.png
+curl "https://glyphweave.hydroroll.team/api/render?data=$DATA" > map.svg
 ```
 
 パラメータ：
 
+- `z` — v3 ZIP で必須の int32 高さスライス
 - `theme` — `ansi-16`（デフォルト）または `cogmind`
 - `padding` — 境界外の余分タイル数（デフォルト `1`）
 - `scale` — タイルあたりのピクセル数（デフォルトは自動フィット ≤ 4096px）
-- `format` — `svg`（デフォルト）または `png`（Cloudflare）
+- `format` — `svg` または `png`。PNG は Node のみ
 
 ### セルフホスト
 
@@ -115,9 +116,9 @@ curl "https://glyphweave.hydroroll.team/api/render?data=$DATA&format=png" > map.
 pnpm dev                           # 開発サーバー, http://localhost:5173
 pnpm build && pnpm start           # 本番サーバー, http://localhost:3001
 
-curl -X POST http://localhost:3001/api/render \
-  -H "Content-Type: application/json" \
-  -d @my-map.gemap > map.png
+curl -X POST "http://localhost:3001/api/render?z=0" \
+  -H "Content-Type: application/vnd.glyphweave.gemap+zip" \
+  --data-binary @my-map.gemap > map.png
 ```
 
 ---

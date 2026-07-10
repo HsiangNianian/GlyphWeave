@@ -2,6 +2,8 @@ import { useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMapStore } from '@/stores/map-store'
 import { convertImageFileToMap, DEFAULT_IMAGE_CONVERT_WIDTH } from '@/lib/image-convert'
+import { buildGemapDocument, writeGemap } from '@/lib/gemap'
+import { importGemapBytes } from '@/lib/gemap-import'
 import { resolveTheme } from '@/lib/theme-registry'
 import { Button } from '@/components/ui/button'
 import { Download, Upload, Image } from 'lucide-react'
@@ -9,22 +11,27 @@ import { Download, Upload, Image } from 'lucide-react'
 export function ExportPanel() {
   const { t } = useTranslation()
   const exportMap = useMapStore((s) => s.exportMap)
+  const exportVoxels = useMapStore((s) => s.exportVoxels)
   const importMap = useMapStore((s) => s.importMap)
+  const importVoxels = useMapStore((s) => s.importVoxels)
+  const worldName = useMapStore((s) => s.worldName)
   const themeId = useMapStore((s) => s.themeId)
   const customThemes = useMapStore((s) => s.customThemes)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
 
   const handleExport = useCallback(() => {
-    const data = exportMap()
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const archive = writeGemap(buildGemapDocument(worldName, exportVoxels()))
+    const archiveBlobBytes = new Uint8Array(archive.length)
+    archiveBlobBytes.set(archive)
+    const blob = new Blob([archiveBlobBytes], { type: 'application/vnd.glyphweave.gemap+zip' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${data.worldName.replace(/\s+/g, '_')}.gemap`
+    a.download = `${worldName.replace(/\s+/g, '_')}.gemap`
     a.click()
     URL.revokeObjectURL(url)
-  }, [exportMap])
+  }, [exportVoxels, worldName])
 
   const handleImport = useCallback(() => {
     fileInputRef.current?.click()
@@ -38,14 +45,22 @@ export function ExportPanel() {
     const file = e.target.files?.[0]
     if (!file) return
     try {
-      const text = await file.text()
-      const data = JSON.parse(text)
-      importMap(data)
+      const imported = importGemapBytes(new Uint8Array(await file.arrayBuffer()))
+      importVoxels({ voxels: imported.voxels, worldName: imported.worldName })
+      if (imported.migrationReport) {
+        const report = imported.migrationReport
+        window.alert(
+          `Legacy map migrated with ${report.mode}: ${report.outputVoxelCount} voxels, `
+          + `${report.overwrittenTileCount} overwritten tiles, `
+          + `${report.unknownTileIds.length} unknown tile IDs.`,
+        )
+      }
     } catch (err) {
       console.error('Failed to import map:', err)
+      window.alert(err instanceof Error ? err.message : 'Failed to import map')
     }
     e.target.value = ''
-  }, [importMap])
+  }, [importVoxels])
 
   const handleImageFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -59,7 +74,11 @@ export function ExportPanel() {
         width: DEFAULT_IMAGE_CONVERT_WIDTH,
         worldName: mapWorldName,
       })
-      importMap(data)
+      importMap({
+        activeZ: 0,
+        slices: { 'z:0': data.tiles },
+        worldName: data.worldName,
+      })
     } catch (err) {
       console.error('Failed to import image:', err)
       window.alert(err instanceof Error ? err.message : 'Failed to import image')
@@ -69,15 +88,20 @@ export function ExportPanel() {
 
   const handleRenderExport = useCallback(async (format: 'svg' | 'png') => {
     const data = exportMap()
+    const gemapDocument = buildGemapDocument(worldName, exportVoxels())
+    gemapDocument.manifest.metadata = { appearance: { themeId } }
+    const archive = writeGemap(gemapDocument)
+    const archiveBuffer = new ArrayBuffer(archive.byteLength)
+    new Uint8Array(archiveBuffer).set(archive)
     const name = data.worldName.replace(/\s+/g, '_')
     const baseUrl = window.location.origin
-    const url = `${baseUrl}/api/render?format=${format}`
+    const url = `${baseUrl}/api/render?format=${format}&z=${data.activeZ}`
 
     try {
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, format }),
+        headers: { 'Content-Type': 'application/vnd.glyphweave.gemap+zip' },
+        body: archiveBuffer,
       })
       if (!res.ok) throw new Error(`API returned ${res.status}`)
       const blob = await res.blob()
@@ -90,7 +114,7 @@ export function ExportPanel() {
     } catch (err) {
       console.error('Render export failed:', err)
     }
-  }, [exportMap])
+  }, [exportMap, exportVoxels, themeId, worldName])
 
   return (
     <div className="flex flex-col gap-3 p-3">

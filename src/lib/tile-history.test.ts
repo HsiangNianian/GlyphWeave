@@ -12,9 +12,9 @@ import {
 
 describe('tile-history', () => {
   it('creates and applies set patches without mutating source tiles', () => {
-    const tiles = { 'layer-1': {} }
+    const tiles = { 'z:0': {} }
     const patch = createTilePatch({
-      layerId: 'layer-1',
+      sliceId: 'z:0',
       key: '0,0',
       before: null,
       after: 'wall',
@@ -23,56 +23,56 @@ describe('tile-history', () => {
     const nextTiles = applyTilePatch(tiles, patch)
 
     expect(patch).toEqual({
-      layerId: 'layer-1',
+      sliceId: 'z:0',
       key: '0,0',
       before: null,
       after: 'wall',
     })
-    expect(nextTiles).toEqual({ 'layer-1': { '0,0': 'wall' } })
-    expect(tiles).toEqual({ 'layer-1': {} })
+    expect(nextTiles).toEqual({ 'z:0': { '0,0': 'wall' } })
+    expect(tiles).toEqual({ 'z:0': {} })
   })
 
   it('deletes tiles when after is null or void', () => {
-    const tiles = { 'layer-1': { '0,0': 'wall', '1,0': 'floor' } }
+    const tiles = { 'z:0': { '0,0': 'wall', '1,0': 'floor' } }
     const nullPatch = createTilePatch({
-      layerId: 'layer-1',
+      sliceId: 'z:0',
       key: '0,0',
       before: 'wall',
       after: null,
     })
     const voidPatch = createTilePatch({
-      layerId: 'layer-1',
+      sliceId: 'z:0',
       key: '0,0',
       before: 'wall',
       after: 'void',
     })
 
     expect(applyTilePatch(tiles, nullPatch)).toEqual({
-      'layer-1': { '1,0': 'floor' },
+      'z:0': { '1,0': 'floor' },
     })
     expect(applyTilePatch(tiles, voidPatch)).toEqual({
-      'layer-1': { '1,0': 'floor' },
+      'z:0': { '1,0': 'floor' },
     })
     expect(voidPatch).toEqual({
-      layerId: 'layer-1',
+      sliceId: 'z:0',
       key: '0,0',
       before: 'wall',
       after: null,
     })
-    expect(tiles).toEqual({ 'layer-1': { '0,0': 'wall', '1,0': 'floor' } })
+    expect(tiles).toEqual({ 'z:0': { '0,0': 'wall', '1,0': 'floor' } })
   })
 
   it('undoes and redoes a transaction through inverted patches', () => {
     const transaction: TileTransaction = {
       patches: [
         createTilePatch({
-          layerId: 'layer-1',
+          sliceId: 'z:0',
           key: '0,0',
           before: 'wall',
           after: 'water',
         }),
         createTilePatch({
-          layerId: 'layer-2',
+          sliceId: 'z:1',
           key: '2,0',
           before: 'floor',
           after: null,
@@ -80,8 +80,8 @@ describe('tile-history', () => {
       ],
     }
     const tiles = {
-      'layer-1': { '0,0': 'wall' },
-      'layer-2': { '2,0': 'floor', '3,0': 'door' },
+      'z:0': { '0,0': 'wall' },
+      'z:1': { '2,0': 'floor', '3,0': 'door' },
     }
 
     const redoneTiles = applyTileTransaction(tiles, transaction)
@@ -89,8 +89,8 @@ describe('tile-history', () => {
     const redoneAgainTiles = applyTileTransaction(undoneTiles, transaction)
 
     expect(redoneTiles).toEqual({
-      'layer-1': { '0,0': 'water' },
-      'layer-2': { '3,0': 'door' },
+      'z:0': { '0,0': 'water' },
+      'z:1': { '3,0': 'door' },
     })
     expect(undoneTiles).toEqual(tiles)
     expect(redoneAgainTiles).toEqual(redoneTiles)
@@ -101,30 +101,30 @@ describe('tile-history', () => {
 
     transaction = mergeStrokeTransaction(
       transaction,
-      createTilePatch({ layerId: 'layer-1', key: '0,0', before: null, after: 'wall' }),
+      createTilePatch({ sliceId: 'z:0', key: '0,0', before: null, after: 'wall' }),
     )
     transaction = mergeStrokeTransaction(
       transaction,
-      createTilePatch({ layerId: 'layer-1', key: '0,0', before: 'wall', after: 'water' }),
+      createTilePatch({ sliceId: 'z:0', key: '0,0', before: 'wall', after: 'water' }),
     )
     transaction = mergeStrokeTransaction(
       transaction,
-      createTilePatch({ layerId: 'layer-1', key: '1,0', before: null, after: 'floor' }),
+      createTilePatch({ sliceId: 'z:0', key: '1,0', before: null, after: 'floor' }),
     )
     transaction = mergeStrokeTransaction(
       transaction,
-      createTilePatch({ layerId: 'layer-2', key: '0,0', before: null, after: 'door' }),
+      createTilePatch({ sliceId: 'z:1', key: '0,0', before: null, after: 'door' }),
     )
     transaction = mergeStrokeTransaction(
       transaction,
-      createTilePatch({ layerId: 'layer-1', key: '0,0', before: 'water', after: 'lava' }),
+      createTilePatch({ sliceId: 'z:0', key: '0,0', before: 'water', after: 'lava' }),
     )
 
     expect(transaction).toEqual({
       patches: [
-        { layerId: 'layer-1', key: '0,0', before: null, after: 'lava' },
-        { layerId: 'layer-1', key: '1,0', before: null, after: 'floor' },
-        { layerId: 'layer-2', key: '0,0', before: null, after: 'door' },
+        { sliceId: 'z:0', key: '0,0', before: null, after: 'lava' },
+        { sliceId: 'z:0', key: '1,0', before: null, after: 'floor' },
+        { sliceId: 'z:1', key: '0,0', before: null, after: 'door' },
       ],
     })
   })
@@ -132,8 +132,8 @@ describe('tile-history', () => {
   it('drops compacted stroke patches with no net tile change', () => {
     const transaction = compactTileTransaction({
       patches: [
-        createTilePatch({ layerId: 'layer-1', key: '0,0', before: 'wall', after: 'floor' }),
-        createTilePatch({ layerId: 'layer-1', key: '0,0', before: 'floor', after: 'wall' }),
+        createTilePatch({ sliceId: 'z:0', key: '0,0', before: 'wall', after: 'floor' }),
+        createTilePatch({ sliceId: 'z:0', key: '0,0', before: 'floor', after: 'wall' }),
       ],
     })
 
@@ -142,30 +142,30 @@ describe('tile-history', () => {
 
   it('keeps deletions scoped to the requested layer', () => {
     const tiles = {
-      'layer-1': { '0,0': 'wall' },
-      'layer-2': { '0,0': 'water' },
+      'z:0': { '0,0': 'wall' },
+      'z:1': { '0,0': 'water' },
     }
     const nextTiles = applyTilePatch(
       tiles,
-      createTilePatch({ layerId: 'layer-2', key: '0,0', before: 'water', after: null }),
+      createTilePatch({ sliceId: 'z:1', key: '0,0', before: 'water', after: null }),
     )
 
     expect(nextTiles).toEqual({
-      'layer-1': { '0,0': 'wall' },
-      'layer-2': {},
+      'z:0': { '0,0': 'wall' },
+      'z:1': {},
     })
     expect(tiles).toEqual({
-      'layer-1': { '0,0': 'wall' },
-      'layer-2': { '0,0': 'water' },
+      'z:0': { '0,0': 'wall' },
+      'z:1': { '0,0': 'water' },
     })
   })
 
   it('creates a missing layer when applying a set patch', () => {
     const nextTiles = applyTilePatch(
       {},
-      createTilePatch({ layerId: 'layer-1', key: '0,0', before: null, after: 'wall' }),
+      createTilePatch({ sliceId: 'z:0', key: '0,0', before: null, after: 'wall' }),
     )
 
-    expect(nextTiles).toEqual({ 'layer-1': { '0,0': 'wall' } })
+    expect(nextTiles).toEqual({ 'z:0': { '0,0': 'wall' } })
   })
 })

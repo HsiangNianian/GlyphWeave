@@ -1,0 +1,7 @@
+{
+  "entriesInOrder": [
+    "manifest.json",
+    "manifest.json"
+  ],
+  "note": "The two entries are byte-identical; duplicate names are invalid."
+}

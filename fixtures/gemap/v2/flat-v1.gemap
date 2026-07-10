@@ -1,0 +1,11 @@
+{
+  "worldName": "Legacy Flat",
+  "tileSize": 24,
+  "themeId": "ansi-16",
+  "tiles": {
+    "-1,-1": "wall",
+    "0,0": "floor",
+    "2,3": "void",
+    "4,5": "mysteryTile"
+  }
+}

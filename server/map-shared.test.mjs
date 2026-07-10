@@ -57,6 +57,7 @@ describe('flattenTiles', () => {
         overlay: {
           '1,0': 'wall',
           '2,0': '',
+          '3,0': 'void',
         },
       },
     })).toEqual({

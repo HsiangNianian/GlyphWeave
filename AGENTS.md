@@ -296,6 +296,7 @@ src/
 ├── App.tsx                   # 根组件（Home ↔ Editor 路由）
 ├── index.css                 # Tailwind CSS 样式入口
 ├── lib/
+│   ├── gemap/               # .gemap v3 ZIP、chunk 编码与校验
 │   ├── image-convert.ts     # 浏览器端图片导入转换（Image → .gemap）
 │   └── utils.ts             # shadcn/ui 工具函数（cn）
 ├── types/

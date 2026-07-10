@@ -8,6 +8,7 @@ import { useUiStore } from '@/stores/ui-store'
 import { getVisibleRange, type Viewport, type VisibleRange } from '@/lib/viewport'
 import { DEFAULT_TILE_CHUNK_SIZE, buildVisibleTileChunkIndex, iterateVisibleTileChunks } from '@/lib/map-core'
 import { resolveTheme } from '@/lib/theme-registry'
+import { formatVoxelSliceId } from '@/lib/voxel-map'
 
 interface MapCanvasProps {
   containerRef: RefObject<HTMLDivElement | null>
@@ -37,7 +38,7 @@ function alignVisibleRangeToChunks(
 
 export function MapCanvas({ containerRef, stageRef }: MapCanvasProps) {
   const tiles = useMapStore((s) => s.tiles)
-  const layers = useMapStore((s) => s.layers)
+  const activeZ = useMapStore((s) => s.activeZ)
   const showGrid = useUiStore((s) => s.showGrid)
   const viewDistance = useUiStore((s) => s.viewDistance)
   const currentTool = useMapStore((s) => s.currentTool)
@@ -92,8 +93,12 @@ export function MapCanvas({ containerRef, stageRef }: MapCanvasProps) {
   }, [updateVisibleRange])
 
   const visibleTileIndex = useMemo(() => {
-    return buildVisibleTileChunkIndex(tiles, layers)
-  }, [tiles, layers])
+    const sliceId = formatVoxelSliceId(activeZ)
+    return buildVisibleTileChunkIndex(
+      { [sliceId]: tiles[sliceId] ?? {} },
+      [{ id: sliceId, visible: true }],
+    )
+  }, [activeZ, tiles])
 
   const visibleTiles = useMemo(() => {
     return [...iterateVisibleTileChunks(visibleTileIndex, { range: visibleRange })]

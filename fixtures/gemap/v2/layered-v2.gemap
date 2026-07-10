@@ -1,0 +1,58 @@
+{
+  "version": 2,
+  "worldName": "Legacy Layers",
+  "tileSize": 24,
+  "themeId": "ansi-16",
+  "tiles": {
+    "99,99": "lava"
+  },
+  "layers": [
+    {
+      "id": "terrain",
+      "name": "Terrain",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "structures",
+      "name": "Structures",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "secrets",
+      "name": "Hidden Secrets",
+      "visible": false,
+      "locked": true
+    },
+    {
+      "id": "details",
+      "name": "Details",
+      "visible": true,
+      "locked": false
+    }
+  ],
+  "layerTiles": {
+    "terrain": {
+      "-1,-1": "floorAlt",
+      "0,0": "floor",
+      "1,0": "grass",
+      "2,0": null,
+      "3,0": "void"
+    },
+    "structures": {
+      "0,0": "wall",
+      "1,0": "void",
+      "2,0": "door"
+    },
+    "secrets": {
+      "0,0": "treasure",
+      "4,0": "tree"
+    },
+    "details": {
+      "0,0": "blood",
+      "2,0": null,
+      "5,0": "mysteryTile"
+    }
+  }
+}

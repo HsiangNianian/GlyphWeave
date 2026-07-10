@@ -2,130 +2,50 @@
  * Shared tilemap data and utilities.
  * No native dependencies — safe for Node.js and Cloudflare Workers.
  */
-export const TILE_TYPES = {
-  void:       { id: 'void',       char: ' ',  category: 'terrain' },
-  wall:       { id: 'wall',       char: '#',  category: 'wall' },
-  floor:      { id: 'floor',      char: '.',  category: 'floor' },
-  floorAlt:   { id: 'floorAlt',   char: ',',  category: 'floor' },
-  door:       { id: 'door',       char: '+',  category: 'wall' },
-  doorOpen:   { id: 'doorOpen',   char: "'",  category: 'wall' },
-  water:      { id: 'water',      char: '~',  category: 'water' },
-  deepWater:  { id: 'deepWater',  char: '≈',  category: 'water' },
-  lava:       { id: 'lava',       char: '~',  category: 'terrain' },
-  tree:       { id: 'tree',       char: '♣',  category: 'vegetation' },
-  grass:      { id: 'grass',      char: '"',  category: 'vegetation' },
-  bridge:     { id: 'bridge',     char: '═',  category: 'floor' },
-  stairsDown: { id: 'stairsDown', char: '>',  category: 'special' },
-  stairsUp:   { id: 'stairsUp',   char: '<',  category: 'special' },
-  altar:      { id: 'altar',      char: '≡',  category: 'furniture' },
-  fountain:   { id: 'fountain',   char: '♦',  category: 'furniture' },
-  grave:      { id: 'grave',      char: '☠',  category: 'decoration' },
-  trap:       { id: 'trap',       char: '^',  category: 'decoration' },
-  pillar:     { id: 'pillar',     char: '0',  category: 'wall' },
-  treasure:   { id: 'treasure',   char: '$',  category: 'item' },
-  shop:       { id: 'shop',       char: 'Σ',  category: 'furniture' },
-  table:      { id: 'table',      char: '▤',  category: 'furniture' },
-  throne:     { id: 'throne',     char: 'Ψ',  category: 'furniture' },
-  cage:       { id: 'cage',       char: '█',  category: 'furniture' },
-  blood:      { id: 'blood',      char: ';',  category: 'decoration' },
-  bar:        { id: 'bar',        char: '│',  category: 'wall' },
-}
+import {
+  DEFAULT_RENDER_THEMES,
+  MAX_OUTPUT_SIZE,
+  TILE_SIZE,
+  TILE_TYPES,
+  colorsForTileToken,
+  glyphForTileToken,
+  normalizeRenderTileToken,
+} from '../src/lib/render-surface-protocol.mjs'
 
-
-export const THEMES = {
-  'ansi-16': {
-    name: 'ANSI 16',
-    colors: {
-      void:       { fgColor: '#000000', bgColor: '#000000' },
-      wall:       { fgColor: '#a0a0a0', bgColor: '#000000' },
-      floor:      { fgColor: '#808080', bgColor: '#1a1a1a' },
-      floorAlt:   { fgColor: '#666666', bgColor: '#141414' },
-      door:       { fgColor: '#ffff00', bgColor: '#1a1a00' },
-      doorOpen:   { fgColor: '#ffff88', bgColor: '#1a1a00' },
-      water:      { fgColor: '#0000ff', bgColor: '#00001a' },
-      deepWater:  { fgColor: '#000088', bgColor: '#000010' },
-      lava:       { fgColor: '#ff5500', bgColor: '#1a0500' },
-      tree:       { fgColor: '#00ff00', bgColor: '#001a00' },
-      grass:      { fgColor: '#44aa44', bgColor: '#001a00' },
-      bridge:     { fgColor: '#888866', bgColor: '#1a1a10' },
-      stairsDown: { fgColor: '#ffffff', bgColor: '#333333' },
-      stairsUp:   { fgColor: '#ffffff', bgColor: '#333333' },
-      altar:      { fgColor: '#ff00ff', bgColor: '#1a001a' },
-      fountain:   { fgColor: '#00ffff', bgColor: '#001a1a' },
-      grave:      { fgColor: '#888888', bgColor: '#0a0a0a' },
-      trap:       { fgColor: '#ff0000', bgColor: '#1a0000' },
-      pillar:     { fgColor: '#aaaaaa', bgColor: '#222222' },
-      treasure:   { fgColor: '#ffff00', bgColor: '#1a1a00' },
-      shop:       { fgColor: '#ffaa00', bgColor: '#1a1000' },
-      table:      { fgColor: '#8b6914', bgColor: '#1a1000' },
-      throne:     { fgColor: '#ffd700', bgColor: '#1a1400' },
-      cage:       { fgColor: '#888888', bgColor: '#111111' },
-      blood:      { fgColor: '#aa0000', bgColor: '#1a0000' },
-      bar:        { fgColor: '#8b4513', bgColor: '#1a0a00' },
-    },
-  },
-  'cogmind': {
-    name: 'Cogmind Dark',
-    colors: {
-      void:       { fgColor: '#000000', bgColor: '#000000' },
-      wall:       { fgColor: '#404060', bgColor: '#0a0a14' },
-      floor:      { fgColor: '#282840', bgColor: '#101020' },
-      floorAlt:   { fgColor: '#202038', bgColor: '#0c0c1c' },
-      door:       { fgColor: '#8080c0', bgColor: '#14142a' },
-      doorOpen:   { fgColor: '#a0a0d0', bgColor: '#14142a' },
-      water:      { fgColor: '#004080', bgColor: '#00081a' },
-      deepWater:  { fgColor: '#002060', bgColor: '#000410' },
-      lava:       { fgColor: '#ff4000', bgColor: '#1a0800' },
-      tree:       { fgColor: '#006000', bgColor: '#001000' },
-      grass:      { fgColor: '#204020', bgColor: '#001000' },
-      bridge:     { fgColor: '#505068', bgColor: '#181828' },
-      stairsDown: { fgColor: '#a0a0c0', bgColor: '#2a2a40' },
-      stairsUp:   { fgColor: '#a0a0c0', bgColor: '#2a2a40' },
-      altar:      { fgColor: '#800080', bgColor: '#100010' },
-      fountain:   { fgColor: '#008080', bgColor: '#001010' },
-      grave:      { fgColor: '#505050', bgColor: '#080808' },
-      trap:       { fgColor: '#800000', bgColor: '#100000' },
-      pillar:     { fgColor: '#585878', bgColor: '#18182a' },
-      treasure:   { fgColor: '#c0c000', bgColor: '#141400' },
-      shop:       { fgColor: '#c08000', bgColor: '#141000' },
-      table:      { fgColor: '#605020', bgColor: '#100800' },
-      throne:     { fgColor: '#b09800', bgColor: '#141000' },
-      cage:       { fgColor: '#505060', bgColor: '#0c0c18' },
-      blood:      { fgColor: '#600000', bgColor: '#0a0000' },
-      bar:        { fgColor: '#604020', bgColor: '#0a0400' },
-    },
-  },
-}
-
-
-export const MAX_OUTPUT_SIZE = 4096
-export const TILE_SIZE = 24
-
+export { MAX_OUTPUT_SIZE, TILE_SIZE, TILE_TYPES, colorsForTileToken, glyphForTileToken }
+export const THEMES = DEFAULT_RENDER_THEMES
 
 export function flattenTiles(data) {
+  const result = {}
   if (data.layerTiles && data.layers) {
-    const result = {}
     for (const layer of data.layers) {
       const lt = data.layerTiles[layer.id]
       if (lt && layer.visible !== false) {
         for (const [key, id] of Object.entries(lt)) {
-          if (id) result[key] = id
+          const normalized = normalizeRenderTileToken(id)
+          if (normalized !== null) result[key] = normalized
         }
       }
     }
     return result
   }
-  if (data.tiles) return { ...data.tiles }
-  return data  // assume already flat
+
+  const tiles = data.tiles ?? data
+  for (const [key, id] of Object.entries(tiles)) {
+    const normalized = normalizeRenderTileToken(id)
+    if (normalized !== null) result[key] = normalized
+  }
+  return result
 }
 
 /**
  * Compute bounds from a flat tiles record.
  */
-
-
 export function computeBounds(tiles) {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
   for (const key of Object.keys(tiles)) {
     const [sx, sy] = key.split(',')
     const x = parseInt(sx, 10)

@@ -3,7 +3,7 @@
 use crate::gameplay::GameMode;
 use crate::render::tilemap::compute_bounds;
 use crate::resource::EditorTool;
-use crate::resource::WorldModel;
+use crate::resource::{ActiveZ, WorldModel};
 use crate::viewport::viewport_to_world_2d_current;
 use bevy::input::mouse::AccumulatedMouseScroll;
 use bevy::prelude::*;
@@ -21,9 +21,10 @@ pub fn spawn_camera(mut commands: Commands) {
 
 pub fn center_camera_on_world(
     world_model: Res<WorldModel>,
+    active_z: Res<ActiveZ>,
     mut camera: Single<&mut Transform, With<Camera2d>>,
 ) {
-    let bounds = compute_bounds(&world_model.0);
+    let bounds = compute_bounds(&world_model.world, active_z.0);
     let tile_px = world_model.tile_size.max(1) as f32;
     camera.translation.x = (bounds.min_x as f32 + bounds.width as f32 * 0.5) * tile_px;
     camera.translation.y = -(bounds.min_y as f32 + bounds.height as f32 * 0.5) * tile_px;
@@ -81,7 +82,9 @@ pub fn pan_camera(
 ) {
     let dragging = buttons.pressed(MouseButton::Middle)
         || buttons.pressed(MouseButton::Right)
-        || (*mode == GameMode::Edit && *tool == EditorTool::Pan && buttons.pressed(MouseButton::Left));
+        || (*mode == GameMode::Edit
+            && *tool == EditorTool::Pan
+            && buttons.pressed(MouseButton::Left));
     let Some(p) = window.cursor_position() else {
         state.last_cursor = None;
         return;

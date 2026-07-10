@@ -1,0 +1,31 @@
+{
+  "axisOrder": "z,x,y",
+  "blockRegistry": {
+    "0": "glyphweave:air",
+    "17": "glyphweave:water",
+    "42": "glyphweave:tree",
+    "5": "glyphweave:floor",
+    "9": "glyphweave:wall"
+  },
+  "chunkShape": [
+    16,
+    16,
+    16
+  ],
+  "format": "glyphweave-map",
+  "metadata": {
+    "fixture": "multi-palette-cross-byte"
+  },
+  "regionShape": [
+    "infinite",
+    32,
+    32
+  ],
+  "regions": {
+    "0,0": "regions/0.0/region.json"
+  },
+  "version": 3,
+  "world": {
+    "name": "Three-bit Palette"
+  }
+}

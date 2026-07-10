@@ -8,6 +8,15 @@ import { renderMap } from './map-render.mjs'
 import { renderMapSVG } from './map-render-svg.mjs'
 import { convertImageToMap, parseConvertRequest } from './map-convert.mjs'
 import { apiDocPage } from './api-doc.mjs'
+import {
+  ApiHttpError,
+  MAX_API_BODY_BYTES,
+  decodeRenderGet,
+  decodeRenderPost,
+  ensureBodySize,
+  gemapConvertResponse,
+  isGemapContentType,
+} from './gemap-api.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PORT = parsePortArg(process.argv.slice(2))
@@ -18,7 +27,23 @@ const MIME_MAP = {
   '.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript',
   '.mjs': 'text/javascript', '.json': 'application/json', '.png': 'image/png',
   '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff2': 'font/woff2',
-  '.woff': 'font/woff', '.ttf': 'font/ttf',
+  '.woff': 'font/woff', '.ttf': 'font/ttf', '.gemap': 'application/vnd.glyphweave.gemap+zip',
+}
+
+const GEMAP_RUNTIME_URL = new URL('../dist/server/gemap-runtime.mjs', import.meta.url)
+let gemapRuntimePromise
+
+async function loadGemapRuntime() {
+  if (!gemapRuntimePromise) {
+    gemapRuntimePromise = import(GEMAP_RUNTIME_URL.href).catch(error => {
+      gemapRuntimePromise = undefined
+      throw new Error(
+        'The built .gemap runtime is missing. Run "pnpm build" before "pnpm start".',
+        { cause: error },
+      )
+    })
+  }
+  return gemapRuntimePromise
 }
 
 function parsePortArg(args) {
@@ -84,29 +109,34 @@ function sendHTML(res, html) {
   res.end(html)
 }
 
-function collectBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = []
-    req.on('data', chunk => chunks.push(chunk))
-    req.on('end', () => resolve(Buffer.concat(chunks)))
-    req.on('error', reject)
-  })
+async function collectBody(req, limit = MAX_API_BODY_BYTES) {
+  const declaredLength = req.headers['content-length']
+  if (declaredLength !== undefined) {
+    const length = Number(declaredLength)
+    if (!Number.isSafeInteger(length) || length < 0) {
+      throw new ApiHttpError(400, 'Invalid Content-Length header')
+    }
+    ensureBodySize(length, limit)
+  }
+
+  const chunks = []
+  let total = 0
+  for await (const chunk of req) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    total += bytes.length
+    ensureBodySize(total, limit)
+    chunks.push(bytes)
+  }
+  return Buffer.concat(chunks, total)
 }
 
-async function handleRender(query, body) {
+async function handleRender(query, body, contentType) {
   let data
   if (body && body.length > 0) {
-    const json = body.toString('utf-8')
-    const parsed = JSON.parse(json)
-    if (!isRecord(parsed)) throw new Error('Request body must be a JSON object')
-    data = parsed
+    const runtime = isGemapContentType(contentType) ? await loadGemapRuntime() : undefined
+    data = decodeRenderPost(body, contentType, query, runtime)
   } else {
-    const dataB64 = query.data
-    if (!dataB64) throw new Error('Missing "data" parameter')
-    const json = Buffer.from(dataB64, 'base64').toString('utf-8')
-    const parsed = JSON.parse(json)
-    if (!isRecord(parsed)) throw new Error('Decoded data must be a JSON object')
-    data = parsed
+    data = decodeRenderGet(query.data)
   }
 
   const { themeId, padding, scale, format, theme } = renderOptions(query, data, 'png')
@@ -128,23 +158,9 @@ async function handleConvert(query, body, contentType) {
   const converted = await convertImageToMap(request.imageBuffer, request.options)
   const renderOptions = { themeId: converted.themeId, theme: converted.theme }
 
-  if (converted.format === 'gemap') {
-    const json = JSON.stringify(converted.map, null, 2)
-    return {
-      body: Buffer.from(json),
-      contentType: 'application/json',
-    }
-  }
-
-  if (converted.format === 'both') {
-    const json = JSON.stringify({
-      map: converted.map,
-      svg: renderMapSVG(converted.map, renderOptions),
-    }, null, 2)
-    return {
-      body: Buffer.from(json),
-      contentType: 'application/json',
-    }
+  if (converted.format === 'gemap' || converted.format === 'both') {
+    const response = gemapConvertResponse(converted, await loadGemapRuntime(), renderMapSVG)
+    return { ...response, body: Buffer.from(response.body) }
   }
 
   if (converted.format === 'png') {
@@ -207,7 +223,7 @@ const server = http.createServer(async (req, res) => {
         sendError(res, 405, 'Method not allowed')
         return
       }
-      const rendered = await handleRender(query, body)
+      const rendered = await handleRender(query, body, req.headers['content-type'] || '')
       res.writeHead(200, {
         'Content-Type': rendered.contentType,
         'Content-Length': rendered.body.length,
@@ -215,7 +231,7 @@ const server = http.createServer(async (req, res) => {
       })
       res.end(rendered.body)
     } catch (err) {
-      sendError(res, 400, `Error: ${err.message}`)
+      sendError(res, err instanceof ApiHttpError ? err.status : 400, `Error: ${err.message}`)
     }
     return
   }
@@ -237,7 +253,7 @@ const server = http.createServer(async (req, res) => {
       })
       res.end(converted.body)
     } catch (err) {
-      sendError(res, 400, `Error: ${err.message}`)
+      sendError(res, err instanceof ApiHttpError ? err.status : 400, `Error: ${err.message}`)
     }
     return
   }

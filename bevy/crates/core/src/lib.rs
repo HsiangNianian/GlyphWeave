@@ -4,7 +4,11 @@ pub mod coords;
 pub mod edit;
 pub mod error;
 pub mod gameplay;
-pub mod gemap;
+#[cfg(test)]
+mod gemap;
 pub mod layer;
+pub mod migration;
+pub mod storage;
 pub mod tile;
+pub mod voxel;
 pub mod world;

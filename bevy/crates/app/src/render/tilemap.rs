@@ -1,17 +1,16 @@
-//! Spawn a bounded composite TilemapBundle with tile entities only for cells
-//! near the camera. Empty upper-layer cells are transparent by composition,
-//! matching the sparse web renderer while avoiding huge entity counts on large
-//! maps.
+//! Spawn bounded tilemap chunks for the active voxel z slice. Only cells near
+//! the camera become entities, avoiding huge entity counts on large worlds.
 #![allow(clippy::type_complexity)]
 
 use crate::render::MapBounds;
 use crate::render::atlas::{TileAtlas, tile_index};
-use crate::resource::{ActiveTheme, CursorTile, EditorViewSettings, WorldModel};
+use crate::resource::{ActiveTheme, ActiveZ, CursorTile, EditorViewSettings, WorldModel};
 use crate::viewport::world_viewport_bounds_current;
+use crate::voxel_adapter::tile_at;
 use bevy::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
 use glyphweave_core::tile::TileKind;
-use glyphweave_core::world::World;
+use glyphweave_core::voxel::VoxelWorld;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Tags a tilemap entity; carries its layer index for sync lookups.
@@ -109,32 +108,23 @@ const FOG_Z: f32 = 8.0;
 const FOG_HIDDEN_ALPHA: f32 = 0.74;
 const FOG_EDGE_ALPHA: f32 = 0.28;
 
-/// Pure: compute union bounds over all layers that have any tiles.
+/// Pure: compute occupied bounds on one z slice.
 /// Empty world -> 1x1 degenerate bounds so the tilemap still exists.
-pub fn compute_bounds(world: &World) -> MapBounds {
+pub fn compute_bounds(world: &VoxelWorld, z: i32) -> MapBounds {
     let mut min_x = i32::MAX;
     let mut min_y = i32::MAX;
     let mut max_x = i32::MIN;
     let mut max_y = i32::MIN;
     let mut any = false;
-    for layer in &world.layers {
-        if let Some(grid) = world.grid(&layer.id) {
-            for ((x, y), _) in grid.iter_tiles() {
-                any = true;
-                if x < min_x {
-                    min_x = x;
-                }
-                if y < min_y {
-                    min_y = y;
-                }
-                if x > max_x {
-                    max_x = x;
-                }
-                if y > max_y {
-                    max_y = y;
-                }
-            }
+    for (coord, _) in world.iter_voxels() {
+        if coord.z != z {
+            continue;
         }
+        any = true;
+        min_x = min_x.min(coord.x);
+        min_y = min_y.min(coord.y);
+        max_x = max_x.max(coord.x);
+        max_y = max_y.max(coord.y);
     }
     if !any {
         return MapBounds {
@@ -153,11 +143,13 @@ pub fn compute_bounds(world: &World) -> MapBounds {
 }
 
 /// Run once on Startup, ordered after `load_initial_world`.
+#[allow(clippy::too_many_arguments)]
 pub fn spawn_tilemaps(
     mut commands: Commands,
     world_model: Res<WorldModel>,
     atlas: Res<TileAtlas>,
     active_theme: Res<ActiveTheme>,
+    active_z: Res<ActiveZ>,
     camera: Single<(&Transform, &Projection), With<Camera2d>>,
     window: Single<&Window>,
     mut tile_entities: ResMut<TileEntities>,
@@ -171,7 +163,7 @@ pub fn spawn_tilemaps(
     ) else {
         return;
     };
-    let (bounds, bounds_mode) = select_render_bounds(&world_model.0, view);
+    let (bounds, bounds_mode) = select_render_bounds(&world_model.world, active_z.0, view);
     let lod_mode = render_lod_mode(world_model.tile_size.max(1) as f32, camera_projection);
 
     commands.insert_resource(bounds);
@@ -181,7 +173,9 @@ pub fn spawn_tilemaps(
     queue_missing_chunks(&mut tile_entities, chunk_coords_for_bounds(bounds));
     build_queued_tile_chunks(
         &mut commands,
-        &world_model.0,
+        &world_model.world,
+        active_z.0,
+        world_model.tile_size.max(1) as f32,
         &atlas,
         &active_theme,
         &mut tile_entities,
@@ -189,14 +183,8 @@ pub fn spawn_tilemaps(
     );
 }
 
-pub fn composite_tile_at(world: &World, x: i32, y: i32) -> Option<TileKind> {
-    world.layers.iter().rev().find_map(|layer| {
-        if !layer.visible {
-            return None;
-        }
-        let kind = world.grid(&layer.id)?.get(x, y)?;
-        (!matches!(kind, TileKind::Void)).then_some(kind)
-    })
+pub fn composite_tile_at(world: &VoxelWorld, z: i32, x: i32, y: i32) -> Option<TileKind> {
+    tile_at(world, z, x, y)
 }
 
 pub fn tile_render_state(kind: Option<TileKind>) -> (TileTextureIndex, TileVisible) {
@@ -278,9 +266,12 @@ fn queue_missing_chunks(tile_entities: &mut TileEntities, desired_chunks: Vec<Re
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_queued_tile_chunks(
     commands: &mut Commands,
-    world: &World,
+    world: &VoxelWorld,
+    z: i32,
+    tile_px: f32,
     atlas: &TileAtlas,
     active_theme: &ActiveTheme,
     tile_entities: &mut TileEntities,
@@ -293,21 +284,32 @@ fn build_queued_tile_chunks(
         if tile_entities.chunks.contains_key(&coord) {
             continue;
         }
-        let entity = spawn_tile_chunk(commands, world, atlas, active_theme, coord, tile_entities);
+        let entity = spawn_tile_chunk(
+            commands,
+            world,
+            z,
+            tile_px,
+            atlas,
+            active_theme,
+            coord,
+            tile_entities,
+        );
         tile_entities.chunks.insert(coord, entity);
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn spawn_tile_chunk(
     commands: &mut Commands,
-    world: &World,
+    world: &VoxelWorld,
+    z: i32,
+    tile_px: f32,
     atlas: &TileAtlas,
     active_theme: &ActiveTheme,
     coord: RenderChunkCoord,
     tile_entities: &mut TileEntities,
 ) -> Entity {
     let bounds = chunk_bounds(coord);
-    let tile_px = world.tile_size.max(1) as f32;
     let map_size = TilemapSize {
         x: RENDER_CHUNK_TILES_U32,
         y: RENDER_CHUNK_TILES_U32,
@@ -328,7 +330,7 @@ fn spawn_tile_chunk(
         for lx in 0..RENDER_CHUNK_TILES_U32 {
             let tx = bounds.min_x + lx as i32;
             let ty = bounds.min_y + ly as i32;
-            if let Some(kind) = composite_tile_at(world, tx, ty) {
+            if let Some(kind) = composite_tile_at(world, z, tx, ty) {
                 let Some(tile_pos) = tile_pos_for_chunk(coord, tx, ty) else {
                     continue;
                 };
@@ -401,9 +403,12 @@ fn sync_tile_chunk_visibility(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn sync_preview_chunks(
     commands: &mut Commands,
-    world: &World,
+    world: &VoxelWorld,
+    z: i32,
+    tile_px: f32,
     lod_mode: RenderLodMode,
     tile_entities: &mut TileEntities,
     preview_tiles: &mut Query<
@@ -433,12 +438,11 @@ fn sync_preview_chunks(
         let desired = tile_entities.desired_chunks.contains(&preview.coord);
         if desired {
             if tile_entities.dirty_preview_chunks.remove(&preview.coord)
-                && let Some(color) = chunk_preview_color(world, preview.coord)
+                && let Some(color) = chunk_preview_color(world, z, preview.coord)
             {
                 sprite.color = color;
             }
             let bounds = chunk_bounds(preview.coord);
-            let tile_px = world.tile_size.max(1) as f32;
             transform.translation = chunk_preview_center(bounds, tile_px);
             *visibility = Visibility::Visible;
         } else {
@@ -454,7 +458,7 @@ fn sync_preview_chunks(
         .take(budget)
         .collect();
     for coord in missing {
-        if let Some(entity) = spawn_preview_chunk(commands, world, coord) {
+        if let Some(entity) = spawn_preview_chunk(commands, world, z, tile_px, coord) {
             tile_entities.preview_chunks.insert(coord, entity);
         }
     }
@@ -462,12 +466,13 @@ fn sync_preview_chunks(
 
 fn spawn_preview_chunk(
     commands: &mut Commands,
-    world: &World,
+    world: &VoxelWorld,
+    z: i32,
+    tile_px: f32,
     coord: RenderChunkCoord,
 ) -> Option<Entity> {
-    let color = chunk_preview_color(world, coord)?;
+    let color = chunk_preview_color(world, z, coord)?;
     let bounds = chunk_bounds(coord);
-    let tile_px = world.tile_size.max(1) as f32;
     Some(
         commands
             .spawn((
@@ -492,12 +497,12 @@ fn chunk_preview_center(bounds: MapBounds, tile_px: f32) -> Vec3 {
     )
 }
 
-fn chunk_preview_color(world: &World, coord: RenderChunkCoord) -> Option<Color> {
+fn chunk_preview_color(world: &VoxelWorld, z: i32, coord: RenderChunkCoord) -> Option<Color> {
     let bounds = chunk_bounds(coord);
     let mut counts: HashMap<TileKind, usize> = HashMap::new();
     for y in bounds.min_y..bounds.min_y + bounds.height as i32 {
         for x in bounds.min_x..bounds.min_x + bounds.width as i32 {
-            let Some(kind) = composite_tile_at(world, x, y) else {
+            let Some(kind) = composite_tile_at(world, z, x, y) else {
                 continue;
             };
             *counts.entry(kind).or_default() += 1;
@@ -717,6 +722,7 @@ pub fn sync_render_chunks(
     world_model: Res<WorldModel>,
     atlas: Res<TileAtlas>,
     active_theme: Res<ActiveTheme>,
+    active_z: Res<ActiveZ>,
     camera: Single<(&Transform, &Projection), With<Camera2d>>,
     window: Single<&Window>,
     mut tile_entities: ResMut<TileEntities>,
@@ -749,7 +755,7 @@ pub fn sync_render_chunks(
     ) else {
         return;
     };
-    let (bounds, bounds_mode) = select_render_bounds(&world_model.0, view);
+    let (bounds, bounds_mode) = select_render_bounds(&world_model.world, active_z.0, view);
     let lod_mode = render_lod_mode(world_model.tile_size.max(1) as f32, camera_projection);
 
     commands.insert_resource(bounds);
@@ -773,7 +779,9 @@ pub fn sync_render_chunks(
     sync_tile_chunk_visibility(&tile_entities, lod_mode, &mut tilemaps);
     sync_preview_chunks(
         &mut commands,
-        &world_model.0,
+        &world_model.world,
+        active_z.0,
+        world_model.tile_size.max(1) as f32,
         lod_mode,
         &mut tile_entities,
         &mut preview_tiles,
@@ -782,7 +790,9 @@ pub fn sync_render_chunks(
     if lod_mode == RenderLodMode::Tiles {
         build_queued_tile_chunks(
             &mut commands,
-            &world_model.0,
+            &world_model.world,
+            active_z.0,
+            world_model.tile_size.max(1) as f32,
             &atlas,
             &active_theme,
             &mut tile_entities,
@@ -836,9 +846,13 @@ fn render_bounds_for_view(view: MapBounds) -> MapBounds {
     }
 }
 
-fn select_render_bounds(world: &World, view: MapBounds) -> (MapBounds, RenderBoundsMode) {
+fn select_render_bounds(
+    world: &VoxelWorld,
+    z: i32,
+    view: MapBounds,
+) -> (MapBounds, RenderBoundsMode) {
     let viewport_bounds = render_bounds_for_view(view);
-    let world_bounds = compute_bounds(world);
+    let world_bounds = compute_bounds(world, z);
     if should_use_world_bounds(world_bounds, viewport_bounds) {
         (world_bounds, RenderBoundsMode::World)
     } else {
@@ -873,28 +887,6 @@ pub fn set_theme(
         *tex = TilemapTexture::Single(handle.clone());
     }
     *last = active.0.clone();
-}
-
-/// Mirror `World.layers[i].visible` onto each tilemap's Visibility component.
-pub fn sync_layer_visibility(
-    world_model: Res<WorldModel>,
-    mut tilemaps: Query<(&TilemapLayer, &mut Visibility)>,
-) {
-    for (tm_layer, mut vis) in tilemaps.iter_mut() {
-        if tm_layer.layer_id == COMPOSITE_LAYER_ID {
-            continue;
-        }
-        let on = world_model
-            .layers
-            .get(tm_layer.index)
-            .map(|l| l.visible)
-            .unwrap_or(true);
-        *vis = if on {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
 }
 
 pub fn draw_grid(
@@ -1191,11 +1183,12 @@ fn hide_fog_entities(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::voxel_adapter::set_tile;
 
     #[test]
     fn empty_world_degenerate_bounds() {
-        let w = World::default();
-        let b = compute_bounds(&w);
+        let w = VoxelWorld::default();
+        let b = compute_bounds(&w, 0);
         assert_eq!(
             b,
             MapBounds {
@@ -1208,12 +1201,11 @@ mod tests {
     }
 
     #[test]
-    fn single_layer_bounds() {
-        let mut w = World::default();
-        let l = w.active_layer.clone();
-        w.set(&l, 0, 0, TileKind::Floor);
-        w.set(&l, 4, 6, TileKind::Wall);
-        let b = compute_bounds(&w);
+    fn single_slice_bounds() {
+        let mut w = VoxelWorld::default();
+        set_tile(&mut w, 2, 0, 0, TileKind::Floor).unwrap();
+        set_tile(&mut w, 2, 4, 6, TileKind::Wall).unwrap();
+        let b = compute_bounds(&w, 2);
         assert_eq!(b.min_x, 0);
         assert_eq!(b.min_y, 0);
         assert_eq!(b.width, 5);
@@ -1222,11 +1214,10 @@ mod tests {
 
     #[test]
     fn bounds_with_negative_origin() {
-        let mut w = World::default();
-        let l = w.active_layer.clone();
-        w.set(&l, -3, -2, TileKind::Floor);
-        w.set(&l, 1, 1, TileKind::Wall);
-        let b = compute_bounds(&w);
+        let mut w = VoxelWorld::default();
+        set_tile(&mut w, -1, -3, -2, TileKind::Floor).unwrap();
+        set_tile(&mut w, -1, 1, 1, TileKind::Wall).unwrap();
+        let b = compute_bounds(&w, -1);
         assert_eq!(b.min_x, -3);
         assert_eq!(b.min_y, -2);
         assert_eq!(b.width, 5);
@@ -1235,13 +1226,13 @@ mod tests {
 
     #[test]
     fn small_view_uses_viewport_render_bounds() {
-        let mut w = World::default();
-        let l = w.active_layer.clone();
-        w.set(&l, 0, 0, TileKind::Floor);
-        w.set(&l, 639, 359, TileKind::Wall);
+        let mut w = VoxelWorld::default();
+        set_tile(&mut w, 0, 0, 0, TileKind::Floor).unwrap();
+        set_tile(&mut w, 0, 639, 359, TileKind::Wall).unwrap();
 
         let (bounds, mode) = select_render_bounds(
             &w,
+            0,
             MapBounds {
                 min_x: 293,
                 min_y: 164,
@@ -1257,13 +1248,13 @@ mod tests {
 
     #[test]
     fn large_view_uses_world_render_bounds() {
-        let mut w = World::default();
-        let l = w.active_layer.clone();
-        w.set(&l, 0, 0, TileKind::Floor);
-        w.set(&l, 639, 359, TileKind::Wall);
+        let mut w = VoxelWorld::default();
+        set_tile(&mut w, 0, 0, 0, TileKind::Floor).unwrap();
+        set_tile(&mut w, 0, 639, 359, TileKind::Wall).unwrap();
 
         let (bounds, mode) = select_render_bounds(
             &w,
+            0,
             MapBounds {
                 min_x: 53,
                 min_y: 29,

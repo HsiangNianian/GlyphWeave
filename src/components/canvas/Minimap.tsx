@@ -1,10 +1,12 @@
 'use client'
-import { useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useCallback, useMemo } from 'react'
 import Konva from 'konva'
 import { useMapStore } from '@/stores/map-store'
 import { useUiStore } from '@/stores/ui-store'
-import { computeTileBounds, flattenLayerTiles, iterateVisibleTiles } from '@/lib/map-core'
+import { computeTileBounds, iterateVisibleTiles } from '@/lib/map-core'
 import { resolveTheme } from '@/lib/theme-registry'
+import { formatVoxelSliceId } from '@/lib/voxel-map'
+import { colorsForTileToken } from '@/lib/render-surface'
 
 interface MinimapProps {
   stageRef: React.RefObject<Konva.Stage | null>
@@ -18,7 +20,7 @@ export function Minimap({ stageRef }: MinimapProps) {
   const cachedBase = useRef<ImageData | null>(null)
   const draggingRef = useRef(false)
   const tiles = useMapStore((s) => s.tiles)
-  const layers = useMapStore((s) => s.layers)
+  const activeZ = useMapStore((s) => s.activeZ)
   const themeId = useMapStore((s) => s.themeId)
   const customThemes = useMapStore((s) => s.customThemes)
   const tileSize = useMapStore((s) => s.tileSize)
@@ -27,13 +29,17 @@ export function Minimap({ stageRef }: MinimapProps) {
   const viewportRef = useRef(useUiStore.getState().viewport)
 
   const theme = resolveTheme(themeId, customThemes)
+  const themeColors = theme.colors
+  const sliceId = formatVoxelSliceId(activeZ)
+  const activeTiles = useMemo(() => tiles[sliceId] ?? {}, [sliceId, tiles])
+  const activeSlice = useMemo(() => [{ id: sliceId, visible: true }], [sliceId])
 
   const bounds = useCallback(() => {
     return computeTileBounds(
-      flattenLayerTiles(tiles, layers),
+      activeTiles,
       { emptyBounds: { minX: 0, minY: 0, maxX: 1, maxY: 1, w: 2, h: 2 } },
     )
-  }, [tiles, layers])
+  }, [activeTiles])
 
   const drawViewport = useCallback(() => {
     const canvas = canvasRef.current
@@ -103,10 +109,10 @@ export function Minimap({ stageRef }: MinimapProps) {
 
     ctx.clearRect(0, 0, MINIMAP_WIDTH, MINIMAP_HEIGHT)
 
-    for (const tile of iterateVisibleTiles(tiles, layers)) {
+    for (const tile of iterateVisibleTiles({ [sliceId]: activeTiles }, activeSlice)) {
       const x = tile.gridX - b.minX
       const y = tile.gridY - b.minY
-      const colors = theme.colors[tile.tileTypeId]
+      const colors = colorsForTileToken({ colors: themeColors }, tile.tileTypeId)
       const color = colors?.bgColor || '#000'
       ctx.fillStyle = color
       ctx.fillRect(
@@ -123,7 +129,7 @@ export function Minimap({ stageRef }: MinimapProps) {
     canvas.dataset.originX = String(b.minX)
     canvas.dataset.originY = String(b.minY)
     drawViewport()
-  }, [tiles, layers, theme.colors, tileSize, bounds, drawViewport])
+  }, [activeSlice, activeTiles, bounds, drawViewport, sliceId, themeColors, tileSize])
 
   useEffect(() => {
     return useUiStore.subscribe((state) => {

@@ -6,6 +6,15 @@ import { renderMap } from './server/map-render.mjs'
 import { renderMapSVG } from './server/map-render-svg.mjs'
 import { convertImageToMap, parseConvertRequest } from './server/map-convert.mjs'
 import { apiDocPage } from './server/api-doc.mjs'
+import {
+  ApiHttpError,
+  MAX_API_BODY_BYTES,
+  decodeRenderGet,
+  decodeRenderPost,
+  ensureBodySize,
+  gemapConvertResponse,
+} from './server/gemap-api.mjs'
+import type { GemapRuntime } from './server/gemap-api.mjs'
 
 type RenderFormat = 'png' | 'svg'
 type RenderPayload = Record<string, unknown>
@@ -42,12 +51,28 @@ function renderOptions(query: Record<string, string>, data: RenderPayload, fallb
   }
 }
 
-async function readRequestBody(req: NodeJS.ReadableStream): Promise<Buffer> {
-  const chunks: Buffer[] = []
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+async function readRequestBody(
+  req: NodeJS.ReadableStream & { headers?: Record<string, string | string[] | undefined> },
+  limit = MAX_API_BODY_BYTES,
+): Promise<Buffer> {
+  const declaredHeader = req.headers?.['content-length']
+  const declaredLength = Array.isArray(declaredHeader) ? declaredHeader[0] : declaredHeader
+  if (declaredLength !== undefined) {
+    const length = Number(declaredLength)
+    if (!Number.isSafeInteger(length) || length < 0) {
+      throw new ApiHttpError(400, 'Invalid Content-Length header')
+    }
+    ensureBodySize(length, limit)
   }
-  return Buffer.concat(chunks)
+  const chunks: Buffer[] = []
+  let total = 0
+  for await (const chunk of req) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    total += bytes.length
+    ensureBodySize(total, limit)
+    chunks.push(bytes)
+  }
+  return Buffer.concat(chunks, total)
 }
 
 /**
@@ -57,6 +82,14 @@ function apiPlugin(): Plugin {
   return {
     name: 'glyphweave-api',
     configureServer(server) {
+      let gemapRuntimePromise: Promise<GemapRuntime> | undefined
+      const loadGemapRuntime = (): Promise<GemapRuntime> => {
+        gemapRuntimePromise ??= server
+          .ssrLoadModule('/server/gemap-runtime.ts')
+          .then((module) => module as GemapRuntime)
+        return gemapRuntimePromise
+      }
+
       server.middlewares.use('/api/health', (_req, res) => {
         res.setHeader('Content-Type', 'application/json')
         res.setHeader('Access-Control-Allow-Origin', '*')
@@ -71,15 +104,14 @@ function apiPlugin(): Plugin {
           let data: RenderPayload
           if (req.method === 'POST') {
             const body = await readRequestBody(req)
-            const parsed = JSON.parse(body.toString('utf-8')) as unknown
-            if (!isRecord(parsed)) throw new Error('Request body must be a JSON object')
-            data = parsed
+            data = decodeRenderPost(
+              body,
+              req.headers['content-type'] || '',
+              query,
+              await loadGemapRuntime(),
+            )
           } else if (req.method === 'GET') {
-            if (!query.data) { res.statusCode = 400; res.end('Missing "data" parameter'); return }
-            const json = Buffer.from(query.data, 'base64').toString('utf-8')
-            const parsed = JSON.parse(json) as unknown
-            if (!isRecord(parsed)) throw new Error('Decoded data must be a JSON object')
-            data = parsed
+            data = decodeRenderGet(query.data)
           } else {
             res.statusCode = 405; res.end('Method not allowed'); return
           }
@@ -95,7 +127,7 @@ function apiPlugin(): Plugin {
           res.end(body)
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
-          res.statusCode = 400
+          res.statusCode = err instanceof ApiHttpError ? err.status : 400
           res.end(`Error: ${msg}`)
         }
       })
@@ -118,15 +150,14 @@ function apiPlugin(): Plugin {
 
           let responseBody: Buffer
           let contentType: string
-          if (converted.format === 'gemap') {
-            responseBody = Buffer.from(JSON.stringify(converted.map, null, 2))
-            contentType = 'application/json'
-          } else if (converted.format === 'both') {
-            responseBody = Buffer.from(JSON.stringify({
-              map: converted.map,
-              svg: renderMapSVG(converted.map, renderOptions),
-            }, null, 2))
-            contentType = 'application/json'
+          if (converted.format === 'gemap' || converted.format === 'both') {
+            const response = gemapConvertResponse(
+              converted,
+              await loadGemapRuntime(),
+              renderMapSVG,
+            )
+            responseBody = Buffer.from(response.body)
+            contentType = response.contentType
           } else if (converted.format === 'png') {
             responseBody = renderMap(converted.map, renderOptions)
             contentType = 'image/png'
@@ -143,7 +174,7 @@ function apiPlugin(): Plugin {
           res.end(responseBody)
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
-          res.statusCode = 400
+          res.statusCode = err instanceof ApiHttpError ? err.status : 400
           res.end(`Error: ${msg}`)
         }
       })
@@ -167,6 +198,20 @@ function apiPlugin(): Plugin {
 }
 
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      preserveEntrySignatures: 'exports-only',
+      input: {
+        app: path.resolve(__dirname, './index.html'),
+        'server/gemap-runtime': path.resolve(__dirname, './server/gemap-runtime.ts'),
+      },
+      output: {
+        entryFileNames: (chunk) => chunk.name === 'server/gemap-runtime'
+          ? 'server/gemap-runtime.mjs'
+          : 'assets/[name]-[hash].js',
+      },
+    },
+  },
   server: {
     host: '0.0.0.0',
   },

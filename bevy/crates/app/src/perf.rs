@@ -186,7 +186,7 @@ pub fn configure_perf_scene(
         view_settings.fog_softness = 4;
     }
     if config.gameplay_entities > 0 {
-        seed_perf_gameplay_entities(&mut gameplay, &world_model.0, config.gameplay_entities);
+        seed_perf_gameplay_entities(&mut gameplay, &world_model.world, config.gameplay_entities);
     }
 }
 

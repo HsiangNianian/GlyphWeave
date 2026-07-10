@@ -10,11 +10,18 @@ pub struct Layer {
     pub locked: bool,
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 impl Layer {
     pub fn new(id: impl Into<String>, name: impl Into<String>) -> Self {
-        Self { id: id.into(), name: name.into(), visible: true, locked: false }
+        Self {
+            id: id.into(),
+            name: name.into(),
+            visible: true,
+            locked: false,
+        }
     }
 }
 
@@ -24,7 +31,12 @@ mod tests {
 
     #[test]
     fn serde_round_trip() {
-        let layer = Layer { id: "layer-2".into(), name: "Terrain".into(), visible: false, locked: true };
+        let layer = Layer {
+            id: "layer-2".into(),
+            name: "Terrain".into(),
+            visible: false,
+            locked: true,
+        };
         let s = serde_json::to_string(&layer).unwrap();
         let back: Layer = serde_json::from_str(&s).unwrap();
         assert_eq!(layer, back);

@@ -45,7 +45,7 @@
 - **多层编辑** — 将地形、建筑、细节分层管理。自由隐藏、锁定、添加或删除图层。
 - **笔刷 / 橡皮 / 填充 / 平移 / 选择** 工具。
 - **撤销 / 重做**（Ctrl+Z / Ctrl+Shift+Z）— 回溯最近 50 步。
-- **导出 / 导入** `.gemap` JSON 格式 — 保留图层、主题和世界名称。
+- **导出 / 导入** `.gemap` v3 ZIP 格式 — Web 与 Bevy 共用稀疏三维体素世界。
 - **小地图** — 实时概览，带视口矩形。点击跳转。
 - **视距** — 可配置的渲染边距，让平移更丝滑。
 - **渲染 API** — 通过 `GET /api/render` 或 `POST /api/render` 将地图生成为 SVG 或 PNG 图片。
@@ -69,7 +69,7 @@ pnpm dev
 
 打开 `http://localhost:5173` — 选择世界名称、格子大小和主题，然后开始绘制。
 
-> **渲染 API** 在开发模式下自动同端口可用——`GET /api/render?data=<base64>` 或 `POST /api/render`（JSON body）。
+> **渲染 API** 在开发模式下自动同端口可用。v3 ZIP 使用 `POST /api/render?z=<高度>`；GET/base64 与 JSON POST 仅用于旧格式兼容。
 
 ## 键盘快捷键
 
@@ -88,41 +88,42 @@ pnpm dev
 
 ## 渲染 API
 
-渲染 API 可将地图转换为图像。支持三种运行环境：
+渲染 API 将 v3 `.gemap` ZIP 的指定 z 切片转换为图像；兼容窗口内仍接受旧版 JSON。支持三种运行环境：
 
 | 环境 | 命令 | 地址 | 输出 |
 |---|---|---|---|
 | 开发 | `pnpm dev` | `http://localhost:5173/api/render` | PNG (`@napi-rs/canvas`) |
 | 生产 (Node) | `pnpm build && pnpm start` | `http://localhost:3001/api/render` | PNG (`@napi-rs/canvas`) |
-| 生产 (Cloudflare) | `pnpm deploy` | `https://glyphweave.hydroroll.team/api/render` | SVG（默认）或 PNG（`?format=png`） |
+| 生产 (Cloudflare) | `pnpm deploy` | `https://glyphweave.hydroroll.team/api/render` | SVG |
 
-### POST（推荐用于大地图）
+### POST v3 `.gemap` ZIP
 
 ```bash
 # 默认 SVG 输出
-curl -X POST https://glyphweave.hydroroll.team/api/render \
-  -H "Content-Type: application/json" \
-  -d @my-map.gemap > map.svg
+curl -X POST "https://glyphweave.hydroroll.team/api/render?z=0" \
+  -H "Content-Type: application/vnd.glyphweave.gemap+zip" \
+  --data-binary @my-map.gemap > map.svg
 
 # PNG 输出
-curl -X POST "https://glyphweave.hydroroll.team/api/render?format=png" \
-  -H "Content-Type: application/json" \
-  -d @my-map.gemap > map.png
+curl -X POST "http://localhost:3001/api/render?z=0&format=png" \
+  -H "Content-Type: application/zip" \
+  --data-binary @my-map.gemap > map.png
 ```
 
-### GET（小地图）
+### GET（仅限小型旧版 JSON 地图）
 
 ```bash
 DATA=$(echo -n '{"tiles":{"0,0":"wall"}}' | base64)
-curl "https://glyphweave.hydroroll.team/api/render?data=$DATA&format=png" > map.png
+curl "https://glyphweave.hydroroll.team/api/render?data=$DATA" > map.svg
 ```
 
 参数：
 
+- `z` — v3 ZIP 必填的 int32 高度切片
 - `theme` — `ansi-16`（默认）或 `cogmind`
 - `padding` — 边界外额外格子数（默认 `1`）
 - `scale` — 每格像素（默认自适应 ≤ 4096px）
-- `format` — `svg`（默认）或 `png`（Cloudflare）
+- `format` — `svg` 或 `png`；PNG 仅 Node 环境支持
 
 ### 自托管
 
@@ -130,9 +131,9 @@ curl "https://glyphweave.hydroroll.team/api/render?data=$DATA&format=png" > map.
 pnpm dev                           # 开发服务器, http://localhost:5173
 pnpm build && pnpm start           # 生产服务器, http://localhost:3001
 
-curl -X POST http://localhost:3001/api/render \
-  -H "Content-Type: application/json" \
-  -d @my-map.gemap > map.png
+curl -X POST "http://localhost:3001/api/render?z=0" \
+  -H "Content-Type: application/vnd.glyphweave.gemap+zip" \
+  --data-binary @my-map.gemap > map.png
 ```
 
 ---

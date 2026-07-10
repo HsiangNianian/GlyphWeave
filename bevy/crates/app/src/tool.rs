@@ -1,17 +1,18 @@
 //! Tool system: left-drag paints, B selects brush, E selects erase.
-//! Produces EditEvents + applies edits to the core World (single source of truth).
+//! Produces EditEvents + applies edits to the VoxelWorld source of truth.
 use crate::ActiveBrush;
 use crate::preset::PRESETS;
 use crate::render::MapBounds;
 use crate::render::tilemap::RenderRefresh;
 use crate::resource::{
-    ActivePreset, CursorTile, EditEvent, EditorHistory, EditorTool, EditorViewSettings, WorldModel,
-    WorldRevision,
+    ActivePreset, ActiveZ, CursorTile, EditEvent, EditorHistory, EditorTool, EditorViewSettings,
+    WorldModel, WorldRevision,
 };
+use crate::voxel_adapter::set_tile;
 use bevy::ecs::message::MessageWriter;
 use bevy::prelude::*;
-use glyphweave_core::edit::Edit;
 use glyphweave_core::tile::TileKind;
+use glyphweave_core::voxel::{BlockKey, VoxelCoord, VoxelWorld};
 use std::collections::{HashSet, VecDeque};
 
 #[allow(clippy::too_many_arguments)]
@@ -26,6 +27,7 @@ pub fn tool_system(
     mut tool: ResMut<EditorTool>,
     mut view_settings: ResMut<EditorViewSettings>,
     active_brush: Res<ActiveBrush>,
+    active_z: Res<ActiveZ>,
     active_preset: Res<ActivePreset>,
     cursor: Res<CursorTile>,
     bounds: Option<Res<MapBounds>>,
@@ -37,9 +39,9 @@ pub fn tool_system(
     let shift = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
     if modifier && keys.just_pressed(KeyCode::KeyZ) {
         let changed = if shift {
-            history.redo(&mut world.0)
+            history.redo(&mut world.world)
         } else {
-            history.undo(&mut world.0)
+            history.undo(&mut world.world)
         };
         if changed {
             bump_world_revision(&mut world_revision);
@@ -74,20 +76,10 @@ pub fn tool_system(
         return;
     }
 
-    // Honor the locked flag on the active layer.
-    let active_locked = world
-        .layer(&world.active_layer)
-        .map(|l| l.locked)
-        .unwrap_or(false);
-    if active_locked {
-        return;
-    }
-
     if buttons.just_pressed(MouseButton::Left) {
-        history.push_snapshot(&world.0);
+        history.push_snapshot(&world.world);
     }
 
-    let active_layer = world.active_layer.clone();
     if buttons.just_pressed(MouseButton::Left) {
         if let Some(preset_index) = active_preset.0
             && let Some(preset) = PRESETS.get(preset_index)
@@ -95,8 +87,9 @@ pub fn tool_system(
             for (dy, row) in preset.grid.iter().enumerate() {
                 for (dx, kind) in row.iter().enumerate() {
                     if !matches!(kind, TileKind::Void) {
-                        world.set(
-                            &active_layer,
+                        let _ = set_tile(
+                            &mut world.world,
+                            active_z.0,
                             cursor.x + dx as i32,
                             cursor.y + dy as i32,
                             *kind,
@@ -112,8 +105,8 @@ pub fn tool_system(
 
         if matches!(*tool, EditorTool::Fill) {
             if flood_fill(
-                &mut world.0,
-                &active_layer,
+                &mut world.world,
+                active_z.0,
                 cursor.x,
                 cursor.y,
                 active_brush.0,
@@ -125,16 +118,23 @@ pub fn tool_system(
         }
     }
 
-    let edit = if matches!(*tool, EditorTool::Erase) || matches!(active_brush.0, TileKind::Void) {
-        Edit::Erase
+    if matches!(*tool, EditorTool::Erase) || matches!(active_brush.0, TileKind::Void) {
+        world
+            .world
+            .erase(VoxelCoord::new(active_z.0, cursor.x, cursor.y));
     } else {
-        Edit::Set(active_brush.0)
-    };
-
-    edit.apply(&mut world.0, &active_layer, cursor.x, cursor.y);
+        let _ = set_tile(
+            &mut world.world,
+            active_z.0,
+            cursor.x,
+            cursor.y,
+            active_brush.0,
+        );
+    }
     bump_world_revision(&mut world_revision);
     refresh_for_expanded_bounds(&mut refresh, bounds.as_deref(), cursor.x, cursor.y);
     writer.write(EditEvent {
+        z: active_z.0,
         x: cursor.x,
         y: cursor.y,
     });
@@ -144,17 +144,23 @@ fn bump_world_revision(world_revision: &mut ResMut<WorldRevision>) {
     world_revision.0 = world_revision.0.wrapping_add(1);
 }
 
-fn flood_fill(
-    world: &mut glyphweave_core::world::World,
-    layer_id: &str,
-    start_x: i32,
-    start_y: i32,
-    fill: TileKind,
-) -> bool {
-    let Some(target) = world.get(layer_id, start_x, start_y) else {
+fn flood_fill(world: &mut VoxelWorld, z: i32, start_x: i32, start_y: i32, fill: TileKind) -> bool {
+    let target = world.get(VoxelCoord::new(z, start_x, start_y));
+    if target.is_air() {
         return false;
+    }
+    let fill_key = if matches!(fill, TileKind::Void) {
+        BlockKey::AIR
+    } else {
+        let Some(name) = crate::voxel_adapter::tile_block_name(fill) else {
+            return false;
+        };
+        let Ok(key) = world.intern_block(name) else {
+            return false;
+        };
+        key
     };
-    if target == fill {
+    if target == fill_key {
         return false;
     }
 
@@ -166,11 +172,16 @@ fn flood_fill(
         if !visited.insert((x, y)) {
             continue;
         }
-        if world.get(layer_id, x, y) != Some(target) {
+        let coord = VoxelCoord::new(z, x, y);
+        if world.get(coord) != target {
             continue;
         }
 
-        world.set(layer_id, x, y, fill);
+        if fill_key.is_air() {
+            world.erase(coord);
+        } else {
+            let _ = world.set(coord, fill_key);
+        }
         changed = true;
 
         queue.push_back((x - 1, y));
@@ -196,5 +207,24 @@ fn refresh_for_expanded_bounds(
     let max_y = bounds.min_y + bounds.height as i32;
     if x < bounds.min_x || y < bounds.min_y || x >= max_x || y >= max_y {
         refresh.0 = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::voxel_adapter::tile_at;
+
+    #[test]
+    fn flood_fill_only_changes_the_requested_z_slice() {
+        let mut world = VoxelWorld::new("fill");
+        set_tile(&mut world, 0, 0, 0, TileKind::Wall).unwrap();
+        set_tile(&mut world, 1, 0, 0, TileKind::Wall).unwrap();
+        set_tile(&mut world, 1, 1, 0, TileKind::Wall).unwrap();
+
+        assert!(flood_fill(&mut world, 1, 0, 0, TileKind::Floor));
+        assert_eq!(tile_at(&world, 0, 0, 0), Some(TileKind::Wall));
+        assert_eq!(tile_at(&world, 1, 0, 0), Some(TileKind::Floor));
+        assert_eq!(tile_at(&world, 1, 1, 0), Some(TileKind::Floor));
     }
 }

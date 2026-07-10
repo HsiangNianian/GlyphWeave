@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 
 /// 26 tile kinds. Discriminant order = atlas index order (0..26).
 /// `Ord` orders by atlas index (natural and correct for derived ordering with `#[repr(u8)]`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize,
+)]
 #[repr(u8)]
 pub enum TileKind {
     #[default]
@@ -106,7 +108,10 @@ impl TileKind {
 
     /// `Some(kind)` if the id is known, else `None`.
     pub fn from_id(id: &str) -> Option<TileKind> {
-        TILE_TABLE.iter().find(|(_, i, _)| *i == id).map(|(k, _, _)| *k)
+        TILE_TABLE
+            .iter()
+            .find(|(_, i, _)| *i == id)
+            .map(|(k, _, _)| *k)
     }
 
     /// Canonical id string used in `.gemap` files.
@@ -119,13 +124,32 @@ impl TileKind {
     }
 
     pub const ALL: [TileKind; 26] = [
-        TileKind::Void, TileKind::Wall, TileKind::Floor, TileKind::FloorAlt,
-        TileKind::Door, TileKind::DoorOpen, TileKind::Water, TileKind::DeepWater,
-        TileKind::Lava, TileKind::Tree, TileKind::Grass, TileKind::Bridge,
-        TileKind::StairsDown, TileKind::StairsUp, TileKind::Altar, TileKind::Fountain,
-        TileKind::Grave, TileKind::Trap, TileKind::Pillar, TileKind::Treasure,
-        TileKind::Shop, TileKind::Table, TileKind::Throne, TileKind::Cage,
-        TileKind::Blood, TileKind::Bar,
+        TileKind::Void,
+        TileKind::Wall,
+        TileKind::Floor,
+        TileKind::FloorAlt,
+        TileKind::Door,
+        TileKind::DoorOpen,
+        TileKind::Water,
+        TileKind::DeepWater,
+        TileKind::Lava,
+        TileKind::Tree,
+        TileKind::Grass,
+        TileKind::Bridge,
+        TileKind::StairsDown,
+        TileKind::StairsUp,
+        TileKind::Altar,
+        TileKind::Fountain,
+        TileKind::Grave,
+        TileKind::Trap,
+        TileKind::Pillar,
+        TileKind::Treasure,
+        TileKind::Shop,
+        TileKind::Table,
+        TileKind::Throne,
+        TileKind::Cage,
+        TileKind::Blood,
+        TileKind::Bar,
     ];
 }
 
@@ -146,10 +170,22 @@ mod tests {
 
     #[test]
     fn specific_camel_case_ids() {
-        assert_eq!(serde_json::to_string(&TileKind::FloorAlt).unwrap(), "\"floorAlt\"");
-        assert_eq!(serde_json::to_string(&TileKind::StairsDown).unwrap(), "\"stairsDown\"");
-        assert_eq!(serde_json::to_string(&TileKind::DeepWater).unwrap(), "\"deepWater\"");
-        assert_eq!(serde_json::to_string(&TileKind::DoorOpen).unwrap(), "\"doorOpen\"");
+        assert_eq!(
+            serde_json::to_string(&TileKind::FloorAlt).unwrap(),
+            "\"floorAlt\""
+        );
+        assert_eq!(
+            serde_json::to_string(&TileKind::StairsDown).unwrap(),
+            "\"stairsDown\""
+        );
+        assert_eq!(
+            serde_json::to_string(&TileKind::DeepWater).unwrap(),
+            "\"deepWater\""
+        );
+        assert_eq!(
+            serde_json::to_string(&TileKind::DoorOpen).unwrap(),
+            "\"doorOpen\""
+        );
     }
 
     #[test]
