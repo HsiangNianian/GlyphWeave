@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:," />
+    <title>GlyphWeave Bevy</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        background: #09090b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body,
+      #glyphweave-canvas {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        overflow: hidden;
+      }
+
+      #glyphweave-canvas {
+        display: block;
+        outline: none;
+      }
+
+      #loading {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        display: grid;
+        place-items: center;
+        color: #a1a1aa;
+        background: #09090b;
+        letter-spacing: 0.04em;
+      }
+
+      #loading[data-error="true"] {
+        color: #fca5a5;
+        white-space: pre-wrap;
+        padding: 2rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loading">Loading GlyphWeave…</div>
+    <canvas id="glyphweave-canvas"></canvas>
+    <script type="module">
+      import init from './pkg/glyphweave.js'
+
+      const loading = document.querySelector('#loading')
+
+      try {
+        await init()
+        loading.remove()
+      } catch (error) {
+        console.error(error)
+        loading.dataset.error = 'true'
+        loading.textContent = `Unable to start GlyphWeave:\n${error}`
+      }
+    </script>
+  </body>
+</html>

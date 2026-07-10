@@ -20,11 +20,14 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 use glyphweave_core::gameplay::{BuildKind, ChallengeStatus, GameCommand, ResourceKind, TileCoord};
+#[cfg(not(target_arch = "wasm32"))]
 use glyphweave_core::gemap::{load_world, save_world};
 use glyphweave_core::layer::Layer;
 use glyphweave_core::tile::TileKind;
 use glyphweave_core::world::World;
-use std::path::{Path, PathBuf};
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Where the most recent load came from / where Save writes.
@@ -57,6 +60,7 @@ pub struct EditorUiState {
     home_world_name: String,
     home_tile_size: u32,
     home_theme_id: String,
+    #[cfg(not(target_arch = "wasm32"))]
     home_import_path: String,
     command_text: String,
     minimap_cache: MinimapCache,
@@ -113,6 +117,7 @@ impl Default for EditorUiState {
             home_world_name: "My Roguelike World".into(),
             home_tile_size: 24,
             home_theme_id: "ansi-16".into(),
+            #[cfg(not(target_arch = "wasm32"))]
             home_import_path: String::new(),
             command_text: String::new(),
             minimap_cache: MinimapCache::default(),
@@ -414,6 +419,7 @@ fn zoom_label(projection: &Projection) -> String {
 
 const CJK_FONT_FALLBACK_NAME: &str = "glyphweave_cjk_fallback";
 
+#[cfg(not(target_arch = "wasm32"))]
 const CJK_FONT_CANDIDATES: &[&str] = &[
     // macOS
     "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
@@ -484,6 +490,14 @@ fn install_cjk_font_fallback(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
+#[cfg(target_arch = "wasm32")]
+fn load_cjk_font_data() -> Option<egui::FontData> {
+    Some(egui::FontData::from_static(include_bytes!(
+        "../../../assets/fonts/NotoSansCJKsc-GlyphWeave.otf"
+    )))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn load_cjk_font_data() -> Option<egui::FontData> {
     CJK_FONT_CANDIDATES
         .iter()
@@ -702,6 +716,7 @@ fn home_screen(
                         }
 
                         ui.add_space(10.0);
+                        #[cfg(not(target_arch = "wasm32"))]
                         ui.horizontal(|ui| {
                             if ui
                                 .add(
@@ -773,6 +788,15 @@ fn home_screen(
                                 }
                             }
                         });
+
+                        #[cfg(target_arch = "wasm32")]
+                        ui.label(
+                            egui::RichText::new(
+                                "Browser file import/export is not available in this preview.",
+                            )
+                            .size(10.0)
+                            .color(zinc(500)),
+                        );
 
                         if !ui_state.status_message.is_empty() {
                             ui.add_space(10.0);
@@ -858,6 +882,7 @@ fn enter_editor(
     refresh.0 = true;
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn demo_map_path() -> PathBuf {
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.pop();
@@ -1347,7 +1372,9 @@ fn export_tab(
     ui.add_space(8.0);
 
     ui.label(egui::RichText::new("Path").size(11.0).color(zinc(500)));
-    ui.text_edit_singleline(&mut ui_state.path_text);
+    ui.add_enabled_ui(!cfg!(target_arch = "wasm32"), |ui| {
+        ui.text_edit_singleline(&mut ui_state.path_text);
+    });
 
     if let Some(current) = &path.0 {
         ui.label(
@@ -1357,6 +1384,7 @@ fn export_tab(
         );
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     ui.horizontal_wrapped(|ui| {
         if ui.button("Save Current").clicked() {
             let target = path
@@ -1396,6 +1424,9 @@ fn export_tab(
                 }
             }
         }
+    });
+
+    ui.horizontal_wrapped(|ui| {
         if ui.button("New Empty").clicked() {
             history.push_snapshot(&world_model.0);
             let world = empty_ground_world();
@@ -1410,8 +1441,15 @@ fn export_tab(
     });
 
     ui.add_space(8.0);
+    #[cfg(not(target_arch = "wasm32"))]
     ui.label(
         egui::RichText::new("Native file pickers are not wired yet; use a full path.")
+            .size(10.0)
+            .color(zinc(500)),
+    );
+    #[cfg(target_arch = "wasm32")]
+    ui.label(
+        egui::RichText::new("Browser file import/export will use upload and download controls.")
             .size(10.0)
             .color(zinc(500)),
     );
@@ -1808,6 +1846,7 @@ fn visible_tile_bounds(world: &World) -> Option<(i32, i32, i32, i32)> {
     any.then_some((min_x, min_y, max_x, max_y))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn save_to_path(world: &World, target: &Path, status: &mut String) {
     match save_world(world, target) {
         Ok(()) => {
@@ -2089,6 +2128,7 @@ mod tests {
         assert_eq!(zoom_label(&zoomed_out), "zoom 50%");
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn cjk_font_candidates_cover_common_platforms() {
         assert!(
@@ -2102,5 +2142,11 @@ mod tests {
                 .iter()
                 .any(|path| path.contains("NotoSansCJK"))
         );
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    #[test]
+    fn web_cjk_font_is_bundled() {
+        assert!(load_cjk_font_data().is_some());
     }
 }
