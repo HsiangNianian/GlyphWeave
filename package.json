@@ -13,8 +13,10 @@
     "perf:canvas": "node scripts/canvas-perf-benchmark.mjs",
     "test": "vitest run",
     "typecheck": "tsc -b",
+    "render-server": "node server/index.mjs",
     "doc-tree": "node scripts/generate-tree.mjs",
-    "doc-tree:check": "node scripts/generate-tree.mjs --check"
+    "doc-tree:check": "node scripts/generate-tree.mjs --check",
+    "bevy:fps": "bash scripts/check-bevy-fps.sh"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.8",

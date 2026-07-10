@@ -35,4 +35,6 @@ dist-ssr
 
 # omx
 .omx/
+
+# Bevy / Rust build artifacts
 bevy/target/
