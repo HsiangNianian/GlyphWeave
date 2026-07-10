@@ -7,8 +7,12 @@
     "dev": "vite",
     "build": "vite build",
     "start": "node server/index.mjs",
-    "deploy": "pnpm run build && wrangler deploy",
-    "preview": "wrangler dev",
+    "deploy": "pnpm run deploy:web",
+    "deploy:web": "pnpm run build && wrangler deploy --config wrangler.jsonc",
+    "deploy:bevy": "pnpm run bevy:web:build && wrangler deploy --config wrangler.bevy.jsonc",
+    "preview": "pnpm run preview:web",
+    "preview:web": "wrangler dev --config wrangler.jsonc",
+    "preview:bevy": "pnpm run bevy:web:build && wrangler dev --config wrangler.bevy.jsonc",
     "lint": "oxlint",
     "perf:canvas": "node scripts/canvas-perf-benchmark.mjs",
     "test": "vitest run",
@@ -16,7 +20,10 @@
     "render-server": "node server/index.mjs",
     "doc-tree": "node scripts/generate-tree.mjs",
     "doc-tree:check": "node scripts/generate-tree.mjs --check",
-    "bevy:fps": "bash scripts/check-bevy-fps.sh"
+    "bevy:fps": "bash scripts/check-bevy-fps.sh",
+    "bevy:web:build": "bash scripts/build-bevy-web.sh",
+    "bevy:web:deploy": "pnpm run deploy:bevy",
+    "bevy:web:serve": "python3 -m http.server 8080 --directory bevy/web/dist"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",

@@ -47,8 +47,8 @@ GlyphWeave ships in two forms that share the same `.gemap` map format:
 |---|---|---|
 | Path | `src/` | `bevy/` |
 | Stack | React 19, Konva, Tailwind, Zustand | Rust, Bevy 0.18, `bevy_ecs_tilemap`, `bevy_egui` |
-| Runs in | Browser | Native desktop (WASM planned) |
-| Status | Full feature set (production) | In progress — P1 foundation + P2 editor UI done; P3–P5 tracked |
+| Runs in | Browser | Native desktop + browser WASM preview |
+| Status | Full feature set (production) | In progress — editor, gameplay simulation, and WASM preview available |
 
 The Bevy port is the active development direction (desktop-first, heading toward a real-time simulation/lighting engine). The React app remains the reference for behavior and visuals. See [docs/superpowers/specs/](docs/superpowers/specs/) for the phased plan.
 
@@ -102,6 +102,41 @@ cargo run --manifest-path bevy/Cargo.toml -p glyphweave-app
 A 1280×720 window opens and auto-loads the Grand Realm of Aethra demo. Left-drag paints the selected tile, the wheel zooms to the cursor, and middle/right-drag pans. The left panel holds the tile palette and theme toggle; the right panel lists layers. Tests: `cargo test --manifest-path bevy/Cargo.toml --workspace`.
 
 > The **Render API** and **Convert API** are available on the same port under `/api/` during development. In production, `pnpm start` serves the frontend plus Node-backed APIs on port 3001. Cloudflare Workers + Assets deployments support rendering and app-side browser image import; direct `/api/convert` remains Node-only.
+
+### Browser preview (Rust + Bevy WASM)
+
+Install the browser target, the matching `wasm-bindgen` CLI, and Binaryen once:
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.126 --locked
+brew install binaryen
+```
+
+Build and serve the standalone preview:
+
+```bash
+pnpm bevy:web:build
+pnpm bevy:web:serve
+```
+
+Open `http://localhost:8080`. Browser file import/export is intentionally
+disabled in this first preview because the native controls use filesystem
+paths.
+
+Deploy the TypeScript app and Bevy preview as separate Cloudflare Workers +
+Static Assets projects:
+
+```bash
+pnpm deploy:web
+pnpm deploy:bevy
+```
+
+The default `pnpm deploy` command is an alias for `pnpm deploy:web`, so the
+production TypeScript app does not include Bevy artifacts. `pnpm deploy:bevy`
+builds `bevy/web/dist` and deploys it with `wrangler.bevy.jsonc` under the
+separate `glyphweave-bevy` Worker. Its WASM executes in the visitor's browser
+while Cloudflare serves the generated files as static assets.
 
 ## Keyboard Shortcuts
 

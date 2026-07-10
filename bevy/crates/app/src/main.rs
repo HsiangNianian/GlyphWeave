@@ -12,7 +12,7 @@ mod tool;
 mod ui;
 mod viewport;
 
-use bevy::asset::AssetPlugin;
+use bevy::asset::{AssetMetaCheck, AssetPlugin};
 use bevy::diagnostic::FrameTimeDiagnosticsPlugin;
 use bevy::prelude::*;
 use bevy::window::PresentMode;
@@ -61,19 +61,13 @@ fn main() {
     app.add_plugins(
         DefaultPlugins
             .set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "GlyphWeave".into(),
-                    resolution: bevy::window::WindowResolution::new(1280, 720),
-                    present_mode,
-                    ..default()
-                }),
+                primary_window: Some(primary_window(present_mode)),
                 ..default()
             })
             .set(ImagePlugin::default_nearest())
             .set(AssetPlugin {
-                // bevy 0.18 resolves file_path relative to the executable dir, not
-                // CWD, so pin it to an absolute path derived from the crate manifest.
-                file_path: format!("{}/../../assets", env!("CARGO_MANIFEST_DIR")),
+                file_path: asset_path(),
+                meta_check: asset_meta_check(),
                 ..default()
             }),
     )
@@ -188,6 +182,54 @@ fn main() {
     }
 
     app.run();
+}
+
+fn primary_window(present_mode: PresentMode) -> Window {
+    let window = Window {
+        title: "GlyphWeave".into(),
+        resolution: bevy::window::WindowResolution::new(1280, 720),
+        present_mode,
+        ..default()
+    };
+
+    #[cfg(target_arch = "wasm32")]
+    let window = Window {
+        canvas: Some("#glyphweave-canvas".into()),
+        fit_canvas_to_parent: true,
+        prevent_default_event_handling: true,
+        ..window
+    };
+
+    window
+}
+
+fn asset_path() -> String {
+    #[cfg(target_arch = "wasm32")]
+    {
+        "assets".into()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // Bevy 0.18 resolves file_path relative to the executable directory,
+        // not the current working directory, so native builds use an absolute
+        // path derived from the crate manifest.
+        format!("{}/../../assets", env!("CARGO_MANIFEST_DIR"))
+    }
+}
+
+fn asset_meta_check() -> AssetMetaCheck {
+    #[cfg(target_arch = "wasm32")]
+    {
+        // Browser asset readers would otherwise issue a second request for a
+        // `.meta` file beside every texture and font.
+        AssetMetaCheck::Never
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        AssetMetaCheck::default()
+    }
 }
 
 fn load_initial_world(mut commands: Commands, startup_options: Res<StartupOptions>) {

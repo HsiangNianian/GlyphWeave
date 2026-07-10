@@ -10,10 +10,41 @@ license = "MIT"
 repository = "https://github.com/HsiangNianian/GlyphWeave"
 
 [workspace.dependencies]
-bevy = "0.18.1"
+bevy = { version = "0.18.1", default-features = false, features = [
+    "2d_bevy_render",
+    "async_executor",
+    "bevy_asset",
+    "bevy_input_focus",
+    "bevy_log",
+    "bevy_window",
+    "bevy_winit",
+    "custom_cursor",
+    "keyboard",
+    "mouse",
+    "multi_threaded",
+    "reflect_auto_register",
+    "std",
+    "sysinfo_plugin",
+    "touch",
+    "webgl2",
+    "wayland",
+    "x11",
+] }
 bevy_ecs_tilemap = { version = "0.18", features = ["atlas"] }
-bevy_egui = "0.39.1"
+bevy_egui = { version = "0.39.1", default-features = false, features = [
+    "default_fonts",
+    "manage_clipboard",
+    "render",
+] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 glyphweave-core = { path = "crates/core" }
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
