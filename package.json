@@ -19,12 +19,13 @@
     "bevy:fps": "bash scripts/check-bevy-fps.sh"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^4.0.8",
-    "@ai-sdk/react": "^4.0.18",
+    "@ai-sdk/openai": "^4.0.9",
+    "@ai-sdk/openai-compatible": "^3.0.5",
+    "@ai-sdk/react": "^4.0.19",
     "@fontsource-variable/geist": "^5.2.9",
     "@napi-rs/canvas": "^1.0.2",
     "@tailwindcss/vite": "^4.3.2",
-    "ai": "^7.0.17",
+    "ai": "^7.0.18",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "d3-delaunay": "^6.0.4",

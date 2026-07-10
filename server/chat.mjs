@@ -1,6 +1,6 @@
 /**
  * Chat API handler — streams AI responses with tool calling support.
- * Uses @ai-sdk/openai for the model and streams via the AI SDK data protocol.
+ * Uses @ai-sdk/openai-compatible for the model and streams via the AI SDK data protocol.
  *
  * Supports both OpenAI and DeepSeek (OpenAI-compatible).
  *
@@ -19,7 +19,7 @@
  *   model:    gpt-4o-mini
  */
 
-import { createOpenAI } from '@ai-sdk/openai'
+import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { streamText, convertToModelMessages } from 'ai'
 import { buildSystemPrompt, buildToolDefinitions } from './chat-tools.mjs'
 
@@ -43,7 +43,7 @@ function getOpenAI() {
   const modelName = process.env.CHAT_MODEL ||
     (isDeepSeek ? 'deepseek-chat' : 'gpt-4o-mini')
 
-  // Wrap fetch to log the actual request body for debugging tool calls
+  // Wrap fetch to log request body AND raw response stream for debugging tool calls
   const originalFetch = globalThis.fetch
   const debugFetch = async (url, init) => {
     const urlStr = typeof url === 'string' ? url : url?.href ?? String(url)
@@ -57,14 +57,42 @@ function getOpenAI() {
         console.log('[chat] >>> messages count:', body.messages?.length)
       } catch { /* ignore parse errors */ }
     }
-    return originalFetch(url, init)
+    const response = await originalFetch(url, init)
+    // Clone response to read body for debug without consuming it
+    if (urlStr.includes('/chat/completions') && response.ok) {
+      const clone = response.clone()
+      const reader = clone.body?.getReader()
+      if (reader) {
+        // Read stream asynchronously in the background, log raw tool_calls chunks
+        const decoder = new TextDecoder()
+        let buffer = ''
+        ;(async () => {
+          try {
+            while (true) {
+              const { done, value } = await reader.read()
+              if (done) break
+              buffer += decoder.decode(value, { stream: true })
+              // Log lines that mention tool_calls
+              const lines = buffer.split('\n')
+              buffer = lines.pop() ?? ''
+              for (const line of lines) {
+                if (line.startsWith('data: ') && line.includes('tool_calls')) {
+                  console.log('[chat] <<< RAW tool_calls chunk:', line.slice(6, 500))
+                }
+              }
+            }
+          } catch { /* ignore */ }
+        })()
+      }
+    }
+    return response
   }
 
   return {
-    provider: createOpenAI({
+    provider: createOpenAICompatible({
+      name: isDeepSeek ? 'deepseek' : 'openai',
       apiKey,
       baseURL,
-      compatibility: 'strict',
       fetch: debugFetch,
     }),
     model: modelName,
@@ -129,7 +157,7 @@ export async function handleChat(req, res) {
     console.log('[chat] request — modelMessages count:', modelMessages.length, 'tool count:', Object.keys(TOOLS).length)
 
     const result = streamText({
-      model: provider.chat(model),
+      model: provider(model),
       system: SYSTEM_PROMPT,
       messages: modelMessages,
       tools: TOOLS,
@@ -143,7 +171,7 @@ export async function handleChat(req, res) {
         console.log('[chat] step finish — toolCalls count:', toolCalls?.length ?? 0)
         if (toolCalls?.length > 0) {
           for (const tc of toolCalls) {
-            console.log('[chat] step finish — toolCall:', tc.toolName, JSON.stringify(tc.args))
+            console.log('[chat] step finish — toolCall:', tc.toolName, 'input:', JSON.stringify(tc.input))
           }
         }
         if (usage) console.log('[chat] step finish — usage:', JSON.stringify(usage))
@@ -157,17 +185,27 @@ export async function handleChat(req, res) {
 
     // DEBUG: intercept what pipeUIMessageStreamToResponse sends
     const origWrite = res.write.bind(res)
+    const decoder = new TextDecoder()
     let streamChunks = 0
     res.write = (chunk, encoding, cb) => {
-      const str = typeof chunk === 'string' ? chunk : chunk?.toString?.('utf-8') ?? ''
+      // Properly decode: handle string, Buffer, and Uint8Array
+      let str
+      if (typeof chunk === 'string') {
+        str = chunk
+      } else if (chunk != null) {
+        str = decoder.decode(chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk), { stream: true })
+      } else {
+        str = ''
+      }
       streamChunks++
       if (str.startsWith('data:') && str.length > 6) {
         const content = str.slice(5).trim()
         if (content && content !== '[DONE]') {
-          console.log('[chat] <<< stream chunk', streamChunks, ':', content.slice(0, 250))
+          // Only log tool-related messages concisely
+          if (content.includes('tool-input') || content.includes('tool-call') || content.includes('tool-result')) {
+            console.log('[chat] <<< SSE', streamChunks, ':', content.slice(0, 300))
+          }
         }
-      } else if (str.length > 0) {
-        console.log('[chat] <<< non-SSE write:', str.slice(0, 100))
       }
       return origWrite(chunk, encoding, cb)
     }

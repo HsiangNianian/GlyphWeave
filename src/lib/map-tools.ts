@@ -9,6 +9,8 @@
 import { useMapStore } from '@/stores/map-store'
 import { TILE_TYPES, TILE_CATEGORIES } from '@/constants/tiles'
 import { PRESETS } from '@/constants/presets'
+import { flattenLayerTiles } from '@/lib/map-core'
+import { validateMap } from '@/lib/map-validate'
 
 export interface ToolResult {
   success: boolean
@@ -22,6 +24,25 @@ function ok(message: string, data?: unknown): ToolResult {
 
 function fail(message: string): ToolResult {
   return { success: false, message }
+}
+
+const ALL_TILE_IDS = Object.keys(TILE_TYPES).filter((k) => k !== 'void').join(', ')
+
+/** Validate a tileId from AI tool call input — defends against undefined/null/missing. */
+function validateTileId(tileId: unknown): { valid: false; error: string } | { valid: true; id: string } {
+  if (tileId == null || tileId === '') {
+    return { valid: false, error: `Missing tileId — you must provide a tile type. Available: ${ALL_TILE_IDS}` }
+  }
+  if (typeof tileId !== 'string') {
+    return { valid: false, error: `tileId must be a string, got ${typeof tileId}. Available: ${ALL_TILE_IDS}` }
+  }
+  if (!TILE_TYPES[tileId]) {
+    return { valid: false, error: `Unknown tile type "${tileId}". Available types: ${ALL_TILE_IDS}` }
+  }
+  if (tileId === 'void') {
+    return { valid: false, error: 'Cannot place void tiles directly. Use the eraser tool to remove tiles.' }
+  }
+  return { valid: true, id: tileId }
 }
 
 /** Get a high-level summary of the current map state for the AI. */
@@ -94,21 +115,15 @@ export function getPresets(): ToolResult {
 
 /** Place a single tile at the given coordinates. */
 export function placeTile(args: { x: number; y: number; tileId: string }): ToolResult {
-  const { x, y, tileId } = args
+  const { x, y } = args
 
   if (!Number.isFinite(x) || !Number.isFinite(y)) {
-    return fail('Invalid coordinates: x and y must be numbers')
+    return fail(`Invalid coordinates: x=${args.x}, y=${args.y}. Both must be finite numbers.`)
   }
 
-  const tileType = TILE_TYPES[tileId]
-  if (!tileType) {
-    const available = Object.keys(TILE_TYPES).filter((k) => k !== 'void').join(', ')
-    return fail(`Unknown tile type "${tileId}". Available types: ${available}`)
-  }
-
-  if (tileId === 'void') {
-    return fail('Cannot place void tiles directly. Use the eraser tool to remove tiles.')
-  }
+  const check = validateTileId(args.tileId)
+  if (!check.valid) return fail(check.error)
+  const tileId = check.id
 
   const store = useMapStore.getState()
   const layer = store.layers[store.activeLayer]
@@ -117,7 +132,7 @@ export function placeTile(args: { x: number; y: number; tileId: string }): ToolR
   }
 
   store.setTile(x, y, tileId)
-  return ok(`Placed "${tileType.name}" at (${x}, ${y}).`)
+  return ok(`Placed "${TILE_TYPES[tileId].name}" at (${x}, ${y}).`)
 }
 
 /** Place a preset structure at the given origin. */
@@ -146,19 +161,17 @@ export function placePreset(args: { presetId: string; x: number; y: number }): T
   return ok(`Placed preset "${preset.name}" (${w}×${h}) at (${x}, ${y}).`)
 }
 
-/** Flood-fill an area starting from (x, y). */
+/** Flood-fill an area starting from (x, y). Only fills the connected region — does NOT cross walls. */
 export function fillArea(args: { x: number; y: number; tileId: string }): ToolResult {
-  const { x, y, tileId } = args
+  const { x, y } = args
 
   if (!Number.isFinite(x) || !Number.isFinite(y)) {
-    return fail('Invalid coordinates: x and y must be numbers')
+    return fail(`Invalid coordinates: x=${args.x}, y=${args.y}. Both must be finite numbers.`)
   }
 
-  const tileType = TILE_TYPES[tileId]
-  if (!tileType || tileId === 'void') {
-    const available = Object.keys(TILE_TYPES).filter((k) => k !== 'void').join(', ')
-    return fail(`Invalid tile type "${tileId}" for fill. Available: ${available}`)
-  }
+  const check = validateTileId(args.tileId)
+  if (!check.valid) return fail(check.error)
+  const tileId = check.id
 
   const store = useMapStore.getState()
   const layer = store.layers[store.activeLayer]
@@ -167,13 +180,13 @@ export function fillArea(args: { x: number; y: number; tileId: string }): ToolRe
   }
 
   store.floodFill(x, y, tileId)
-  return ok(`Flood-filled area starting at (${x}, ${y}) with "${tileType.name}".`)
+  return ok(`Flood-filled area starting at (${x}, ${y}) with "${TILE_TYPES[tileId].name}".`)
 }
 
-/** Place multiple tiles in a batch. */
+/** Place multiple tiles in a batch. Use this for drawing corridors between disconnected rooms. */
 export function placeMultipleTiles(args: { tiles: { x: number; y: number; tileId: string }[] }): ToolResult {
   if (!args.tiles || !Array.isArray(args.tiles) || args.tiles.length === 0) {
-    return fail('No tiles provided')
+    return fail('No tiles provided. You must pass an array of {x, y, tileId} objects.')
   }
 
   const store = useMapStore.getState()
@@ -185,17 +198,18 @@ export function placeMultipleTiles(args: { tiles: { x: number; y: number; tileId
   const validTiles: [number, number, string | null][] = []
   const invalid: string[] = []
 
-  for (const t of args.tiles) {
+  for (let i = 0; i < args.tiles.length; i++) {
+    const t = args.tiles[i]
     if (!Number.isFinite(t.x) || !Number.isFinite(t.y)) {
-      invalid.push(`(${t.x},${t.y}): invalid coordinates`)
+      invalid.push(`[${i}]: invalid coordinates (x=${t.x}, y=${t.y})`)
       continue
     }
-    const tileType = TILE_TYPES[t.tileId]
-    if (!tileType || t.tileId === 'void') {
-      invalid.push(`(${t.x},${t.y}): unknown tile "${t.tileId}"`)
+    const check = validateTileId(t.tileId)
+    if (!check.valid) {
+      invalid.push(`[${i}]: ${check.error}`)
       continue
     }
-    validTiles.push([t.x, t.y, t.tileId])
+    validTiles.push([t.x, t.y, check.id])
   }
 
   if (validTiles.length === 0) {
@@ -221,6 +235,14 @@ export function undoLastChange(): ToolResult {
   return ok('Last change undone.')
 }
 
+/** Validate the current map for connectivity and logic issues. */
+export function runValidateMap(): ToolResult {
+  const state = useMapStore.getState()
+  const flatTiles = flattenLayerTiles(state.tiles, state.layers)
+  const report = validateMap(flatTiles as Record<string, string | null>)
+  return ok('Map validation complete.', report)
+}
+
 /** Dispatch table — maps tool names to their execution functions. */
 export const TOOL_EXECUTORS: Record<string, (args: Record<string, unknown>) => ToolResult> = {
   getMapState: () => getMapState(),
@@ -231,4 +253,5 @@ export const TOOL_EXECUTORS: Record<string, (args: Record<string, unknown>) => T
   fillArea: (args) => fillArea(args as unknown as { x: number; y: number; tileId: string }),
   placeMultipleTiles: (args) => placeMultipleTiles(args as unknown as { tiles: { x: number; y: number; tileId: string }[] }),
   undoLastChange: () => undoLastChange(),
+  validateMap: () => runValidateMap(),
 }

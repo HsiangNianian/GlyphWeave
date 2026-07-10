@@ -121,13 +121,25 @@ export function buildSystemPrompt() {
     presetCatalog,
     '',
     '═══ RULES ═══',
+    '── Placement ──',
     '1. ALWAYS use tools to make changes — never just describe what you will do.',
     "2. You do NOT need to call getTileTypes/getPresets first — the tile/preset IDs above are always current. Only call these tools if the user asks what's available.",
     "3. For placing rooms/corridors/structures, prefer placePreset — it's the most efficient.",
-    '4. For drawing walls or filling floors, use placeMultipleTiles to batch many tiles at once.',
-    '5. For filling enclosed areas with floor/water/grass, use fillArea.',
+    '4. For drawing walls or corridors, use placeMultipleTiles to batch many tiles at once.',
+    '5. For filling enclosed areas with floor/water/grass, use fillArea. IMPORTANT: fillArea only fills one enclosed region — it does NOT cross walls.',
     '6. (0,0) = top-left, x→right, y→down.',
-    '7. Be concise — confirm what you placed in 1 sentence after the tool completes.',
+    '── Validation & Fixes ──',
+    '7. After placing rooms and corridors, call validateMap to check for connectivity issues.',
+    "8. To fix disconnected areas: use placeMultipleTiles to draw a narrow floor CORRIDOR (1-3 tiles wide) connecting the rooms. Do NOT fill large areas with floor.",
+    "9. When placeMultipleTiles fails with 'Missing tileId', you forgot to include the tileId field in each tile object. Always provide {x, y, tileId}.",
+    '10. Every room should have at least one door connecting to a corridor or another room.',
+    '── ANTI-PATTERNS (NEVER do these) ──',
+    '11. NEVER expand or enlarge floor areas as a "fix". Rooms already have floors — making floors bigger does NOT fix connectivity, room enclosure, or any other validation issue.',
+    '12. NEVER use fillArea to "fix" anything other than a truly missing floor inside an enclosed room. fillArea is destructive — it overwrites EVERYTHING in the region.',
+    '13. NEVER place floor tiles outside of rooms or corridors. Open space should remain void, not floor.',
+    '14. If validateMap reports a problem you don\'t understand, ASK the user what they want instead of guessing with floor tiles.',
+    '── Style ──',
+    '15. Be concise — confirm what you placed in 1 sentence after the tool completes.',
   ].join('\n')
 }
 
@@ -202,12 +214,16 @@ export function buildToolDefinitions() {
     fillArea: {
       description:
         'Flood-fill an enclosed area with the given tile type. Useful for ' +
-        'filling rooms with floor tiles or creating water/lava pools.',
+        'filling an empty enclosed room with floor, or a moat with water. ' +
+        '⚠️ DANGER: This overwrites EVERY tile in the region — walls, doors, furniture, everything. ' +
+        'ONLY use fillArea when you are CERTAIN the enclosed area is meant to be filled. ' +
+        'NEVER use fillArea to "fix" connectivity or validation issues. ' +
+        'For corridors connecting rooms, use placeMultipleTiles instead.',
       parameters: {
         type: 'object',
         properties: {
-          x: { type: 'number', description: 'X coordinate to start filling from' },
-          y: { type: 'number', description: 'Y coordinate to start filling from' },
+          x: { type: 'number', description: 'X coordinate to start filling from (must be inside the enclosed area)' },
+          y: { type: 'number', description: 'Y coordinate to start filling from (must be inside the enclosed area)' },
           tileId: { type: 'string', description: tileIdConstraint() },
         },
         required: ['x', 'y', 'tileId'],
@@ -216,8 +232,12 @@ export function buildToolDefinitions() {
 
     placeMultipleTiles: {
       description:
-        'Batch-place many tiles at once. Use this for drawing walls, floors, ' +
-        'or any pattern that needs many tiles. Much faster than calling placeTile repeatedly.',
+        'Batch-place many tiles at once. Use this for drawing walls, drawing narrow corridors ' +
+        '(1-3 tiles wide) between disconnected rooms, or placing small clusters of decoration. ' +
+        'Each tile object MUST have {x, y, tileId}. ' +
+        'Example corridor: tiles=[{x:5,y:10,tileId:"floor"},{x:6,y:10,tileId:"floor"},...]. ' +
+        'Do NOT use this to fill large areas with floor — that destroys existing content. ' +
+        'Much faster than calling placeTile repeatedly.',
       parameters: {
         type: 'object',
         properties: {
@@ -226,13 +246,13 @@ export function buildToolDefinitions() {
             items: {
               type: 'object',
               properties: {
-                x: { type: 'number' },
-                y: { type: 'number' },
-                tileId: { type: 'string', description: tileIdConstraint() },
+                x: { type: 'number', description: 'X coordinate (column)' },
+                y: { type: 'number', description: 'Y coordinate (row)' },
+                tileId: { type: 'string', description: `Tile type ID. Required. Must be one of: ${TILE_ID_LIST}` },
               },
               required: ['x', 'y', 'tileId'],
             },
-            description: 'Array of tile placements {x, y, tileId}',
+            description: 'Array of tile placements. Each object MUST have x, y, and tileId fields.',
           },
         },
         required: ['tiles'],
@@ -242,6 +262,15 @@ export function buildToolDefinitions() {
     undoLastChange: {
       description:
         'Undo the most recent change. Use when the user asks to revert an action.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+
+    validateMap: {
+      description:
+        'Validate the current map for connectivity and logic issues. ' +
+        'Returns disconnected areas, invalid doors, unenclosed rooms, missing stairs, ' +
+        'water/lava boundary problems, and dead ends. ' +
+        'Always call this after placing rooms/corridors to verify the map is well-formed.',
       parameters: { type: 'object', properties: {}, required: [] },
     },
   }

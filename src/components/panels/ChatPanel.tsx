@@ -20,7 +20,6 @@ export function ChatPanel() {
     status,
     error,
     addToolOutput,
-    setMessages,
   } = useChat({
     transport: new DefaultChatTransport({ api: '/api/chat' }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
@@ -28,9 +27,11 @@ export function ChatPanel() {
       console.error('[ChatPanel] onError:', err)
     },
     async onToolCall({ toolCall }) {
-      console.log('[ChatPanel] onToolCall:', toolCall.toolName, 'input:', toolCall.input)
+      const rawInput = toolCall.input
+      console.log('[ChatPanel] onToolCall:', toolCall.toolName, 'rawInput:', JSON.stringify(rawInput))
       const exec = TOOL_EXECUTORS[toolCall.toolName]
       if (!exec) {
+        console.warn('[ChatPanel] unknown tool:', toolCall.toolName)
         addToolOutput({
           tool: toolCall.toolName,
           toolCallId: toolCall.toolCallId,
@@ -42,9 +43,9 @@ export function ChatPanel() {
 
       try {
         // toolCall.input may be a parsed object or a JSON string depending on the transport version
-        const input = typeof toolCall.input === 'string'
-          ? JSON.parse(toolCall.input)
-          : (toolCall.input as Record<string, unknown>)
+        const input: Record<string, unknown> = typeof rawInput === 'string'
+          ? JSON.parse(rawInput)
+          : ((rawInput ?? {}) as Record<string, unknown>)
         const result = exec(input)
         console.log('[ChatPanel] tool result:', toolCall.toolName, result)
         addToolOutput({
@@ -93,7 +94,6 @@ export function ChatPanel() {
 
   const handleClose = () => {
     setChatOpen(false)
-    setMessages([])
   }
 
   const getMessageText = (msg: (typeof messages)[number]): string => {
