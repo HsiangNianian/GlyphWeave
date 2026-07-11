@@ -71,6 +71,20 @@ pnpm dev
 
 > **渲染 API** 在开发模式下自动同端口可用。v3 ZIP 使用 `POST /api/render?z=<高度>`；GET/base64 与 JSON POST 仅用于旧格式兼容。
 
+### 检查 `.gemap` chunk
+
+`.gemap` v3 文件是 ZIP 容器。chunk 负载是 palette 打包后的二进制，
+可以用 Rust CLI 把世界坐标映射回 region、section、chunk hash、palette
+以及解码后的非 air voxel：
+
+```bash
+cargo run --manifest-path bevy/Cargo.toml -p glyphweave-cli -- \
+  dump-chunk --coord 0,0,0 --limit 8 examples/aethra-mega.gemap
+```
+
+也可以用 `--section cz,rx,ry,rcx,rcy` 直接定位 section；需要输出整个
+chunk 时使用 `--all`。
+
 ## 键盘快捷键
 
 | 键             | 功能     |
