@@ -2,7 +2,7 @@
 import { useState, useRef, useCallback } from 'react'
 import type { WorldConfig } from '@/types'
 import { THEME_LIST } from '@/constants/themes'
-import { TILE_TYPES } from '@/constants/tiles'
+import { ASCII_GLYPHS } from '@/constants/ascii-glyphs'
 import { generateDemoMap } from '@/constants/demo-map'
 import { convertImageFileToMap, DEFAULT_IMAGE_CONVERT_WIDTH } from '@/lib/image-convert'
 import { importGemapBytes } from '@/lib/gemap-import'
@@ -95,14 +95,7 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
     e.target.value = ''
   }, [onStart, tileSize, themeId])
 
-  const sampleColors = [
-    TILE_TYPES.wall,
-    TILE_TYPES.floor,
-    TILE_TYPES.door,
-    TILE_TYPES.water,
-    TILE_TYPES.tree,
-    TILE_TYPES.lava,
-  ]
+  const sampleTileIds = ['wall', 'floor', 'door', 'water', 'tree', 'lava']
 
   return (
     <div className="w-full h-full flex items-center justify-center bg-black">
@@ -148,7 +141,7 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
           <Label className="text-xs text-zinc-400">{t('home.colorTheme')}</Label>
           <div className="grid grid-cols-1 gap-2">
             {THEME_LIST.map((theme) => {
-              const colors = sampleColors.map((t) => theme.colors[t.id])
+              const colors = sampleTileIds.map((id) => theme.colors[id])
               return (
                 <div
                   key={theme.id}
@@ -173,7 +166,7 @@ export function HomePage({ onStart, onWorkshop }: HomePageProps) {
                         className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-mono"
                         style={{ backgroundColor: c?.bgColor || '#000', color: c?.fgColor || '#fff' }}
                       >
-                        {sampleColors[i]?.char}
+                        {ASCII_GLYPHS[sampleTileIds[i]] || ' '}
                       </div>
                     ))}
                   </div>

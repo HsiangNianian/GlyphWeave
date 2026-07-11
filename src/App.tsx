@@ -3,6 +3,8 @@ import type { ReactElement } from 'react'
 import type { WorldConfig, Theme } from '@/types'
 import { HomePage } from '@/components/pages/HomePage'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { Titlebar } from '@/components/Titlebar'
+import type { TitlebarPage } from '@/components/Titlebar'
 
 type Page = 'home' | 'editor' | 'workshop'
 
@@ -62,17 +64,27 @@ export default function App(): ReactElement {
 
   return (
     <TooltipProvider>
-      {page === 'editor' && worldConfig ? (
-        <Suspense fallback={<PageLoading />}>
-          <EditorPage worldConfig={worldConfig} onBack={handleBack} />
-        </Suspense>
-      ) : page === 'workshop' ? (
-        <Suspense fallback={<PageLoading />}>
-          <ThemeWorkshop onBack={() => setPage('home')} onUseTheme={handleUseTheme} />
-        </Suspense>
-      ) : (
-        <HomePage onStart={handleStart} onWorkshop={handleWorkshop} />
-      )}
+      <div className="h-screen flex flex-col bg-black overflow-hidden">
+        <Titlebar
+          page={page as TitlebarPage}
+          worldName={worldConfig?.worldName}
+          onBack={page !== 'home' ? handleBack : undefined}
+          onWorkshop={page === 'home' ? handleWorkshop : undefined}
+        />
+        <div className="flex-1 min-h-0">
+          {page === 'editor' && worldConfig ? (
+            <Suspense fallback={<PageLoading />}>
+              <EditorPage worldConfig={worldConfig} />
+            </Suspense>
+          ) : page === 'workshop' ? (
+            <Suspense fallback={<PageLoading />}>
+              <ThemeWorkshop onUseTheme={handleUseTheme} />
+            </Suspense>
+          ) : (
+            <HomePage onStart={handleStart} onWorkshop={handleWorkshop} />
+          )}
+        </div>
+      </div>
     </TooltipProvider>
   )
 }

@@ -299,6 +299,37 @@ _ _ w w w _ _
 
 Render output auto-scales to fit ≤4096px. For crisp detail, suggest `scale: 24`.
 
+## 8. Map Validation Rules
+
+Every generated map MUST pass these checks. Run validation after placing all rooms and corridors.
+
+### Connectivity
+- **All walkable areas must be connected.** Use BFS to find connected components.
+- Walkable tiles: `floor`, `floorAlt`, `door`, `doorOpen`, `bridge`, `stairsDown`, `stairsUp`, `grass`, all furniture (`altar`, `fountain`, `shop`, `table`, `throne`, `cage`), items (`treasure`), decorations (`grave`, `trap`, `blood`).
+- Blocking tiles: `wall`, `pillar`, `bar`, `water`, `deepWater`, `lava`, `tree`.
+- If disconnected areas exist → add corridors or doors to connect them.
+
+### Doors
+- Every `door` must have walkable tiles on at least two sides, or one walkable + one blocking side (outer wall doors).
+- Door connecting only void on both sides is invalid.
+
+### Stairs
+- If `stairsDown` exists, include at least one `stairsUp` (and vice versa).
+- Exception: single-level maps may omit stairs entirely.
+
+### Water / Lava
+- Water, deepWater, and lava tiles must be fully enclosed (no adjacent void tiles).
+- Enclose with walls, floors, or bridges.
+
+### Room Enclosure
+- Walkable tiles (floors, furniture) should not be adjacent to void at the map boundary.
+- All rooms must have complete wall borders except at door openings.
+
+### Dead Ends
+- Corridors should connect two spaces — avoid dead ends (tiles with exactly 1 walkable neighbor).
+- Dead ends are acceptable for intentional features (closets, treasure rooms) but should be rare.
+
+
 ## 8. Example: Complete Dungeon
 
 A 5-room dungeon with central hub:

@@ -1,11 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import type { Theme, TileColors } from '@/types'
 import { TILE_TYPES } from '@/constants/tiles'
+import { ASCII_GLYPHS } from '@/constants/ascii-glyphs'
 import { THEMES } from '@/constants/themes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { ArrowLeft, Download, Upload, Eye } from 'lucide-react'
+import { Download, Upload, Eye } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 const CATEGORIES = [
@@ -39,11 +40,10 @@ const DEMO_MAP = {
 }
 
 interface ThemeWorkshopProps {
-  onBack: () => void
   onUseTheme: (theme: Theme) => void
 }
 
-export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
+export function ThemeWorkshop({ onUseTheme }: ThemeWorkshopProps) {
   const { t } = useTranslation()
   // Start from a copy of ansi-16
   const [theme, setTheme] = useState<Theme>(() => ({
@@ -151,16 +151,6 @@ export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
 
   return (
     <div className="w-full h-full flex flex-col bg-zinc-950 text-zinc-100">
-      {/* Header */}
-      <header className="flex items-center gap-3 px-4 h-12 border-b border-zinc-800 shrink-0">
-        <button onClick={onBack} className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200">
-          <ArrowLeft className="w-3.5 h-3.5" />
-          {t('common.back').replace('← ', '')}
-        </button>
-        <span className="text-sm font-mono text-zinc-500">/</span>
-        <h1 className="text-sm font-medium text-zinc-200">{t('workshop.title')}</h1>
-      </header>
-
       <div className="flex flex-1 min-h-0">
         {/* Left: tile selector + metadata */}
         <aside className="w-72 shrink-0 border-r border-zinc-800 flex flex-col overflow-y-auto">
@@ -215,7 +205,7 @@ export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
                         className="w-5 h-5 rounded flex items-center justify-center text-[11px] font-mono shrink-0"
                         style={{ background: tc.bgColor, color: tc.fgColor }}
                       >
-                        {TILE_TYPES[tileId]?.char || '?'}
+                        {ASCII_GLYPHS[tileId] || '?'}
                       </span>
                       <span className="truncate">{tileId}</span>
                     </button>
@@ -272,7 +262,7 @@ export function ThemeWorkshop({ onBack, onUseTheme }: ThemeWorkshopProps) {
                 className="w-7 h-7 rounded flex items-center justify-center text-sm font-mono"
                 style={{ background: selectedColors.bgColor, color: selectedColors.fgColor }}
               >
-                {TILE_TYPES[selectedTile]?.char || '?'}
+                {ASCII_GLYPHS[selectedTile] || '?'}
               </span>
             </div>
 

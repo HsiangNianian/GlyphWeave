@@ -46,7 +46,15 @@
     "select": "选择",
     "undo": "撤销",
     "redo": "重做",
-    "shortcut": "快捷键"
+    "shortcut": "快捷键",
+    "viewOnlyHint": "仅查看 — 切换到 ASCII 风格可编辑"
+  },
+  "surfaces": {
+    "viewOnlyBadge": "仅查看",
+    "ascii": "ASCII",
+    "voronoi": "Voronoi",
+    "voxel": "Voxel",
+    "pixel": "Pixel"
   },
   "tilepalette": {
     "wall": "墙壁",
@@ -149,5 +157,11 @@
     "cage": "笼子",
     "blood": "血迹",
     "bar": "栅栏"
+  },
+  "chat": {
+    "title": "AI 助手",
+    "empty": "有什么关于地图的问题可以问我。",
+    "inputPlaceholder": "输入消息…",
+    "placeholder": "这是一个占位回复，聊天功能即将集成。"
   }
 }

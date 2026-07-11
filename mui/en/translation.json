@@ -46,7 +46,15 @@
     "select": "Select",
     "undo": "Undo",
     "redo": "Redo",
-    "shortcut": "Shortcut"
+    "shortcut": "Shortcut",
+    "viewOnlyHint": "View-only — switch to ASCII to edit"
+  },
+  "surfaces": {
+    "viewOnlyBadge": "view-only",
+    "ascii": "ASCII",
+    "voronoi": "Voronoi",
+    "voxel": "Voxel",
+    "pixel": "Pixel"
   },
   "tilepalette": {
     "wall": "Walls",
@@ -149,5 +157,11 @@
     "cage": "Cage",
     "blood": "Blood",
     "bar": "Bar"
+  },
+  "chat": {
+    "title": "Assistant",
+    "empty": "Ask me anything about your map.",
+    "inputPlaceholder": "Type a message…",
+    "placeholder": "This is a placeholder response. Chat integration coming soon."
   }
 }

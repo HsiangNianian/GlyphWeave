@@ -1,11 +1,14 @@
 'use client'
 import { useMapStore } from '@/stores/map-store'
+import { useUiStore } from '@/stores/ui-store'
 import type { ToolType } from '@/types'
 import { Brush, Eraser, Hand, PaintBucket, MousePointer2, Undo2, Redo2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+
+const PAINT_TOOLS = new Set<ToolType>(['brush', 'erase', 'fill'])
 
 const TOOLS: { id: ToolType; label: string; icon: typeof Brush; shortcut: string }[] = [
   { id: 'brush', label: 'Brush', icon: Brush, shortcut: 'B' },
@@ -21,11 +24,15 @@ export function Toolbar() {
   const setCurrentTool = useMapStore((s) => s.setCurrentTool)
   const undo = useMapStore((s) => s.undo)
   const redo = useMapStore((s) => s.redo)
+  const surfaceStyle = useUiStore((s) => s.surfaceStyle)
+  const isEditable = surfaceStyle === 'ascii'
 
   return (
     <div className="flex flex-col items-center gap-1.5 bg-zinc-950 border-r border-zinc-800 px-2 py-3">
       {TOOLS.map((tool) => {
         const Icon = tool.icon
+        const isPaintTool = PAINT_TOOLS.has(tool.id)
+        const disabled = !isEditable && isPaintTool
         return (
           <Tooltip key={tool.id}>
             <TooltipTrigger asChild>
@@ -33,19 +40,22 @@ export function Toolbar() {
                 variant={currentTool === tool.id ? 'default' : 'ghost'}
                 size="icon"
                 className="w-9 h-9"
+                disabled={disabled}
                 onClick={() => setCurrentTool(tool.id)}
               >
                 <Icon className="w-4 h-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right">
-              {tool.id === 'brush' ? t('toolbar.brush')
+              {disabled
+                ? t('toolbar.viewOnlyHint')
+                : <>{tool.id === 'brush' ? t('toolbar.brush')
                 : tool.id === 'erase' ? t('toolbar.eraser')
                 : tool.id === 'fill' ? t('toolbar.fill')
                 : tool.id === 'pan' ? t('toolbar.pan')
                 : tool.id === 'select' ? t('toolbar.select')
                 : tool.label}{' '}
-              <span className="text-zinc-500 ml-1">[{tool.shortcut}]</span>
+              <span className="text-zinc-500 ml-1">[{tool.shortcut}]</span></>}
             </TooltipContent>
           </Tooltip>
         )

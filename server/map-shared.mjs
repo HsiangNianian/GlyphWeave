@@ -14,6 +14,9 @@ import {
 
 export { MAX_OUTPUT_SIZE, TILE_SIZE, TILE_TYPES, colorsForTileToken, glyphForTileToken }
 export const THEMES = DEFAULT_RENDER_THEMES
+export const ASCII_GLYPHS = Object.freeze(
+  Object.fromEntries(Object.keys(TILE_TYPES).map((tileId) => [tileId, glyphForTileToken(tileId)])),
+)
 
 export function flattenTiles(data) {
   const result = {}

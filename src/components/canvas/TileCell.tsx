@@ -1,10 +1,10 @@
 'use client'
 import { memo } from 'react'
 import { Rect, Text } from 'react-konva'
-import { TILE_TYPES } from '@/constants/tiles'
+import { ASCII_GLYPHS } from '@/constants/ascii-glyphs'
 import type { TileColors } from '@/types'
 
-interface TileCellProps {
+type TileCellProps = {
   x: number
   y: number
   tileTypeId: string | null
@@ -23,8 +23,7 @@ type PixelRect = {
 }
 
 function TileCellInner({ x, y, tileTypeId, tileSize, colors, renderMode = 'glyph' }: TileCellProps) {
-  const def = tileTypeId ? TILE_TYPES[tileTypeId] : null
-  const char = def?.char ?? ''
+  const char = tileTypeId ? ASCII_GLYPHS[tileTypeId] ?? '' : ''
   const originX = x * tileSize
   const originY = y * tileSize
   const scale = tileSize / 24

@@ -117,11 +117,15 @@ export function useCanvas(stageRef: MutableRefObject<Konva.Stage | null>) {
     }
 
     if (currentTool === 'fill') {
+      const surfaceStyle = useUiStore.getState().surfaceStyle
+      if (surfaceStyle !== 'ascii') return
       floodFill(tx, ty, activeTileType)
       return
     }
 
     if (currentTool === 'brush' || currentTool === 'erase') {
+      const surfaceStyle = useUiStore.getState().surfaceStyle
+      if (surfaceStyle !== 'ascii') return
       isDrawing.current = true
       strokeTransaction.current = { patches: [] }
       const state = useMapStore.getState()

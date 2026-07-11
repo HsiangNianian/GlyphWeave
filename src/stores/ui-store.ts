@@ -1,26 +1,32 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { clampZoomScale, type Viewport } from '@/lib/viewport'
+import type { SurfaceStyle } from '@/types'
 
 export type ViewportState = Viewport
 
 export interface UiStore {
   sidePanelTab: string
   sidePanelOpen: boolean
+  chatOpen: boolean
   showGrid: boolean
   showMinimap: boolean
   viewDistance: number
   zoomScale: number
   viewport: ViewportState
+  surfaceStyle: SurfaceStyle
 
   setSidePanelTab: (tab: string) => void
   setSidePanelOpen: (open: boolean) => void
   toggleSidePanel: () => void
+  setChatOpen: (open: boolean) => void
+  toggleChat: () => void
   setShowGrid: (show: boolean) => void
   setShowMinimap: (show: boolean) => void
   setViewDistance: (d: number) => void
   setZoomScale: (scale: number) => void
   setViewport: (viewport: ViewportState) => void
+  setSurfaceStyle: (style: SurfaceStyle) => void
   zoomIn: () => void
   zoomOut: () => void
   resetZoom: () => void
@@ -31,15 +37,19 @@ export const useUiStore = create<UiStore>()(
   immer((set, get) => ({
     sidePanelTab: 'tiles',
     sidePanelOpen: true,
+    chatOpen: false,
     showGrid: true,
     showMinimap: true,
     viewDistance: 5,
     zoomScale: 1,
     viewport: { x: 0, y: 0, scale: 1 },
+    surfaceStyle: 'ascii',
 
     setSidePanelTab: (tab) => set((draft) => { draft.sidePanelTab = tab }),
     setSidePanelOpen: (open) => set((draft) => { draft.sidePanelOpen = open }),
     toggleSidePanel: () => set((draft) => { draft.sidePanelOpen = !draft.sidePanelOpen }),
+    setChatOpen: (open) => set((draft) => { draft.chatOpen = open }),
+    toggleChat: () => set((draft) => { draft.chatOpen = !draft.chatOpen }),
     setShowGrid: (show) => set((draft) => { draft.showGrid = show }),
     setShowMinimap: (show) => set((draft) => { draft.showMinimap = show }),
     setViewDistance: (d) => set((draft) => { draft.viewDistance = Math.max(1, Math.min(100, d)) }),
@@ -53,6 +63,8 @@ export const useUiStore = create<UiStore>()(
       draft.viewport = { x: viewport.x, y: viewport.y, scale }
       draft.zoomScale = scale
     }),
+
+    setSurfaceStyle: (style) => set((draft) => { draft.surfaceStyle = style }),
 
     zoomIn: () => {
       const { zoomScale } = get()
