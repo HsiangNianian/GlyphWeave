@@ -71,6 +71,21 @@ pnpm dev
 
 > **レンダリングAPI** は開発モードで同一ポートから利用できます。v3 ZIP は `POST /api/render?z=<高さ>`、GET/base64 と JSON POST は旧形式の互換入力専用です。
 
+### `.gemap` チャンクを確認する
+
+`.gemap` v3 ファイルは ZIP コンテナです。チャンク本体は palette
+でパックされたバイナリなので、Rust CLI を使うとワールド座標から
+region、section、chunk hash、palette、デコード済みの非 air voxel
+まで確認できます：
+
+```bash
+cargo run --manifest-path bevy/Cargo.toml -p glyphweave-cli -- \
+  dump-chunk --coord 0,0,0 --limit 8 examples/aethra-mega.gemap
+```
+
+`--section cz,rx,ry,rcx,rcy` で section を直接指定することもできます。
+チャンク内の全 non-air voxel を出力したい場合は `--all` を使います。
+
 ## Render API
 
 v3 `.gemap` ZIP の指定 z スライスを画像に変換します。互換期間中は旧JSONも入力できます：

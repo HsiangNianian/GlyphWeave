@@ -101,6 +101,20 @@ cargo run --manifest-path bevy/Cargo.toml -p glyphweave-app
 
 A 1280×720 window opens and auto-loads the Grand Realm of Aethra demo. Left-drag paints the selected tile, the wheel zooms to the cursor, and middle/right-drag pans. The left panel holds the tile palette and theme toggle; the right panel lists layers. Tests: `cargo test --manifest-path bevy/Cargo.toml --workspace`.
 
+### Inspect `.gemap` chunks
+
+`.gemap` v3 files are ZIP containers. Chunk payloads are palette-packed binary
+files, so use the Rust CLI to map a world coordinate back to its region,
+section, chunk hash, palette, and decoded non-air voxels:
+
+```bash
+cargo run --manifest-path bevy/Cargo.toml -p glyphweave-cli -- \
+  dump-chunk --coord 0,0,0 --limit 8 examples/aethra-mega.gemap
+```
+
+You can also address a section directly with `--section cz,rx,ry,rcx,rcy`;
+use `--all` to print every non-air voxel in the chunk.
+
 > The **Render API** and **Convert API** are available on the same port under `/api/` during development. In production, `pnpm start` serves the frontend plus Node-backed APIs on port 3001. Cloudflare Workers + Assets deployments support rendering and app-side browser image import; direct `/api/convert` remains Node-only.
 
 ### Browser preview (Rust + Bevy WASM)
