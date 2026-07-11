@@ -1,6 +1,6 @@
 import { sha256 } from '@noble/hashes/sha2.js'
 
-import { TILE_SURFACES } from '@/lib/render-surface'
+import { TILE_SURFACES } from '../render-surface'
 import { buildGemapDocument } from './builder'
 import { gemapFail } from './errors'
 import type { GemapDocument, GemapVoxel } from './types'
