@@ -419,6 +419,8 @@ fn zoom_label(projection: &Projection) -> String {
 }
 
 const CJK_FONT_FALLBACK_NAME: &str = "glyphweave_cjk_fallback";
+const BUNDLED_CJK_FONT_BYTES: &[u8] =
+    include_bytes!("../../../assets/fonts/NotoSansCJKsc-GlyphWeave.otf");
 
 #[cfg(not(target_arch = "wasm32"))]
 const CJK_FONT_CANDIDATES: &[&str] = &[
@@ -469,9 +471,7 @@ fn apply_editor_style(ctx: &egui::Context) {
 }
 
 fn install_cjk_font_fallback(ctx: &egui::Context) {
-    let Some(font_data) = load_cjk_font_data() else {
-        return;
-    };
+    let font_data = load_cjk_font_data();
 
     let mut fonts = egui::FontDefinitions::default();
     fonts
@@ -491,15 +491,21 @@ fn install_cjk_font_fallback(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
-#[cfg(target_arch = "wasm32")]
-fn load_cjk_font_data() -> Option<egui::FontData> {
-    Some(egui::FontData::from_static(include_bytes!(
-        "../../../assets/fonts/NotoSansCJKsc-GlyphWeave.otf"
-    )))
+fn load_cjk_font_data() -> egui::FontData {
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(font_data) = load_system_cjk_font_data() {
+        return font_data;
+    }
+
+    bundled_cjk_font_data()
+}
+
+fn bundled_cjk_font_data() -> egui::FontData {
+    egui::FontData::from_static(BUNDLED_CJK_FONT_BYTES)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn load_cjk_font_data() -> Option<egui::FontData> {
+fn load_system_cjk_font_data() -> Option<egui::FontData> {
     CJK_FONT_CANDIDATES
         .iter()
         .find_map(|path| std::fs::read(path).ok().map(egui::FontData::from_owned))
@@ -2141,6 +2147,13 @@ mod tests {
         );
     }
 
+    #[test]
+    fn bundled_cjk_font_is_available_on_all_targets() {
+        assert!(BUNDLED_CJK_FONT_BYTES.len() > 1024);
+
+        let _font_data = bundled_cjk_font_data();
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn legacy_path_loads_through_flatten_migration() {
@@ -2186,9 +2199,8 @@ mod tests {
         std::fs::remove_dir(directory).unwrap();
     }
 
-    #[cfg(target_arch = "wasm32")]
     #[test]
-    fn web_cjk_font_is_bundled() {
-        assert!(load_cjk_font_data().is_some());
+    fn cjk_font_loader_always_returns_font_data() {
+        let _font_data = load_cjk_font_data();
     }
 }

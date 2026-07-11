@@ -1,9 +1,10 @@
 # Bevy fonts
 
 - `NotoSansMono-Regular.ttf` supplies the tile atlas glyphs.
-- `NotoSansCJKsc-GlyphWeave.otf` is a small web fallback containing the
+- `NotoSansCJKsc-GlyphWeave.otf` is a small bundled fallback containing the
   Chinese glyphs used by the built-in scenarios and rule-based commands.
-  It is derived from
+  Native builds try system CJK fonts first and use this subset when none are
+  available; browser builds always use this subset. It is derived from
   [Noto Sans CJK SC](https://github.com/notofonts/noto-cjk) under the SIL
   Open Font License in `OFL-NotoSansCJK.txt`.
 
@@ -19,4 +20,4 @@ uv run --with fonttools pyftsubset NotoSansCJKsc-Regular.otf \
 ```
 
 When adding new built-in Chinese UI text or command keywords, add its glyphs
-to the subset before rebuilding the browser bundle.
+to the subset before rebuilding native or browser bundles.
