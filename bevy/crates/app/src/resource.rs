@@ -74,7 +74,7 @@ pub struct ActivePreset(pub Option<usize>);
 /// View toggles shown in the Settings tab.
 #[derive(Resource, Debug, Clone, Copy)]
 pub struct EditorViewSettings {
-    pub view_distance: u32,
+    pub render_distance_chunks: u32,
     pub show_grid: bool,
     pub show_minimap: bool,
     pub show_fog_of_war: bool,
@@ -82,10 +82,21 @@ pub struct EditorViewSettings {
     pub fog_softness: u32,
 }
 
+pub const DEFAULT_RENDER_DISTANCE_CHUNKS: u32 = 4;
+pub const MIN_RENDER_DISTANCE_CHUNKS: u32 = 1;
+pub const MAX_RENDER_DISTANCE_CHUNKS: u32 = 12;
+
+impl EditorViewSettings {
+    pub fn clamped_render_distance_chunks(self) -> u32 {
+        self.render_distance_chunks
+            .clamp(MIN_RENDER_DISTANCE_CHUNKS, MAX_RENDER_DISTANCE_CHUNKS)
+    }
+}
+
 impl Default for EditorViewSettings {
     fn default() -> Self {
         Self {
-            view_distance: 5,
+            render_distance_chunks: DEFAULT_RENDER_DISTANCE_CHUNKS,
             show_grid: true,
             show_minimap: true,
             show_fog_of_war: false,

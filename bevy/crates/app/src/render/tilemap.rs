@@ -1,10 +1,13 @@
-//! Spawn bounded tilemap chunks for the active voxel z slice. Only cells near
-//! the camera become entities, avoiding huge entity counts on large worlds.
+//! Spawn bounded tilemap chunks for the active voxel z slice. The editor keeps
+//! a fixed Minecraft-style chunk radius around the camera, so zooming changes
+//! LOD but does not widen the loaded chunk set.
 #![allow(clippy::type_complexity)]
 
 use crate::render::MapBounds;
 use crate::render::atlas::{TileAtlas, tile_index};
-use crate::resource::{ActiveTheme, ActiveZ, CursorTile, EditorViewSettings, WorldModel};
+use crate::resource::{
+    ActiveTheme, ActiveZ, CursorTile, EditorViewSettings, MAX_RENDER_DISTANCE_CHUNKS, WorldModel,
+};
 use crate::viewport::world_viewport_bounds_current;
 use crate::voxel_adapter::tile_at;
 use bevy::prelude::*;
@@ -71,8 +74,7 @@ pub struct RenderRefresh(pub bool);
 #[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RenderBoundsMode {
     #[default]
-    Viewport,
-    World,
+    ChunkDistance,
 }
 
 #[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,11 +98,9 @@ const RENDER_CHUNK_TILES: i32 = 64;
 const RENDER_CHUNK_TILES_U32: u32 = RENDER_CHUNK_TILES as u32;
 const RENDER_CHUNK_BUILD_BUDGET: usize = 8;
 const PREVIEW_CHUNK_BUILD_BUDGET: usize = 64;
-const MAX_CACHED_TILE_CHUNKS: usize = 256;
-const MAX_CACHED_PREVIEW_CHUNKS: usize = 512;
-const RENDER_PADDING_TILES: i32 = 40;
-const FULL_WORLD_RENDER_CELL_LIMIT: u64 = 300_000;
-const FULL_WORLD_RENDER_AREA_RATIO: f32 = 0.08;
+const MAX_CACHED_TILE_CHUNKS: usize = 768;
+const MAX_CACHED_PREVIEW_CHUNKS: usize = 1024;
+const GRID_PADDING_TILES: i32 = 5;
 const PREVIEW_LOD_SCALE: f32 = 8.0;
 const MIN_GRID_SCREEN_SPACING_PX: f32 = 8.0;
 const PREVIEW_Z: f32 = -0.2;
@@ -150,6 +150,7 @@ pub fn spawn_tilemaps(
     atlas: Res<TileAtlas>,
     active_theme: Res<ActiveTheme>,
     active_z: Res<ActiveZ>,
+    view_settings: Res<EditorViewSettings>,
     camera: Single<(&Transform, &Projection), With<Camera2d>>,
     window: Single<&Window>,
     mut tile_entities: ResMut<TileEntities>,
@@ -163,14 +164,15 @@ pub fn spawn_tilemaps(
     ) else {
         return;
     };
-    let (bounds, bounds_mode) = select_render_bounds(&world_model.world, active_z.0, view);
+    let (bounds, desired_chunks, bounds_mode) =
+        select_render_bounds(view, view_settings.clamped_render_distance_chunks());
     let lod_mode = render_lod_mode(world_model.tile_size.max(1) as f32, camera_projection);
 
     commands.insert_resource(bounds);
     commands.insert_resource(bounds_mode);
     commands.insert_resource(lod_mode);
 
-    queue_missing_chunks(&mut tile_entities, chunk_coords_for_bounds(bounds));
+    queue_missing_chunks(&mut tile_entities, desired_chunks);
     build_queued_tile_chunks(
         &mut commands,
         &world_model.world,
@@ -723,6 +725,7 @@ pub fn sync_render_chunks(
     atlas: Res<TileAtlas>,
     active_theme: Res<ActiveTheme>,
     active_z: Res<ActiveZ>,
+    view_settings: Res<EditorViewSettings>,
     camera: Single<(&Transform, &Projection), With<Camera2d>>,
     window: Single<&Window>,
     mut tile_entities: ResMut<TileEntities>,
@@ -755,7 +758,8 @@ pub fn sync_render_chunks(
     ) else {
         return;
     };
-    let (bounds, bounds_mode) = select_render_bounds(&world_model.world, active_z.0, view);
+    let (bounds, desired_chunks, bounds_mode) =
+        select_render_bounds(view, view_settings.clamped_render_distance_chunks());
     let lod_mode = render_lod_mode(world_model.tile_size.max(1) as f32, camera_projection);
 
     commands.insert_resource(bounds);
@@ -772,7 +776,6 @@ pub fn sync_render_chunks(
         refresh.0 = false;
     }
 
-    let desired_chunks = chunk_coords_for_bounds(bounds);
     let visible_chunks = desired_chunks.len();
     queue_missing_chunks(&mut tile_entities, desired_chunks);
 
@@ -837,38 +840,52 @@ fn camera_view_bounds(
     })
 }
 
-fn render_bounds_for_view(view: MapBounds) -> MapBounds {
-    MapBounds {
-        min_x: view.min_x - RENDER_PADDING_TILES,
-        min_y: view.min_y - RENDER_PADDING_TILES,
-        width: view.width + (RENDER_PADDING_TILES * 2) as u32,
-        height: view.height + (RENDER_PADDING_TILES * 2) as u32,
-    }
-}
-
 fn select_render_bounds(
-    world: &VoxelWorld,
-    z: i32,
     view: MapBounds,
-) -> (MapBounds, RenderBoundsMode) {
-    let viewport_bounds = render_bounds_for_view(view);
-    let world_bounds = compute_bounds(world, z);
-    if should_use_world_bounds(world_bounds, viewport_bounds) {
-        (world_bounds, RenderBoundsMode::World)
-    } else {
-        (viewport_bounds, RenderBoundsMode::Viewport)
+    render_distance_chunks: u32,
+) -> (MapBounds, Vec<RenderChunkCoord>, RenderBoundsMode) {
+    let center = center_chunk_for_view(view);
+    let radius = render_distance_chunks.min(MAX_RENDER_DISTANCE_CHUNKS) as i32;
+    (
+        render_bounds_for_chunk_distance(center, radius),
+        chunk_coords_for_chunk_distance(center, radius),
+        RenderBoundsMode::ChunkDistance,
+    )
+}
+
+fn center_chunk_for_view(view: MapBounds) -> RenderChunkCoord {
+    let center_x = view.min_x + view.width as i32 / 2;
+    let center_y = view.min_y + view.height as i32 / 2;
+    render_chunk_coord_for_tile(center_x, center_y)
+}
+
+fn render_bounds_for_chunk_distance(center: RenderChunkCoord, radius: i32) -> MapBounds {
+    let radius = radius.max(0);
+    let min_chunk_x = center.x - radius;
+    let min_chunk_y = center.y - radius;
+    let chunk_count = (radius * 2 + 1) as u32;
+    MapBounds {
+        min_x: min_chunk_x * RENDER_CHUNK_TILES,
+        min_y: min_chunk_y * RENDER_CHUNK_TILES,
+        width: chunk_count * RENDER_CHUNK_TILES_U32,
+        height: chunk_count * RENDER_CHUNK_TILES_U32,
     }
 }
 
-fn should_use_world_bounds(world: MapBounds, viewport: MapBounds) -> bool {
-    let world_area = bounds_area(world);
-    let viewport_area = bounds_area(viewport);
-    world_area <= FULL_WORLD_RENDER_CELL_LIMIT
-        && viewport_area as f32 >= world_area as f32 * FULL_WORLD_RENDER_AREA_RATIO
-}
-
-fn bounds_area(bounds: MapBounds) -> u64 {
-    u64::from(bounds.width) * u64::from(bounds.height)
+fn chunk_coords_for_chunk_distance(center: RenderChunkCoord, radius: i32) -> Vec<RenderChunkCoord> {
+    let radius = radius.max(0);
+    let mut chunks = Vec::with_capacity(((radius * 2 + 1) * (radius * 2 + 1)) as usize);
+    for y in center.y - radius..=center.y + radius {
+        for x in center.x - radius..=center.x + radius {
+            chunks.push(RenderChunkCoord { x, y });
+        }
+    }
+    chunks.sort_by_key(|coord| {
+        let dx = (coord.x - center.x).abs();
+        let dy = (coord.y - center.y).abs();
+        (dx.max(dy), dx + dy, dy, dx)
+    });
+    chunks
 }
 
 /// Swap every tilemap's texture to the atlas for `ActiveTheme` when it changes.
@@ -907,7 +924,7 @@ pub fn draw_grid(
     };
 
     let tile_px = world_model.tile_size.max(1) as f32;
-    let padding = settings.view_distance as i32;
+    let padding = GRID_PADDING_TILES;
     let step = grid_line_step_tiles(tile_px, camera_projection);
     let min_tile_x = (view_bounds.min_x / tile_px).floor() as i32 - padding;
     let max_tile_x = (view_bounds.max_x / tile_px).ceil() as i32 + padding;
@@ -1225,75 +1242,75 @@ mod tests {
     }
 
     #[test]
-    fn small_view_uses_viewport_render_bounds() {
-        let mut w = VoxelWorld::default();
-        set_tile(&mut w, 0, 0, 0, TileKind::Floor).unwrap();
-        set_tile(&mut w, 0, 639, 359, TileKind::Wall).unwrap();
-
-        let (bounds, mode) = select_render_bounds(
-            &w,
-            0,
+    fn render_distance_uses_fixed_chunk_radius_for_small_view() {
+        let (bounds, chunks, mode) = select_render_bounds(
             MapBounds {
                 min_x: 293,
                 min_y: 164,
                 width: 54,
                 height: 32,
             },
+            4,
         );
 
-        assert_eq!(mode, RenderBoundsMode::Viewport);
-        assert_eq!(bounds.width, 134);
-        assert_eq!(bounds.height, 112);
+        assert_eq!(mode, RenderBoundsMode::ChunkDistance);
+        assert_eq!(chunks.len(), 81);
+        assert_eq!(
+            bounds,
+            MapBounds {
+                min_x: 64,
+                min_y: -128,
+                width: 576,
+                height: 576
+            }
+        );
     }
 
     #[test]
-    fn large_view_uses_world_render_bounds() {
-        let mut w = VoxelWorld::default();
-        set_tile(&mut w, 0, 0, 0, TileKind::Floor).unwrap();
-        set_tile(&mut w, 0, 639, 359, TileKind::Wall).unwrap();
-
-        let (bounds, mode) = select_render_bounds(
-            &w,
-            0,
+    fn render_distance_ignores_zoomed_out_view_size() {
+        let (bounds, chunks, mode) = select_render_bounds(
             MapBounds {
                 min_x: 53,
                 min_y: 29,
                 width: 534,
                 height: 302,
             },
+            4,
         );
 
-        assert_eq!(mode, RenderBoundsMode::World);
+        assert_eq!(mode, RenderBoundsMode::ChunkDistance);
+        assert_eq!(chunks.len(), 81);
         assert_eq!(
             bounds,
             MapBounds {
-                min_x: 0,
-                min_y: 0,
-                width: 640,
-                height: 360
+                min_x: 64,
+                min_y: -128,
+                width: 576,
+                height: 576
             }
         );
     }
 
     #[test]
-    fn world_render_bounds_release_when_view_is_small_again() {
-        let world_bounds = MapBounds {
-            min_x: 0,
-            min_y: 0,
-            width: 640,
-            height: 360,
-        };
-        let small_viewport_bounds = render_bounds_for_view(MapBounds {
-            min_x: 293,
-            min_y: 164,
-            width: 54,
-            height: 32,
-        });
+    fn chunk_distance_queue_starts_from_camera_chunk() {
+        let chunks = chunk_coords_for_chunk_distance(RenderChunkCoord { x: 3, y: 2 }, 1);
 
-        assert!(!should_use_world_bounds(
-            world_bounds,
-            small_viewport_bounds
-        ));
+        assert_eq!(chunks.first(), Some(&RenderChunkCoord { x: 3, y: 2 }));
+        assert_eq!(chunks.len(), 9);
+        assert_eq!(
+            chunks.iter().copied().collect::<HashSet<_>>(),
+            HashSet::from([
+                RenderChunkCoord { x: 2, y: 1 },
+                RenderChunkCoord { x: 3, y: 1 },
+                RenderChunkCoord { x: 4, y: 1 },
+                RenderChunkCoord { x: 2, y: 2 },
+                RenderChunkCoord { x: 3, y: 2 },
+                RenderChunkCoord { x: 4, y: 2 },
+                RenderChunkCoord { x: 2, y: 3 },
+                RenderChunkCoord { x: 3, y: 3 },
+                RenderChunkCoord { x: 4, y: 3 },
+            ])
+        );
     }
 
     #[test]

@@ -11,7 +11,7 @@ use crate::render::MapBounds;
 use crate::render::tilemap::RenderRefresh;
 use crate::resource::{
     ActivePreset, ActiveTheme, ActiveZ, CursorTile, EditorHistory, EditorTool, EditorViewSettings,
-    WorldModel, WorldRevision,
+    MAX_RENDER_DISTANCE_CHUNKS, MIN_RENDER_DISTANCE_CHUNKS, WorldModel, WorldRevision,
 };
 use crate::scenario::{FloodFortressPreset, create_flood_fortress_preset};
 use crate::viewport::world_viewport_bounds_current;
@@ -1443,9 +1443,18 @@ fn settings_tab(
     ui.add_space(12.0);
     ui.label(egui::RichText::new("View").size(11.0).color(zinc(500)));
     ui.horizontal(|ui| {
-        ui.label("View Distance");
-        ui.add(egui::DragValue::new(&mut view_settings.view_distance).range(1..=50));
+        ui.label("Render Distance");
+        ui.add(
+            egui::DragValue::new(&mut view_settings.render_distance_chunks)
+                .range(MIN_RENDER_DISTANCE_CHUNKS..=MAX_RENDER_DISTANCE_CHUNKS),
+        );
+        ui.label("chunks");
     });
+    ui.label(
+        egui::RichText::new("Fixed chunk radius around the camera; zoom only switches LOD.")
+            .size(10.0)
+            .color(zinc(500)),
+    );
     ui.checkbox(&mut view_settings.show_grid, "Show Grid");
     ui.checkbox(&mut view_settings.show_minimap, "Show Minimap");
     ui.checkbox(&mut view_settings.show_fog_of_war, "Fog of War");
