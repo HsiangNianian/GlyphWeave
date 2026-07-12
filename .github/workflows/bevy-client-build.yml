@@ -100,3 +100,48 @@ jobs:
           path: bevy/target/debug/${{ matrix.binary }}
           if-no-files-found: error
           retention-days: 7
+
+  wasm:
+    name: Build WebAssembly
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            bevy -> target
+          cache-on-failure: true
+
+      - name: Build Bevy WebAssembly client
+        working-directory: bevy
+        run: >
+          cargo build
+          -p glyphweave-app
+          --bin glyphweave
+          --target wasm32-unknown-unknown
+          --locked
+          --verbose
+
+      - name: Get short SHA
+        if: github.event_name == 'workflow_dispatch'
+        id: slug
+        shell: bash
+        run: echo "sha8=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload WebAssembly artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v6
+        with:
+          name: glyphweave-wasm-${{ steps.slug.outputs.sha8 }}
+          path: bevy/target/wasm32-unknown-unknown/debug/glyphweave.wasm
+          if-no-files-found: error
+          retention-days: 7
