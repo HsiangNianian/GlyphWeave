@@ -1,0 +1,147 @@
+name: Bevy Client Build
+
+on:
+  push:
+    branches: ["main", "dev"]
+    paths:
+      - "bevy/**"
+      - ".github/workflows/bevy-client-build.yml"
+  pull_request:
+    branches: ["main", "dev"]
+    paths:
+      - "bevy/**"
+      - ".github/workflows/bevy-client-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  native:
+    name: Build on ${{ matrix.name }}
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-latest
+            name: Linux
+            binary: glyphweave
+            artifact: glyphweave-linux
+          - platform: windows-latest
+            name: Windows
+            binary: glyphweave.exe
+            artifact: glyphweave-windows
+          - platform: macos-latest
+            name: macOS
+            binary: glyphweave
+            artifact: glyphweave-macos
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Bevy dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang \
+            libasound2-dev \
+            libegl1-mesa-dev \
+            libgl1-mesa-dev \
+            libudev-dev \
+            libwayland-dev \
+            libx11-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxinerama-dev \
+            libxkbcommon-dev \
+            libxrandr-dev \
+            pkg-config \
+            wayland-protocols
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            bevy -> target
+          cache-on-failure: true
+
+      - name: Run Bevy workspace tests
+        working-directory: bevy
+        run: cargo test --workspace --locked --verbose
+
+      - name: Build Bevy client
+        working-directory: bevy
+        run: cargo build -p glyphweave-app --bin glyphweave --locked --verbose
+
+      - name: Get short SHA
+        if: github.event_name == 'workflow_dispatch'
+        id: slug
+        shell: bash
+        run: echo "sha8=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload client artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.artifact }}-${{ steps.slug.outputs.sha8 }}
+          path: bevy/target/debug/${{ matrix.binary }}
+          if-no-files-found: error
+          retention-days: 7
+
+  wasm:
+    name: Build WebAssembly
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            bevy -> target
+          cache-on-failure: true
+
+      - name: Build Bevy WebAssembly client
+        working-directory: bevy
+        run: >
+          cargo build
+          -p glyphweave-app
+          --bin glyphweave
+          --target wasm32-unknown-unknown
+          --locked
+          --verbose
+
+      - name: Get short SHA
+        if: github.event_name == 'workflow_dispatch'
+        id: slug
+        shell: bash
+        run: echo "sha8=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload WebAssembly artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v6
+        with:
+          name: glyphweave-wasm-${{ steps.slug.outputs.sha8 }}
+          path: bevy/target/wasm32-unknown-unknown/debug/glyphweave.wasm
+          if-no-files-found: error
+          retention-days: 7
