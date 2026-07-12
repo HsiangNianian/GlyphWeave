@@ -87,7 +87,7 @@ pub const MIN_RENDER_DISTANCE_CHUNKS: u32 = 1;
 pub const MAX_RENDER_DISTANCE_CHUNKS: u32 = 12;
 
 impl EditorViewSettings {
-    pub fn clamped_render_distance_chunks(self) -> u32 {
+    pub fn clamped_render_distance_chunks(&self) -> u32 {
         self.render_distance_chunks
             .clamp(MIN_RENDER_DISTANCE_CHUNKS, MAX_RENDER_DISTANCE_CHUNKS)
     }
