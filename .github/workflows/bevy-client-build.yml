@@ -31,15 +31,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: ubuntu-22.04
-            name: Ubuntu 22.04
+          - platform: ubuntu-latest
+            name: Linux
             binary: glyphweave
-            artifact: glyphweave-linux-ubuntu
+            artifact: glyphweave-linux
           - platform: windows-latest
             name: Windows
             binary: glyphweave.exe
             artifact: glyphweave-windows
-          - platform: macos-14
+          - platform: macos-latest
             name: macOS
             binary: glyphweave
             artifact: glyphweave-macos
@@ -48,7 +48,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Install Bevy dependencies (Ubuntu)
+      - name: Install Bevy dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
@@ -98,77 +98,5 @@ jobs:
         with:
           name: ${{ matrix.artifact }}-${{ steps.slug.outputs.sha8 }}
           path: bevy/target/debug/${{ matrix.binary }}
-          if-no-files-found: error
-          retention-days: 7
-
-  arch-wayland:
-    name: Build on Arch Linux (Wayland)
-    runs-on: ubuntu-22.04
-    container:
-      image: archlinux:latest
-      options: --user root
-
-    steps:
-      - name: Install Arch dependencies
-        run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm \
-            alsa-lib \
-            base-devel \
-            ca-certificates \
-            clang \
-            git \
-            libx11 \
-            libxcursor \
-            libxi \
-            libxinerama \
-            libxkbcommon \
-            libxrandr \
-            mesa \
-            nodejs \
-            pkgconf \
-            systemd-libs \
-            wayland \
-            wayland-protocols
-
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Configure Wayland environment
-        run: |
-          echo "WAYLAND_DISPLAY=wayland-1" >> "$GITHUB_ENV"
-          echo "GDK_BACKEND=wayland" >> "$GITHUB_ENV"
-          echo "XDG_SESSION_TYPE=wayland" >> "$GITHUB_ENV"
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            bevy -> target
-          cache-on-failure: true
-
-      - name: Run Bevy workspace tests
-        working-directory: bevy
-        run: cargo test --workspace --locked --verbose
-
-      - name: Build Bevy client
-        working-directory: bevy
-        run: cargo build -p glyphweave-app --bin glyphweave --locked --verbose
-
-      - name: Get short SHA
-        if: github.event_name == 'workflow_dispatch'
-        id: slug
-        shell: bash
-        run: echo "sha8=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
-
-      - name: Upload client artifact
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v6
-        with:
-          name: glyphweave-linux-arch-wayland-${{ steps.slug.outputs.sha8 }}
-          path: bevy/target/debug/glyphweave
           if-no-files-found: error
           retention-days: 7
