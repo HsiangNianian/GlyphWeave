@@ -3,6 +3,8 @@ name: Bevy Client Build
 on:
   push:
     branches: ["main", "dev"]
+    tags:
+      - "v*"
     paths:
       - "bevy/**"
       - ".github/workflows/bevy-client-build.yml"
@@ -12,6 +14,11 @@ on:
       - "bevy/**"
       - ".github/workflows/bevy-client-build.yml"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing tag to build and publish, e.g. v0.1.0"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -22,6 +29,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || github.event.inputs.release_tag || '' }}
 
 jobs:
   native:
@@ -46,7 +54,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG || github.ref }}
 
       - name: Install Bevy dependencies (Linux)
         if: runner.os == 'Linux'
@@ -84,20 +94,65 @@ jobs:
 
       - name: Build Bevy client
         working-directory: bevy
-        run: cargo build -p glyphweave-app --bin glyphweave --locked --verbose
-
-      - name: Get short SHA
-        if: github.event_name == 'workflow_dispatch'
-        id: slug
         shell: bash
-        run: echo "sha8=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          build_args=(
+            cargo build
+            -p glyphweave-app
+            --bin glyphweave
+            --locked
+            --verbose
+          )
+
+          if [[ -n "${RELEASE_TAG}" ]]; then
+            build_args+=(--release)
+          fi
+
+          "${build_args[@]}"
+
+      - name: Package native artifact
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          ARTIFACT: ${{ matrix.artifact }}
+          BINARY: ${{ matrix.binary }}
+        run: |
+          set -euo pipefail
+          profile=debug
+          suffix="${GITHUB_SHA::8}"
+
+          if [[ -n "${RELEASE_TAG}" ]]; then
+            profile=release
+            suffix="${RELEASE_TAG}"
+          fi
+
+          rm -rf dist package
+          mkdir -p dist package
+          cp "bevy/target/${profile}/${BINARY}" "package/${BINARY}"
+
+          if [[ "${RUNNER_OS}" == "Windows" ]]; then
+            SUFFIX="${suffix}" python - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZIP_DEFLATED, ZipFile
+
+          binary = Path("package") / os.environ["BINARY"]
+          archive = Path("dist") / f'{os.environ["ARTIFACT"]}-{os.environ["SUFFIX"]}.zip'
+
+          with ZipFile(archive, "w", ZIP_DEFLATED) as zip_file:
+              zip_file.write(binary, arcname=binary.name)
+          PY
+          else
+            tar -C package -czf "dist/${ARTIFACT}-${suffix}.tar.gz" "${BINARY}"
+          fi
 
       - name: Upload client artifact
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v6
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.artifact }}-${{ steps.slug.outputs.sha8 }}
-          path: bevy/target/debug/${{ matrix.binary }}
+          name: ${{ matrix.artifact }}-${{ env.RELEASE_TAG || github.ref_name }}
+          path: dist/*
           if-no-files-found: error
           retention-days: 7
 
@@ -107,7 +162,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.RELEASE_TAG || github.ref }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -123,25 +180,94 @@ jobs:
 
       - name: Build Bevy WebAssembly client
         working-directory: bevy
-        run: >
-          cargo build
-          -p glyphweave-app
-          --bin glyphweave
-          --target wasm32-unknown-unknown
-          --locked
-          --verbose
-
-      - name: Get short SHA
-        if: github.event_name == 'workflow_dispatch'
-        id: slug
         shell: bash
-        run: echo "sha8=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          build_args=(
+            cargo build
+            -p glyphweave-app
+            --bin glyphweave
+            --target wasm32-unknown-unknown
+            --locked
+            --verbose
+          )
+
+          if [[ -n "${RELEASE_TAG}" ]]; then
+            build_args+=(--profile wasm-release)
+          fi
+
+          "${build_args[@]}"
+
+      - name: Package WebAssembly artifact
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          profile=debug
+          suffix="${GITHUB_SHA::8}"
+
+          if [[ -n "${RELEASE_TAG}" ]]; then
+            profile=wasm-release
+            suffix="${RELEASE_TAG}"
+          fi
+
+          rm -rf dist package
+          mkdir -p dist package
+          cp "bevy/target/wasm32-unknown-unknown/${profile}/glyphweave.wasm" \
+            package/glyphweave.wasm
+          tar -C package -czf "dist/glyphweave-wasm-${suffix}.tar.gz" glyphweave.wasm
 
       - name: Upload WebAssembly artifact
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v6
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v7
         with:
-          name: glyphweave-wasm-${{ steps.slug.outputs.sha8 }}
-          path: bevy/target/wasm32-unknown-unknown/debug/glyphweave.wasm
+          name: glyphweave-wasm-${{ env.RELEASE_TAG || github.ref_name }}
+          path: dist/*
           if-no-files-found: error
           retention-days: 7
+
+  release:
+    name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag != '')
+    needs: [native, wasm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || github.event.inputs.release_tag }}
+
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: glyphweave-*-${{ env.RELEASE_TAG }}
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          assets=(release-assets/*)
+
+          if (( ${#assets[@]} == 0 )); then
+            echo "No release artifacts were downloaded." >&2
+            exit 1
+          fi
+
+          ls -lah release-assets
+
+          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" "${assets[@]}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --clobber
+          else
+            gh release create "${RELEASE_TAG}" "${assets[@]}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "${RELEASE_TAG}" \
+              --generate-notes \
+              --verify-tag
+          fi
