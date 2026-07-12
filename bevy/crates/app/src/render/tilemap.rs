@@ -231,6 +231,7 @@ fn chunk_bounds(coord: RenderChunkCoord) -> MapBounds {
     }
 }
 
+#[cfg(test)]
 fn chunk_coords_for_bounds(bounds: MapBounds) -> Vec<RenderChunkCoord> {
     let max_x = bounds.min_x + bounds.width as i32 - 1;
     let max_y = bounds.min_y + bounds.height as i32 - 1;
