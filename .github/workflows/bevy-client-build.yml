@@ -40,17 +40,29 @@ jobs:
       matrix:
         include:
           - platform: ubuntu-latest
-            name: Linux
+            name: Linux x86_64
             binary: glyphweave
-            artifact: glyphweave-linux
+            artifact: glyphweave-linux-x86_64
+          - platform: ubuntu-24.04-arm
+            name: Linux aarch64
+            binary: glyphweave
+            artifact: glyphweave-linux-aarch64
           - platform: windows-latest
-            name: Windows
+            name: Windows x86_64
             binary: glyphweave.exe
-            artifact: glyphweave-windows
-          - platform: macos-latest
-            name: macOS
+            artifact: glyphweave-windows-x86_64
+          - platform: windows-11-arm
+            name: Windows aarch64
+            binary: glyphweave.exe
+            artifact: glyphweave-windows-aarch64
+          - platform: macos-15-intel
+            name: macOS x86_64
             binary: glyphweave
-            artifact: glyphweave-macos
+            artifact: glyphweave-macos-x86_64
+          - platform: macos-15
+            name: macOS aarch64
+            binary: glyphweave
+            artifact: glyphweave-macos-aarch64
 
     steps:
       - name: Checkout
@@ -115,44 +127,30 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         shell: bash
         env:
-          ARTIFACT: ${{ matrix.artifact }}
           BINARY: ${{ matrix.binary }}
         run: |
           set -euo pipefail
           profile=debug
-          suffix="${GITHUB_SHA::8}"
 
           if [[ -n "${RELEASE_TAG}" ]]; then
             profile=release
-            suffix="${RELEASE_TAG}"
           fi
 
-          rm -rf dist package
-          mkdir -p dist package
+          rm -rf package
+          mkdir -p package
           cp "bevy/target/${profile}/${BINARY}" "package/${BINARY}"
+          cp -R bevy/assets package/assets
 
-          if [[ "${RUNNER_OS}" == "Windows" ]]; then
-            SUFFIX="${suffix}" python - <<'PY'
-          import os
-          from pathlib import Path
-          from zipfile import ZIP_DEFLATED, ZipFile
-
-          binary = Path("package") / os.environ["BINARY"]
-          archive = Path("dist") / f'{os.environ["ARTIFACT"]}-{os.environ["SUFFIX"]}.zip'
-
-          with ZipFile(archive, "w", ZIP_DEFLATED) as zip_file:
-              zip_file.write(binary, arcname=binary.name)
-          PY
-          else
-            tar -C package -czf "dist/${ARTIFACT}-${suffix}.tar.gz" "${BINARY}"
+          if [[ "${RUNNER_OS}" != "Windows" ]]; then
+            chmod +x "package/${BINARY}"
           fi
 
       - name: Upload client artifact
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.artifact }}-${{ env.RELEASE_TAG || github.ref_name }}
-          path: dist/*
+          name: ${{ matrix.artifact }}-${{ env.RELEASE_TAG || github.run_id }}
+          path: package
           if-no-files-found: error
           retention-days: 7
 
@@ -204,25 +202,23 @@ jobs:
         run: |
           set -euo pipefail
           profile=debug
-          suffix="${GITHUB_SHA::8}"
 
           if [[ -n "${RELEASE_TAG}" ]]; then
             profile=wasm-release
-            suffix="${RELEASE_TAG}"
           fi
 
-          rm -rf dist package
-          mkdir -p dist package
+          rm -rf package
+          mkdir -p package
           cp "bevy/target/wasm32-unknown-unknown/${profile}/glyphweave.wasm" \
             package/glyphweave.wasm
-          tar -C package -czf "dist/glyphweave-wasm-${suffix}.tar.gz" glyphweave.wasm
+          cp -R bevy/assets package/assets
 
       - name: Upload WebAssembly artifact
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v7
         with:
-          name: glyphweave-wasm-${{ env.RELEASE_TAG || github.ref_name }}
-          path: dist/*
+          name: glyphweave-wasm-${{ env.RELEASE_TAG || github.run_id }}
+          path: package
           if-no-files-found: error
           retention-days: 7
 
@@ -241,8 +237,51 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           pattern: glyphweave-*-${{ env.RELEASE_TAG }}
-          path: release-assets
-          merge-multiple: true
+          path: release-packages
+
+      - name: Package release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          rm -rf release-assets
+          mkdir -p release-assets
+
+          package_dirs=(release-packages/*)
+          if (( ${#package_dirs[@]} == 0 )); then
+            echo "No release packages were downloaded." >&2
+            exit 1
+          fi
+
+          for package_dir in "${package_dirs[@]}"; do
+            name="$(basename "${package_dir}")"
+            content_dir="${package_dir}"
+
+            if [[ -d "${package_dir}/package" ]]; then
+              content_dir="${package_dir}/package"
+            fi
+
+            if [[ "${name}" == glyphweave-windows-* ]]; then
+              python - "${content_dir}" "release-assets/${name}.zip" <<'PY'
+          import sys
+          from pathlib import Path
+          from zipfile import ZIP_DEFLATED, ZipFile
+
+          package_dir = Path(sys.argv[1])
+          archive = Path(sys.argv[2])
+
+          with ZipFile(archive, "w", ZIP_DEFLATED) as zip_file:
+              for path in sorted(package_dir.rglob("*")):
+                  if path.is_file():
+                      zip_file.write(path, arcname=path.relative_to(package_dir))
+          PY
+            else
+              tar -C "${content_dir}" -czf "release-assets/${name}.tar.gz" .
+            fi
+          done
+
+          ls -lah release-assets
 
       - name: Publish GitHub Release
         shell: bash
@@ -261,6 +300,19 @@ jobs:
           ls -lah release-assets
 
           if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            while IFS= read -r asset; do
+              if [[ "${asset}" == glyphweave-* ]]; then
+                gh release delete-asset "${RELEASE_TAG}" "${asset}" \
+                  --repo "${GITHUB_REPOSITORY}" \
+                  --yes
+              fi
+            done < <(
+              gh release view "${RELEASE_TAG}" \
+                --repo "${GITHUB_REPOSITORY}" \
+                --json assets \
+                --jq '.assets[].name'
+            )
+
             gh release upload "${RELEASE_TAG}" "${assets[@]}" \
               --repo "${GITHUB_REPOSITORY}" \
               --clobber
