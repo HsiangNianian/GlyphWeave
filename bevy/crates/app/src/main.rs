@@ -214,11 +214,56 @@ fn asset_path() -> String {
 
     #[cfg(not(target_arch = "wasm32"))]
     {
-        // Bevy 0.18 resolves file_path relative to the executable directory,
-        // not the current working directory, so native builds use an absolute
-        // path derived from the crate manifest.
-        format!("{}/../../assets", env!("CARGO_MANIFEST_DIR"))
+        native_asset_path().to_string_lossy().into_owned()
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn native_asset_path() -> std::path::PathBuf {
+    if let Some(path) = std::env::var_os("GLYPHWEAVE_ASSET_PATH")
+        .filter(|path| !path.as_os_str().is_empty())
+        .map(std::path::PathBuf::from)
+    {
+        return path;
+    }
+
+    for candidate in native_asset_path_candidates() {
+        if has_required_assets(&candidate) {
+            return candidate;
+        }
+    }
+
+    development_asset_path()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn native_asset_path_candidates() -> Vec<std::path::PathBuf> {
+    let mut candidates = Vec::new();
+
+    if let Ok(executable) = std::env::current_exe()
+        && let Some(directory) = executable.parent()
+    {
+        candidates.push(directory.join("assets"));
+    }
+
+    if let Ok(directory) = std::env::current_dir() {
+        candidates.push(directory.join("assets"));
+    }
+
+    candidates.push(development_asset_path());
+    candidates
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn development_asset_path() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets")
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn has_required_assets(path: &std::path::Path) -> bool {
+    path.join("textures/atlas-ansi-16.png").is_file()
+        && path.join("textures/atlas-cogmind.png").is_file()
+        && path.join("textures/atlas-fortress-pixel.png").is_file()
 }
 
 fn asset_meta_check() -> AssetMetaCheck {
@@ -269,4 +314,15 @@ fn load_initial_world(mut commands: Commands, startup_options: Res<StartupOption
     commands.insert_resource(ui::CurrentMapPath(path));
     commands.insert_resource(WorldModel::new(world, voxel_adapter::DEFAULT_TILE_SIZE));
     commands.insert_resource(WorldRevision(1));
+}
+
+#[cfg(test)]
+#[cfg(not(target_arch = "wasm32"))]
+mod tests {
+    use super::{development_asset_path, has_required_assets};
+
+    #[test]
+    fn development_asset_path_contains_atlases() {
+        assert!(has_required_assets(&development_asset_path()));
+    }
 }
