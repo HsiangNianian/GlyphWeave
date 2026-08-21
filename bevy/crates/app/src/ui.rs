@@ -3,8 +3,8 @@
 //! floating status controls.
 use crate::ActiveBrush;
 use crate::gameplay::{
-    ActiveGameOrder, GameMode, GameplayModel, command_for_order, dispatch_text_command,
-    reset_gameplay_for_world,
+    ActiveGameOrder, CommandPreviewCache, GameMode, GameplayModel, command_for_order,
+    dispatch_text_command, preview_command, reset_gameplay_for_world,
 };
 use crate::preset::{PRESETS, PresetCategory};
 use crate::render::MapBounds;
@@ -20,7 +20,9 @@ use bevy::diagnostic::DiagnosticsStore;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
-use glyphweave_core::gameplay::{BuildKind, ChallengeStatus, GameCommand, ResourceKind, TileCoord};
+use glyphweave_core::gameplay::{
+    BuildKind, ChallengeStatus, CommandReceipt, GameCommand, MedalTier, ResourceKind, TileCoord,
+};
 #[cfg(not(target_arch = "wasm32"))]
 use glyphweave_core::migration::{MigrationMode, MigrationReport, migrate_legacy_json};
 #[cfg(not(target_arch = "wasm32"))]
@@ -56,6 +58,11 @@ enum EditorScreen {
     Editor,
 }
 
+struct CommandFeedback {
+    accepted: bool,
+    message: String,
+}
+
 pub struct EditorUiState {
     screen: EditorScreen,
     side_panel_open: bool,
@@ -69,6 +76,15 @@ pub struct EditorUiState {
     #[cfg(not(target_arch = "wasm32"))]
     home_import_path: String,
     command_text: String,
+    command_feedback: Option<CommandFeedback>,
+    command_preview_cache: CommandPreviewCache,
+    /// Terminal challenge state already shown by the settlement window, so the
+    /// modal opens once per finished run instead of every frame.
+    settled_challenge: Option<ChallengeStatus>,
+    /// Whether the settlement modal is currently visible.
+    settlement_open: bool,
+    /// Flood Fortress preset backing the active challenge, used by "Play Again".
+    active_challenge_preset: Option<FloodFortressPreset>,
     minimap_cache: MinimapCache,
     style_applied: bool,
 }
@@ -128,6 +144,11 @@ impl Default for EditorUiState {
             #[cfg(not(target_arch = "wasm32"))]
             home_import_path: String::new(),
             command_text: String::new(),
+            command_feedback: None,
+            command_preview_cache: CommandPreviewCache::default(),
+            settled_challenge: None,
+            settlement_open: false,
+            active_challenge_preset: None,
             minimap_cache: MinimapCache::default(),
             style_applied: false,
         }
@@ -267,15 +288,20 @@ pub fn ui_overlay(
                 ui.add_space(4.0);
 
                 match ui_state.side_tab {
-                    SideTab::Play => play_tab(
-                        ui,
-                        &mut ui_state,
-                        &mut gameplay.game_mode,
-                        &mut gameplay.active_order,
-                        &mut gameplay.gameplay_model,
-                        &world.world_model,
-                        &cursor,
-                    ),
+                    SideTab::Play => {
+                        ui_state
+                            .command_preview_cache
+                            .refresh(&world.world_model, world.world_revision.0);
+                        play_tab(
+                            ui,
+                            &mut ui_state,
+                            &mut gameplay.game_mode,
+                            &mut gameplay.active_order,
+                            &mut gameplay.gameplay_model,
+                            &world.world_model,
+                            &cursor,
+                        )
+                    }
                     SideTab::Tiles => {
                         tiles_tab(ui, &mut active_brush, &mut active_preset, &mut tool)
                     }
@@ -406,6 +432,18 @@ pub fn ui_overlay(
                 ui_state.side_panel_open = !ui_state.side_panel_open;
             }
         });
+
+    settlement_window(
+        ctx,
+        &mut ui_state,
+        &mut gameplay.game_mode,
+        &mut gameplay.gameplay_model,
+        &mut world.world_model,
+        &mut world.active_z,
+        &mut active_theme,
+        &mut world.world_revision,
+        &mut refresh,
+    );
 }
 
 fn zoom_label(projection: &Projection) -> String {
@@ -720,6 +758,9 @@ fn home_screen(
                                     None,
                                 );
                                 gameplay_model.0 = state;
+                                ui_state.active_challenge_preset = Some(preset);
+                                ui_state.settled_challenge = None;
+                                ui_state.settlement_open = false;
                                 ui_state.side_tab = SideTab::Play;
                                 ui_state.path_text.clear();
                                 ui_state.status_message.clear();
@@ -1002,6 +1043,9 @@ fn play_tab(
             enabled,
             egui::TextEdit::singleline(&mut ui_state.command_text).desired_width(118.0),
         );
+        if response.changed() {
+            ui_state.command_feedback = None;
+        }
         let submit = response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
         if ui
             .add_enabled(enabled, egui::Button::new("Run").corner_radius(3))
@@ -1015,15 +1059,38 @@ fn play_tab(
                 &world_model.world,
                 gameplay_model,
             ) {
-                Ok(()) => {
-                    gameplay_model.emit("Accepted text command.");
+                Ok(receipt) => {
+                    let summary = command_receipt_summary(&receipt);
+                    gameplay_model.emit(format!("Accepted text command: {summary}."));
+                    ui_state.command_feedback = Some(CommandFeedback {
+                        accepted: true,
+                        message: format!("accepted - {summary}"),
+                    });
                     ui_state.command_text.clear();
                     **game_mode = GameMode::Play;
                 }
-                Err(err) => gameplay_model.emit(format!("Text command rejected: {err}.")),
+                Err(err) => {
+                    gameplay_model.emit(format!("Text command rejected: {err}."));
+                    ui_state.command_feedback = Some(CommandFeedback {
+                        accepted: false,
+                        message: format!("rejected - {err}"),
+                    });
+                }
             }
         }
     });
+    if let Some(feedback) = &ui_state.command_feedback {
+        let color = if feedback.accepted {
+            rgb(0x65A36E)
+        } else {
+            rgb(0xD8574A)
+        };
+        ui.label(
+            egui::RichText::new(&feedback.message)
+                .size(10.0)
+                .color(color),
+        );
+    }
 
     ui.add_space(8.0);
     ui.separator();
@@ -1064,13 +1131,48 @@ fn play_tab(
     ui.label(egui::RichText::new("Cursor").size(11.0).color(zinc(500)));
     if cursor.valid {
         let focus = TileCoord::new(cursor.x, cursor.y);
-        let preview = command_for_order(**active_order, focus, 0, gameplay_model);
-        ui.label(format!(
-            "{}, {} -> {}",
-            cursor.x,
-            cursor.y,
-            command_label(preview.as_ref())
-        ));
+        let area_radius = if ui.input(|input| input.modifiers.shift) {
+            2
+        } else {
+            0
+        };
+        let command = command_for_order(**active_order, focus, area_radius, gameplay_model);
+        let label = match &command {
+            Ok(command) => command_label(command.as_ref()),
+            Err(_) => active_order.label(),
+        };
+        ui.label(format!("{}, {} -> {label}", cursor.x, cursor.y));
+        match command {
+            Ok(Some(command)) => {
+                match preview_command(&command, &ui_state.command_preview_cache, gameplay_model) {
+                    Ok(receipt) => {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "ready - {}",
+                                command_receipt_summary(&receipt)
+                            ))
+                            .size(10.0)
+                            .color(rgb(0x65A36E)),
+                        );
+                    }
+                    Err(err) => {
+                        ui.label(
+                            egui::RichText::new(format!("blocked - {err}"))
+                                .size(10.0)
+                                .color(rgb(0xD8574A)),
+                        );
+                    }
+                }
+            }
+            Ok(None) => {}
+            Err(err) => {
+                ui.label(
+                    egui::RichText::new(format!("blocked - {err}"))
+                        .size(10.0)
+                        .color(rgb(0xD8574A)),
+                );
+            }
+        }
     } else {
         ui.label("outside map");
     }
@@ -1120,6 +1222,41 @@ fn command_label(command: Option<&GameCommand>) -> &'static str {
     }
 }
 
+fn command_receipt_summary(receipt: &CommandReceipt) -> String {
+    if receipt.safe_zone_set {
+        return format!(
+            "evacuates {} {}",
+            receipt.jobs_created,
+            pluralize(receipt.jobs_created, "worker", "workers")
+        );
+    }
+    if receipt.core_storehouse_set {
+        return "sets core storehouse".to_string();
+    }
+    if receipt.stockpiles_created > 0 {
+        return "marks stockpile".to_string();
+    }
+    if receipt.jobs_canceled > 0 {
+        return format!(
+            "cancels {} {}",
+            receipt.jobs_canceled,
+            pluralize(receipt.jobs_canceled, "job", "jobs")
+        );
+    }
+    if receipt.jobs_created > 0 {
+        return format!(
+            "queues {} {}",
+            receipt.jobs_created,
+            pluralize(receipt.jobs_created, "job", "jobs")
+        );
+    }
+    "no open jobs in area".to_string()
+}
+
+fn pluralize(count: usize, singular: &'static str, plural: &'static str) -> &'static str {
+    if count == 1 { singular } else { plural }
+}
+
 fn challenge_status_panel(ui: &mut egui::Ui, gameplay_model: &GameplayModel) {
     let Some(challenge) = &gameplay_model.challenge else {
         return;
@@ -1164,6 +1301,198 @@ fn challenge_status_panel(ui: &mut egui::Ui, gameplay_model: &GameplayModel) {
             challenge.score.flooded_tiles
         ));
     }
+}
+
+/// Modal end-of-run screen for a finished Flood Fortress challenge.
+///
+/// Opens automatically once when the challenge reaches a terminal `Won`/`Lost`
+/// state, and offers a replay of the same scenario or a return to inspection.
+#[allow(clippy::too_many_arguments)]
+fn settlement_window(
+    ctx: &egui::Context,
+    ui_state: &mut EditorUiState,
+    game_mode: &mut ResMut<GameMode>,
+    gameplay_model: &mut ResMut<GameplayModel>,
+    world_model: &mut ResMut<WorldModel>,
+    active_z: &mut ResMut<ActiveZ>,
+    active_theme: &mut ResMut<ActiveTheme>,
+    world_revision: &mut ResMut<WorldRevision>,
+    refresh: &mut ResMut<RenderRefresh>,
+) {
+    let Some(challenge) = &gameplay_model.challenge else {
+        ui_state.settled_challenge = None;
+        ui_state.settlement_open = false;
+        return;
+    };
+    let status = challenge.status.clone();
+    let terminal = !status.is_running() && !matches!(status, ChallengeStatus::Setup);
+
+    // Open once when a run first reaches a terminal state.
+    if terminal && ui_state.settled_challenge.as_ref() != Some(&status) {
+        ui_state.settled_challenge = Some(status.clone());
+        ui_state.settlement_open = true;
+    }
+    if !terminal {
+        ui_state.settled_challenge = None;
+    }
+    if !ui_state.settlement_open || !terminal {
+        return;
+    }
+
+    let score = challenge.score.clone();
+    let goals = challenge.goals;
+    let mut replay = false;
+    let mut close = false;
+
+    egui::Window::new("Challenge Complete")
+        .collapsible(false)
+        .resizable(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+        .frame(floating_frame())
+        .show(ctx, |ui| {
+            ui.set_width(300.0);
+            match &status {
+                ChallengeStatus::Won(medal) => {
+                    let (label, color) = match medal {
+                        MedalTier::Gold => ("Gold", rgb(0xE8B23A)),
+                        MedalTier::Silver => ("Silver", zinc(300)),
+                        MedalTier::Bronze => ("Bronze", rgb(0xB07A4A)),
+                    };
+                    ui.vertical_centered(|ui| {
+                        ui.label(
+                            egui::RichText::new("Fortress Held")
+                                .size(20.0)
+                                .strong()
+                                .color(zinc(100)),
+                        );
+                        ui.add_space(4.0);
+                        ui.label(
+                            egui::RichText::new(format!("{label} Medal"))
+                                .size(15.0)
+                                .strong()
+                                .color(color),
+                        );
+                    });
+                }
+                ChallengeStatus::Lost { reason } => {
+                    ui.vertical_centered(|ui| {
+                        ui.label(
+                            egui::RichText::new("Colony Lost")
+                                .size(20.0)
+                                .strong()
+                                .color(rgb(0xD8574A)),
+                        );
+                        ui.add_space(4.0);
+                        ui.label(egui::RichText::new(reason).size(12.0).color(zinc(400)));
+                    });
+                }
+                _ => {}
+            }
+
+            ui.add_space(10.0);
+            ui.separator();
+            ui.add_space(6.0);
+            ui.label(egui::RichText::new("Results").size(11.0).color(zinc(500)));
+            settlement_row(
+                ui,
+                "Survivors",
+                format!("{}/{}", score.surviving_workers, score.total_workers),
+                score.surviving_workers >= goals.silver_min_survivors,
+            );
+            settlement_row(
+                ui,
+                "Core kept dry",
+                if score.core_wet_ticks == 0 {
+                    "yes".to_string()
+                } else {
+                    format!("{} wet ticks", score.core_wet_ticks)
+                },
+                score.core_wet_ticks == 0,
+            );
+            settlement_row(
+                ui,
+                "Flood structures",
+                score.flood_structures_built.to_string(),
+                score.flood_structures_built >= goals.silver_min_flood_structures,
+            );
+            settlement_row(
+                ui,
+                "Channels dug",
+                score.channels_dug.to_string(),
+                score.channels_dug >= goals.gold_min_channels,
+            );
+            settlement_row(
+                ui,
+                "Food",
+                score.remaining_food.to_string(),
+                score.remaining_food >= goals.gold_min_food,
+            );
+            settlement_row(
+                ui,
+                "Wood",
+                score.remaining_wood.to_string(),
+                score.remaining_wood >= goals.gold_min_wood,
+            );
+            settlement_row(
+                ui,
+                "Stone",
+                score.remaining_stone.to_string(),
+                score.remaining_stone >= goals.gold_min_stone,
+            );
+            settlement_row(ui, "Tiles flooded", score.flooded_tiles.to_string(), true);
+
+            ui.add_space(10.0);
+            ui.horizontal(|ui| {
+                if ui_state.active_challenge_preset.is_some()
+                    && ui
+                        .add(egui::Button::new("Play Again").corner_radius(4))
+                        .clicked()
+                {
+                    replay = true;
+                }
+                if ui
+                    .add(egui::Button::new("Keep Inspecting").corner_radius(4))
+                    .clicked()
+                {
+                    close = true;
+                }
+            });
+        });
+
+    if replay {
+        if let Some(preset) = ui_state.active_challenge_preset {
+            let (legacy, state) = create_flood_fortress_preset(preset);
+            let world = legacy_world_to_voxel(&legacy);
+            active_theme.0 = legacy.theme_id.clone();
+            active_z.0 = 0;
+            reset_gameplay_for_world(gameplay_model, &world);
+            gameplay_model.0 = state;
+            world_model.world = world;
+            world_model.tile_size = legacy.tile_size;
+            **game_mode = GameMode::Play;
+            ui_state.settled_challenge = None;
+            ui_state.settlement_open = false;
+            bump_world_revision(world_revision);
+            refresh.0 = true;
+        }
+    } else if close {
+        ui_state.settlement_open = false;
+    }
+}
+
+fn settlement_row(ui: &mut egui::Ui, label: &str, value: String, met: bool) {
+    ui.horizontal(|ui| {
+        let color = if met { zinc(300) } else { rgb(0xD8574A) };
+        ui.label(egui::RichText::new(label).size(11.0).color(color));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.label(
+                egui::RichText::new(value)
+                    .size(11.0)
+                    .monospace()
+                    .color(color),
+            );
+        });
+    });
 }
 
 fn tiles_tab(
@@ -2138,6 +2467,29 @@ mod tests {
 
         assert_eq!(zoom_label(&zoomed_in), "zoom 200%");
         assert_eq!(zoom_label(&zoomed_out), "zoom 50%");
+    }
+
+    #[test]
+    fn command_receipt_summary_describes_preview_effects() {
+        assert_eq!(
+            command_receipt_summary(&CommandReceipt {
+                jobs_created: 1,
+                ..CommandReceipt::default()
+            }),
+            "queues 1 job"
+        );
+        assert_eq!(
+            command_receipt_summary(&CommandReceipt {
+                jobs_created: 3,
+                safe_zone_set: true,
+                ..CommandReceipt::default()
+            }),
+            "evacuates 3 workers"
+        );
+        assert_eq!(
+            command_receipt_summary(&CommandReceipt::default()),
+            "no open jobs in area"
+        );
     }
 
     #[cfg(not(target_arch = "wasm32"))]

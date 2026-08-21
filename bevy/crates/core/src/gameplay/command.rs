@@ -78,6 +78,29 @@ pub enum CommandError {
     NoWorkers,
 }
 
+impl CommandError {
+    /// Short player-facing explanation for previews and rejection messages.
+    pub fn describe(&self) -> String {
+        match self {
+            Self::EmptyArea => "no tiles selected".to_string(),
+            Self::AreaTooLarge { requested, limit } => {
+                format!("area too large ({requested} > {limit} tiles)")
+            }
+            Self::NoValidTargets => "no valid targets in area".to_string(),
+            Self::MissingStockpile => "no stockpile designated".to_string(),
+            Self::NoWorkers => "no workers available".to_string(),
+        }
+    }
+}
+
+impl std::fmt::Display for CommandError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.describe())
+    }
+}
+
+impl std::error::Error for CommandError {}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CommandReceipt {
     pub jobs_created: usize,
@@ -90,6 +113,87 @@ pub struct CommandReceipt {
 pub struct CommandDispatcher;
 
 impl CommandDispatcher {
+    /// Validate a command and report what it would do without mutating `state`.
+    ///
+    /// Previewing only inspects the affected area and relevant state, so it is
+    /// cheap enough to run while the cursor moves without cloning `GameState`.
+    pub fn preview(
+        world: &World,
+        state: &GameState,
+        command: &GameCommand,
+    ) -> Result<CommandReceipt, CommandError> {
+        match command {
+            GameCommand::Mine { area } => preview_area_jobs(world, *area, |world, coord| {
+                is_mineable(rendered_tile_at(world, coord))
+            }),
+            GameCommand::Chop { area } => preview_area_jobs(world, *area, |world, coord| {
+                is_choppable(rendered_tile_at(world, coord))
+            }),
+            GameCommand::Build { blueprint } => {
+                preview_area_jobs(world, blueprint.area, |_, _| true)
+            }
+            GameCommand::Haul { from, .. } => {
+                validate_area(*from)?;
+                let jobs_created = state
+                    .item_piles
+                    .keys()
+                    .filter(|coord| from.contains(**coord))
+                    .take(MAX_COMMAND_TILES)
+                    .count();
+                if jobs_created == 0 {
+                    return Err(CommandError::NoValidTargets);
+                }
+                Ok(CommandReceipt {
+                    jobs_created,
+                    ..CommandReceipt::default()
+                })
+            }
+            GameCommand::Explore { area } => preview_area_jobs(world, *area, |_, _| true),
+            GameCommand::SetStockpile { area } => {
+                validate_area(*area)?;
+                Ok(CommandReceipt {
+                    stockpiles_created: 1,
+                    ..CommandReceipt::default()
+                })
+            }
+            GameCommand::SetCoreStorehouse { area } => {
+                validate_area(*area)?;
+                Ok(CommandReceipt {
+                    core_storehouse_set: true,
+                    ..CommandReceipt::default()
+                })
+            }
+            GameCommand::Evacuate { area } => {
+                validate_area(*area)?;
+                let jobs_created = state
+                    .workers
+                    .values()
+                    .filter(|worker| worker.can_work())
+                    .count();
+                if jobs_created == 0 {
+                    return Err(CommandError::NoWorkers);
+                }
+                Ok(CommandReceipt {
+                    jobs_created,
+                    safe_zone_set: true,
+                    ..CommandReceipt::default()
+                })
+            }
+            GameCommand::Cancel { area } => {
+                validate_area(*area)?;
+                let jobs_canceled = state
+                    .jobs
+                    .iter()
+                    .filter(|job| job.is_open() && area.contains(job.kind.target()))
+                    .count();
+                Ok(CommandReceipt {
+                    jobs_canceled,
+                    ..CommandReceipt::default()
+                })
+            }
+        }
+    }
+
     pub fn dispatch(
         world: &World,
         state: &mut GameState,
@@ -234,6 +338,26 @@ fn queue_area_jobs(
     state.emit(format!("Queued {created} job(s)."));
     Ok(CommandReceipt {
         jobs_created: created,
+        ..CommandReceipt::default()
+    })
+}
+
+fn preview_area_jobs(
+    world: &World,
+    area: TileArea,
+    mut is_valid_target: impl FnMut(&World, TileCoord) -> bool,
+) -> Result<CommandReceipt, CommandError> {
+    validate_area(area)?;
+    let jobs_created = area
+        .iter()
+        .take(MAX_COMMAND_TILES)
+        .filter(|coord| is_valid_target(world, *coord))
+        .count();
+    if jobs_created == 0 {
+        return Err(CommandError::NoValidTargets);
+    }
+    Ok(CommandReceipt {
+        jobs_created,
         ..CommandReceipt::default()
     })
 }
@@ -403,6 +527,55 @@ mod tests {
 
         assert_eq!(receipt.jobs_created, 1);
         assert_eq!(state.jobs.len(), 1);
+    }
+
+    #[test]
+    fn preview_reports_receipt_without_mutating_state() {
+        let mut world = World::default();
+        let layer = world.active_layer.clone();
+        world.set(&layer, 0, 0, TileKind::Wall);
+        let mut state = GameState::default();
+        let before = state.jobs.len();
+
+        let receipt = CommandDispatcher::preview(
+            &world,
+            &state,
+            &GameCommand::Mine {
+                area: TileArea::centered(TileCoord::new(0, 0), 0),
+            },
+        )
+        .unwrap();
+
+        assert_eq!(receipt.jobs_created, 1);
+        assert_eq!(state.jobs.len(), before, "preview must not queue jobs");
+        assert!(state.events.is_empty(), "preview must not emit events");
+
+        // The real dispatch on the same input produces the same receipt.
+        let real = CommandDispatcher::dispatch(
+            &world,
+            &mut state,
+            CommandEnvelope::human(GameCommand::Mine {
+                area: TileArea::centered(TileCoord::new(0, 0), 0),
+            }),
+        )
+        .unwrap();
+        assert_eq!(real.jobs_created, receipt.jobs_created);
+    }
+
+    #[test]
+    fn preview_surfaces_dispatch_errors() {
+        let world = World::default();
+        let state = GameState::default();
+        let err = CommandDispatcher::preview(
+            &world,
+            &state,
+            &GameCommand::Mine {
+                area: TileArea::centered(TileCoord::new(0, 0), 0),
+            },
+        )
+        .unwrap_err();
+        assert_eq!(err, CommandError::NoValidTargets);
+        assert_eq!(err.describe(), "no valid targets in area");
     }
 
     #[test]
