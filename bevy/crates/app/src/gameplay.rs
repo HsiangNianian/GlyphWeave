@@ -9,9 +9,9 @@ use crate::voxel_adapter::{DEFAULT_TILE_SIZE, GAMEPLAY_Z, set_tile, voxel_slice_
 use bevy::ecs::message::MessageWriter;
 use bevy::prelude::*;
 use glyphweave_core::gameplay::{
-    BuildBlueprint, BuildKind, CommandDispatcher, CommandEnvelope, CommandError, CommandSource,
-    GameCommand, GameState, ResourceKind, RuleBasedTextCommandSource, SimulationConfig, TileArea,
-    TileCoord, tick_gameplay,
+    BuildBlueprint, BuildKind, CommandDispatcher, CommandEnvelope, CommandError, CommandReceipt,
+    CommandSource, GameCommand, GameState, ResourceKind, RuleBasedTextCommandSource,
+    SimulationConfig, TileArea, TileCoord, tick_gameplay,
 };
 use glyphweave_core::voxel::VoxelWorld;
 use glyphweave_core::world::World;
@@ -107,6 +107,28 @@ impl std::ops::DerefMut for GameplayModel {
     }
 }
 
+#[derive(Default)]
+pub struct CommandPreviewCache {
+    signature: Option<(u64, u32)>,
+    projected: World,
+}
+
+impl CommandPreviewCache {
+    pub fn refresh(&mut self, world_model: &WorldModel, world_revision: u64) {
+        let signature = (world_revision, world_model.tile_size);
+        if self.signature == Some(signature) {
+            return;
+        }
+        self.projected = voxel_slice_to_legacy(
+            &world_model.world,
+            GAMEPLAY_Z,
+            world_model.tile_size,
+            "ansi-16",
+        );
+        self.signature = Some(signature);
+    }
+}
+
 #[derive(Resource, Debug, Clone)]
 pub struct GameplayTickTimer(pub Timer);
 
@@ -188,9 +210,9 @@ pub fn command_for_order(
     cursor: TileCoord,
     area_radius: i32,
     state: &GameState,
-) -> Option<GameCommand> {
+) -> Result<Option<GameCommand>, CommandError> {
     let area = TileArea::centered(cursor, area_radius);
-    match order {
+    let command = match order {
         ActiveGameOrder::Mine => Some(GameCommand::Mine { area }),
         ActiveGameOrder::Chop => Some(GameCommand::Chop { area }),
         ActiveGameOrder::BuildWall => Some(GameCommand::Build {
@@ -211,16 +233,20 @@ pub fn command_for_order(
                 area,
             },
         }),
-        ActiveGameOrder::Haul => state
-            .stockpile_target()
-            .map(|to| GameCommand::Haul { from: area, to }),
+        ActiveGameOrder::Haul => {
+            let to = state
+                .stockpile_target()
+                .ok_or(CommandError::MissingStockpile)?;
+            Some(GameCommand::Haul { from: area, to })
+        }
         ActiveGameOrder::Explore => Some(GameCommand::Explore { area }),
         ActiveGameOrder::Stockpile => Some(GameCommand::SetStockpile { area }),
         ActiveGameOrder::CoreStorehouse => Some(GameCommand::SetCoreStorehouse { area }),
         ActiveGameOrder::Evacuate => Some(GameCommand::Evacuate { area }),
         ActiveGameOrder::Cancel => Some(GameCommand::Cancel { area }),
         ActiveGameOrder::Inspect => None,
-    }
+    };
+    Ok(command)
 }
 
 pub fn dispatch_text_command(
@@ -228,13 +254,21 @@ pub fn dispatch_text_command(
     focus: TileCoord,
     world: &VoxelWorld,
     gameplay: &mut GameplayModel,
-) -> Result<(), String> {
+) -> Result<CommandReceipt, String> {
     let projected = voxel_slice_to_legacy(world, GAMEPLAY_Z, DEFAULT_TILE_SIZE, "ansi-16");
     let mut source = RuleBasedTextCommandSource::from_text(text, focus)?;
     let Some(envelope) = source.next_command(&projected, &gameplay.0) else {
         return Err("text command produced no order".into());
     };
-    dispatch_envelope(&projected, gameplay, envelope).map(|_| ())
+    dispatch_envelope(&projected, gameplay, envelope)
+}
+
+pub fn preview_command(
+    command: &GameCommand,
+    cache: &CommandPreviewCache,
+    gameplay: &GameplayModel,
+) -> Result<CommandReceipt, CommandError> {
+    CommandDispatcher::preview(&cache.projected, &gameplay.0, command)
 }
 
 pub fn gameplay_order_input(
@@ -258,8 +292,13 @@ pub fn gameplay_order_input(
         0
     };
     let focus = TileCoord::new(cursor.x, cursor.y);
-    let Some(command) = command_for_order(*active_order, focus, area_radius, &gameplay.0) else {
-        return;
+    let command = match command_for_order(*active_order, focus, area_radius, &gameplay.0) {
+        Ok(Some(command)) => command,
+        Ok(None) => return,
+        Err(err) => {
+            gameplay.emit(format!("Command rejected: {err}."));
+            return;
+        }
     };
     let projected = voxel_slice_to_legacy(
         &world_model.world,
@@ -499,22 +538,8 @@ fn dispatch_envelope(
     world: &World,
     gameplay: &mut GameplayModel,
     envelope: CommandEnvelope,
-) -> Result<(), String> {
-    CommandDispatcher::dispatch(world, &mut gameplay.0, envelope)
-        .map(|_| ())
-        .map_err(command_error_label)
-}
-
-fn command_error_label(err: CommandError) -> String {
-    match err {
-        CommandError::EmptyArea => "empty area".into(),
-        CommandError::AreaTooLarge { requested, limit } => {
-            format!("area too large ({requested} > {limit})")
-        }
-        CommandError::NoValidTargets => "no valid targets".into(),
-        CommandError::MissingStockpile => "missing stockpile".into(),
-        CommandError::NoWorkers => "no workers".into(),
-    }
+) -> Result<CommandReceipt, String> {
+    CommandDispatcher::dispatch(world, &mut gameplay.0, envelope).map_err(|err| err.to_string())
 }
 
 fn spawn_coord_for_world(world: &VoxelWorld) -> TileCoord {
@@ -640,7 +665,9 @@ mod tests {
     fn active_order_maps_to_build_command() {
         let state = GameState::new_with_worker(TileCoord::new(0, 0));
         let command =
-            command_for_order(ActiveGameOrder::BuildWall, TileCoord::new(2, 3), 0, &state).unwrap();
+            command_for_order(ActiveGameOrder::BuildWall, TileCoord::new(2, 3), 0, &state)
+                .unwrap()
+                .unwrap();
 
         match command {
             GameCommand::Build { blueprint } => {
@@ -649,6 +676,16 @@ mod tests {
             }
             other => panic!("unexpected command: {other:?}"),
         }
+    }
+
+    #[test]
+    fn haul_order_requires_a_stockpile() {
+        let state = GameState::default();
+
+        let err =
+            command_for_order(ActiveGameOrder::Haul, TileCoord::new(0, 0), 0, &state).unwrap_err();
+
+        assert_eq!(err, CommandError::MissingStockpile);
     }
 
     #[test]
@@ -664,8 +701,27 @@ mod tests {
         .unwrap();
         let mut gameplay = GameplayModel(GameState::new_with_worker(TileCoord::new(1, 0)));
 
-        dispatch_text_command("砍树", TileCoord::new(0, 0), &world, &mut gameplay).unwrap();
+        let receipt =
+            dispatch_text_command("砍树", TileCoord::new(0, 0), &world, &mut gameplay).unwrap();
 
+        assert_eq!(receipt.jobs_created, 1);
         assert_eq!(gameplay.open_job_count(), 1);
+    }
+
+    #[test]
+    fn cursor_preview_reports_rejection_without_queueing_jobs() {
+        let world_model = WorldModel::new(VoxelWorld::default(), DEFAULT_TILE_SIZE);
+        let gameplay = GameplayModel(GameState::new_with_worker(TileCoord::new(1, 0)));
+        let mut cache = CommandPreviewCache::default();
+        let command = GameCommand::Mine {
+            area: TileArea::single(TileCoord::new(0, 0)),
+        };
+
+        cache.refresh(&world_model, 7);
+        let err = preview_command(&command, &cache, &gameplay).unwrap_err();
+
+        assert_eq!(err, CommandError::NoValidTargets);
+        assert!(gameplay.jobs.is_empty());
+        assert_eq!(cache.signature, Some((7, DEFAULT_TILE_SIZE)));
     }
 }
