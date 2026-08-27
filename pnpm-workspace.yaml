@@ -1,3 +1,6 @@
+packages:
+  - '.'
+
 allowBuilds:
   esbuild: false
   sharp: false
@@ -9,4 +12,3 @@ minimumReleaseAgeExclude:
   - '@ai-sdk/provider-utils@5.0.6'
   - '@ai-sdk/react@4.0.19'
   - ai@7.0.18
-storeDir: /Users/liguo/Library/pnpm/store/v11
