@@ -1,0 +1,83 @@
+name: Bevy FPS Budget
+
+on:
+  push:
+    branches: ["main", "dev"]
+    paths:
+      - "bevy/**"
+      - "examples/**"
+      - "scripts/check-bevy-fps.sh"
+      - ".github/workflows/bevy-fps-budget.yml"
+  pull_request:
+    branches: ["main", "dev"]
+    paths:
+      - "bevy/**"
+      - "examples/**"
+      - "scripts/check-bevy-fps.sh"
+      - ".github/workflows/bevy-fps-budget.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fps-budget:
+    name: Enforce workload FPS budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    env:
+      # The workload FPS gate measures CPU-side frame cost, so it stays
+      # meaningful on runners without a GPU (wgpu falls back to llvmpipe).
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      WGPU_BACKEND: "gl"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Bevy dependencies (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang \
+            jq \
+            libasound2-dev \
+            libegl1-mesa-dev \
+            libgl1-mesa-dri \
+            libgl1-mesa-dev \
+            libudev-dev \
+            libwayland-dev \
+            libx11-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libxinerama-dev \
+            libxkbcommon-dev \
+            libxrandr-dev \
+            mesa-utils \
+            pkg-config \
+            unzip \
+            wayland-protocols \
+            xvfb
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            bevy -> target
+          cache-on-failure: true
+
+      - name: Run FPS budget checks
+        run: |
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+            bash scripts/check-bevy-fps.sh

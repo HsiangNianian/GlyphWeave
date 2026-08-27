@@ -64,7 +64,7 @@
 - [x] Add perf coverage for fog overlay rendering.
 - [x] Add perf coverage for gameplay entity overlays.
 - [x] Keep default threshold at 150 workload FPS.
-- [ ] Add CI wiring for the release FPS script.
+- [x] Add CI wiring for the release FPS script.
 - [ ] Add a low-end profile with smaller entity counts.
 - [ ] Add perf coverage for Flood Fortress water overlays once water visuals grow.
 
