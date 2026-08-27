@@ -21,18 +21,20 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 use glyphweave_core::gameplay::{
-    BuildKind, ChallengeStatus, CommandReceipt, GameCommand, MedalTier, ResourceKind, TileCoord,
+    BuildKind, ChallengeStatus, CommandReceipt, GameCommand, GameState, MedalTier, ResourceKind,
+    TileCoord, GAMEPLAY_METADATA_KEY, decode_snapshot, encode_snapshot,
 };
 #[cfg(not(target_arch = "wasm32"))]
 use glyphweave_core::migration::{MigrationMode, MigrationReport, migrate_legacy_json};
 #[cfg(not(target_arch = "wasm32"))]
 use glyphweave_core::storage::archive::ArchiveLimits;
 #[cfg(not(target_arch = "wasm32"))]
-use glyphweave_core::storage::codec::{decode_world, encode_world};
+use glyphweave_core::storage::codec::{decode_world_with_metadata, encode_world_with_metadata};
 use glyphweave_core::tile::TileKind;
 use glyphweave_core::voxel::VoxelWorld;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
@@ -778,7 +780,7 @@ fn home_screen(
                             {
                                 let demo_path = demo_map_path();
                                 match load_editor_path(&demo_path) {
-                                    Ok((world, report)) => {
+                                    Ok((world, report, snapshot)) => {
                                         let migration_status =
                                             report.as_ref().map(migration_status);
                                         enter_editor(
@@ -799,6 +801,12 @@ fn home_screen(
                                             ui_state.home_theme_id.clone(),
                                             Some(demo_path.clone()),
                                         );
+                                        if let Some(state) = snapshot {
+                                            gameplay_model.0 = state;
+                                            ui_state.active_challenge_preset = None;
+                                            ui_state.settled_challenge = None;
+                                            ui_state.settlement_open = false;
+                                        }
                                         ui_state.path_text = demo_path.display().to_string();
                                         ui_state.status_message =
                                             migration_status.unwrap_or_default();
@@ -815,7 +823,7 @@ fn home_screen(
                                     ui_state.status_message = "Enter an import path first.".into();
                                 } else {
                                     match load_editor_path(&import_path) {
-                                        Ok((world, report)) => {
+                                        Ok((world, report, snapshot)) => {
                                             let migration_status =
                                                 report.as_ref().map(migration_status);
                                             ui_state.home_world_name = world.name.clone();
@@ -837,6 +845,12 @@ fn home_screen(
                                                 ui_state.home_theme_id.clone(),
                                                 Some(import_path.clone()),
                                             );
+                                            if let Some(state) = snapshot {
+                                                gameplay_model.0 = state;
+                                                ui_state.active_challenge_preset = None;
+                                                ui_state.settled_challenge = None;
+                                                ui_state.settlement_open = false;
+                                            }
                                             ui_state.path_text = import_path.display().to_string();
                                             ui_state.status_message =
                                                 migration_status.unwrap_or_default();
@@ -1669,14 +1683,24 @@ fn export_tab(
                 .0
                 .clone()
                 .unwrap_or_else(|| PathBuf::from("glyphweave_save.gemap"));
-            save_to_path(&world_model.world, &target, &mut ui_state.status_message);
+            save_to_path(
+                &world_model.world,
+                Some(&gameplay_model.0),
+                &target,
+                &mut ui_state.status_message,
+            );
         }
         if ui.button("Export Path").clicked() {
             let target = PathBuf::from(ui_state.path_text.trim());
             if target.as_os_str().is_empty() {
                 ui_state.status_message = "Enter an export path first.".into();
             } else {
-                save_to_path(&world_model.world, &target, &mut ui_state.status_message);
+                save_to_path(
+                    &world_model.world,
+                    Some(&gameplay_model.0),
+                    &target,
+                    &mut ui_state.status_message,
+                );
                 path.0 = Some(target);
             }
         }
@@ -1686,9 +1710,16 @@ fn export_tab(
                 ui_state.status_message = "Enter an import path first.".into();
             } else {
                 match load_editor_path(&target) {
-                    Ok((world, report)) => {
+                    Ok((world, report, snapshot)) => {
                         history.push_snapshot(&world_model.world);
-                        reset_gameplay_for_world(gameplay_model, &world);
+                        if let Some(state) = snapshot {
+                            gameplay_model.0 = state;
+                            ui_state.active_challenge_preset = None;
+                            ui_state.settled_challenge = None;
+                            ui_state.settlement_open = false;
+                        } else {
+                            reset_gameplay_for_world(gameplay_model, &world);
+                        }
                         world_model.world = world;
                         active_z.0 = 0;
                         path.0 = Some(target);
@@ -2136,15 +2167,23 @@ fn visible_tile_bounds(world: &VoxelWorld, z: i32) -> Option<(i32, i32, i32, i32
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn load_editor_path(path: &Path) -> Result<(VoxelWorld, Option<MigrationReport>), String> {
+fn load_editor_path(
+    path: &Path,
+) -> Result<(VoxelWorld, Option<MigrationReport>, Option<GameState>), String> {
     let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
     if bytes.iter().find(|byte| !byte.is_ascii_whitespace()) == Some(&b'{') {
         let result = migrate_legacy_json(&bytes, MigrationMode::Flatten)
             .map_err(|error| error.to_string())?;
-        return Ok((result.world, Some(result.report)));
+        return Ok((result.world, Some(result.report), None));
     }
-    decode_world(&bytes, ArchiveLimits::default())
-        .map(|world| (world, None))
+    decode_world_with_metadata(&bytes, ArchiveLimits::default())
+        .map(|decoded| {
+            let snapshot = decoded
+                .metadata
+                .as_ref()
+                .and_then(decode_snapshot);
+            (decoded.world, None, snapshot)
+        })
         .map_err(|error| error.to_string())
 }
 
@@ -2161,8 +2200,16 @@ fn migration_status(report: &MigrationReport) -> String {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn save_to_path(world: &VoxelWorld, target: &Path, status: &mut String) {
-    let result = encode_world(world)
+fn save_to_path(
+    world: &VoxelWorld,
+    gameplay: Option<&GameState>,
+    target: &Path,
+    status: &mut String,
+) {
+    let metadata = gameplay.map(|state| {
+        BTreeMap::from([(GAMEPLAY_METADATA_KEY.to_owned(), encode_snapshot(state))])
+    });
+    let result = encode_world_with_metadata(world, metadata)
         .map_err(|error| error.to_string())
         .and_then(|bytes| atomic_replace(target, &bytes).map_err(|error| error.to_string()));
     match result {
@@ -2453,6 +2500,8 @@ const TILE_GROUPS: [(&str, &[TileKind]); 9] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+    use glyphweave_core::gameplay::TileArea;
+    use glyphweave_core::storage::codec::decode_world;
 
     #[test]
     fn zoom_label_uses_visual_zoom_percent() {
@@ -2522,13 +2571,14 @@ mod tests {
             .join("../../..")
             .join("fixtures/gemap/v2/layered-v2.gemap");
 
-        let (world, report) = load_editor_path(&fixture).unwrap();
+        let (world, report, snapshot) = load_editor_path(&fixture).unwrap();
         let report = report.expect("legacy input must produce a migration report");
 
         assert_eq!(report.mode, MigrationMode::Flatten);
         assert_eq!(report.source_version, 2);
         assert_eq!(world.len(), report.output_voxel_count);
         assert!(migration_status(&report).contains("Migrated legacy v2"));
+        assert!(snapshot.is_none(), "legacy maps carry no gameplay snapshot");
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -2547,14 +2597,49 @@ mod tests {
         let mut status = String::new();
 
         let first = VoxelWorld::new("first");
-        save_to_path(&first, &target, &mut status);
+        save_to_path(&first, None, &target, &mut status);
         assert!(status.starts_with("Saved"));
 
         let second = VoxelWorld::new("second");
-        save_to_path(&second, &target, &mut status);
+        save_to_path(&second, None, &target, &mut status);
         let bytes = std::fs::read(&target).unwrap();
         let loaded = decode_world(&bytes, ArchiveLimits::default()).unwrap();
         assert_eq!(loaded.name, "second");
+
+        std::fs::remove_file(target).unwrap();
+        std::fs::remove_dir(directory).unwrap();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn gameplay_run_survives_save_and_load() {
+        let nonce = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "glyphweave-app-run-test-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let target = directory.join("run.gemap");
+        let mut status = String::new();
+
+        let world = VoxelWorld::new("Run world");
+        let mut state = GameState::new_with_worker(TileCoord::new(2, 3));
+        state.spawn_worker("Extra", TileCoord::new(4, 5));
+        state.start_flood_fortress(
+            TileArea::rect(TileCoord::new(0, 0), TileCoord::new(2, 2)),
+            vec![],
+            vec![],
+            48,
+        );
+        save_to_path(&world, Some(&state), &target, &mut status);
+        assert!(status.starts_with("Saved"));
+
+        let (_, _, restored) = load_editor_path(&target).unwrap();
+        let restored = restored.expect("saved run must restore its gameplay state");
+        assert_eq!(restored, state);
 
         std::fs::remove_file(target).unwrap();
         std::fs::remove_dir(directory).unwrap();

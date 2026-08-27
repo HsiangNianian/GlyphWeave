@@ -53,7 +53,7 @@
 - [x] Add first flood simulation.
 - [ ] Add food production.
 - [ ] Add better monster spawn rules.
-- [ ] Add save/load for gameplay state, not only the tilemap.
+- [x] Add save/load for gameplay state, not only the tilemap.
 - [ ] Add water receding/drain behavior.
 - [ ] Add structural damage from sustained flood pressure.
 
