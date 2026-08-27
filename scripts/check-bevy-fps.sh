@@ -39,7 +39,7 @@ count_tiles() {
       # awk consumes the full stream so the upstream cargo never sees SIGPIPE
       # (which would trip pipefail and abort the script).
       cargo run --release -p glyphweave-cli --quiet -- inspect "$map" 2>/dev/null |
-        awk '/^voxels:/{value=$2} END{if (value != "") print value}'
+        awk '/^voxels:/{value=$2} END{if (value != "") print value}' || true
     )
   elif jq empty "$map" >/dev/null 2>&1; then
     jq '((.tiles // {}) | length) + (((.layerTiles // {}) | to_entries | map(.value | length) | add) // 0)' "$map"
