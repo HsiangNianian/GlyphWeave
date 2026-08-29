@@ -18,6 +18,7 @@ colors:
   signal-amber: "#fbbf24"
   signal-amber-bright: "#fcd34d"
   destructive: "#f87171"
+  signal-emerald: "#34d399"
   ansi-yellow: "#ffff00"
   ansi-green: "#00ff00"
   ansi-blue: "#0000ff"
@@ -118,7 +119,7 @@ Typography makes the monospace voice the brand voice: the title, breadcrumbs, co
 **Key Characteristics:**
 
 - Zero elevation shadows: hierarchy is carried entirely by 1px hairline borders (zinc-800) and brightness steps; floating layers use black-70% translucency + backdrop blur; the single exception is the amber self-glow on live-data indicator dots
-- Achromatic chrome + amber as the only functional UI signal color (live data, read-only state)
+- Achromatic editor chrome + amber as the only functional accent (live data, read-only state); the AI chat panel is the single surface exception with its own emerald accent, and red is reserved for destructive/error tones
 - Monospace is the brand voice: brand name, paths, and data readouts are always mono
 - Color belongs to glyphs: the UI never competes with the canvas for chromatic attention
 - Icons are always Lucide, never emoji; desktop-first editor layout, full-viewport, no page scroll
@@ -150,7 +151,8 @@ A third layer of shadcn semantic tokens (neutral oklch values in `src/index.css`
 
 ### Secondary
 
-- **Signal Amber** (signal-amber #fbbf24 / amber-400; text uses signal-amber-bright #fcd34d / amber-300): the only functional UI accent. It marks live data (Z-level readout, layer icon) and state warnings (the "view only" badge on non-ASCII surfaces). It tags *living data* — it is not decoration.
+- **Signal Amber** (signal-amber #fbbf24 / amber-400; text uses signal-amber-bright #fcd34d / amber-300): the only functional accent in the editor chrome. It marks live data (Z-level readout, layer icon) and state warnings (the "view only" badge on non-ASCII surfaces). It tags *living data* — it is not decoration.
+- **Signal Emerald** (signal-emerald #34d399 / emerald-400; assistant bubbles use emerald-600/80): the accent of the AI chat panel only — assistant avatar, message bubbles, typing indicator, read receipt, input focus ring, send button. Emerald belongs to the companion surface and never appears in editor chrome. Red covers destructive/error tones (the destructive button treatment, the chat panel's experiment notice).
 
 ### Tertiary (canvas data colors · ANSI 16 anchors)
 
@@ -167,7 +169,7 @@ These are the most recognizable anchors of the default ANSI 16 theme (the full 2
 
 ### Named Rules
 
-**The Amber Signal Rule.** The only color in the UI chrome is amber, and it may only appear on *live data* (level readouts, real-time state, read-only warnings). Amber never exceeds 1% of any screen; every other emphasis is done with brightness. All remaining color belongs to glyphs.
+**The Amber Signal Rule.** In the editor chrome the only functional color is amber, and it may only appear on *live data* (level readouts, real-time state, read-only warnings). Amber never exceeds 1% of any screen; every other emphasis is done with brightness. The single surface exception is the AI chat panel, which carries its own emerald accent (see Signal Emerald) — emerald never leaks into editor chrome, and red is reserved for destructive/error tones. All remaining color belongs to glyphs.
 
 **The Flat Surface Rule.** The system has zero elevation shadows — the single exception is the amber self-glow on live-data indicator dots (see Shadow Vocabulary). Hierarchy = 1px hairline borders + surface brightness steps (zinc-950 → 900 → 800 → 700); floating layers = black 70% + backdrop blur, never drop shadows.
 
@@ -175,7 +177,7 @@ These are the most recognizable anchors of the default ANSI 16 theme (the full 2
 
 **Display/Brand Font:** Tailwind `font-mono` stack (ui-monospace → SFMono-Regular → Menlo → Consolas → monospace)
 **Body Font:** Geist Variable (`@fontsource-variable/geist`, sans-serif fallback)
-**Canvas Glyph Font:** Geist (0.75× tile size, falling back to Noto Sans SC / Microsoft YaHei / PingFang SC → monospace; same stack in the high-performance batch renderer)
+**Canvas Glyph Font** (0.75× tile size in both paths): the normal `TileCell` renderer uses JetBrains Mono → Fira Code → Courier New → monospace; the high-performance batch renderer (`TileBatchLayer`, surface renderers) uses Geist → Noto Sans SC → Microsoft YaHei → PingFang SC → monospace
 
 **Character:** monospace carries "the machine's voice" — brand name, world-name paths, coordinates, zoom percentage, shortcut hints; Geist carries "the human voice" — body copy, labels, forms. The two voices have distinct jobs and never swap contexts.
 
@@ -293,8 +295,8 @@ Dark fill (zinc-900 family), 11–12px text; shortcuts append in zinc-500 as `[B
 ### Don't:
 
 - **Don't** use box-shadow for elevation or lift (floats use black 70% + backdrop-blur); the only legal box-shadow is the amber self-glow on live-data indicator dots (`0 0 10px rgba(251,191,36,0.35)`)
-- **Don't** introduce new colors into the UI chrome (amber belongs to live data; canvas colors belong to themes)
+- **Don't** introduce new colors into the editor chrome (amber belongs to live data, emerald belongs to the chat surface, red belongs to destructive/error tones; canvas colors belong to themes)
 - **Don't** use Unicode emoji as icons or decoration (explicit repo ban — always lucide-react)
 - **Don't** hardcode canvas glyph colors (they must go through themes)
 - **Don't** round the tab strip or HUD readouts — square corners are their identity
-- **Don't** hand-style native `<button>`/`<input>` elements — always go through the shadcn wrappers in `src/components/ui/`
+- **Don't** hand-style native `<button>`/`<input>` elements — always go through the shadcn wrappers in `src/components/ui/` (known legacy exception: the `ThemeWorkshop` tile-list button, to be migrated)

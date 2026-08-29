@@ -12,7 +12,7 @@ Primary users: **indie game developers** — they need to sketch and iterate on 
 
 ## Product Purpose
 
-GlyphWeave is an open-source, infinite-canvas ASCII roguelike tilemap editor: every tile is an ASCII glyph (`#`, `.`, `~`, `♣`, …), and users "weave" dungeons and wilderness maps cell by cell — with preset rooms, instant dual-theme recoloring, multi-layer editing, undo/redo, a minimap, and `.gemap` v3 ZIP (sparse 3D voxel) import/export.
+GlyphWeave is an open-source, infinite-canvas ASCII roguelike tilemap editor: every tile is an ASCII glyph (`#`, `.`, `~`, `♣`, …), and users "weave" dungeons and wilderness maps cell by cell — with preset rooms, instant theme recoloring, multi-layer editing, undo/redo, a minimap, and `.gemap` v3 ZIP (sparse 3D voxel) import/export.
 
 The product evolves along two implementations:
 
@@ -36,7 +36,7 @@ Per `docs/game-plan.md`, the product vision is moving from "editor" to a playabl
 
 ## Capabilities and Constraints
 
-Confirmed features: 25 tile types, 25 preset rooms, two themes (ANSI 16 / Cogmind Dark) with instant recoloring, multi-layer editing (Terrain / Structures / Details), brush / eraser / flood-fill / pan / select tools, undo/redo (50 steps), `.gemap` v3 ZIP import/export, minimap, Render API (PNG/SVG), Convert API (image → map), in-app image import, ThemeWorkshop, and an AI chat panel (conversational map editing).
+Confirmed features: 25 tile types, 25 preset rooms, three themes (ANSI 16 / Cogmind Dark / Fortress Pixel) with instant recoloring, multi-layer editing (Terrain / Structures / Details), brush / eraser / flood-fill / pan / select tools, undo/redo (50 steps), `.gemap` v3 ZIP import/export, minimap, Render API (PNG/SVG), Convert API (image → map), in-app image import, ThemeWorkshop, and an AI chat panel (conversational map editing).
 
 Architecture constraints:
 
@@ -51,7 +51,7 @@ Architecture constraints:
 
 - Name meaning: Glyph (each tile is an ASCII glyph) + Weave (glyphs interlaced into a coherent map, strand by strand).
 - All UI icons come from Lucide (`lucide-react`); Unicode emoji are banned as icons or decoration.
-- Base UI elements use the shadcn/ui wrappers in `src/components/ui/`; no hand-styled native tags.
+- Base UI elements use the shadcn/ui wrappers in `src/components/ui/` when an appropriate wrapper is available; hand-styled native tags are the exception, not the pattern (`ThemeWorkshop`'s tile-list button is a known legacy case to migrate).
 - The color baseline is the Tailwind zinc series unless a theme requires custom colors.
 - UI copy is maintained in i18next across three languages (en/zh/ja).
 
