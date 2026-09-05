@@ -327,7 +327,8 @@ src/
 ├── stores/                   # Zustand 状态管理
 │   ├── map-store.ts          # 地图数据、历史栈、工具状态
 │   ├── map-store.test.ts
-│   └── ui-store.ts           # UI 可见性、面板状态
+│   ├── ui-store.ts           # UI 可见性、面板状态
+│   └── ui-store.test.ts
 ├── hooks/                    # 交互逻辑
 │   ├── useCanvas.ts          # 鼠标/键盘事件 → Konva Stage
 │   └── useKeyboard.ts        # 全局快捷键
