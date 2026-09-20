@@ -2561,7 +2561,7 @@ dependencies = [
 
 [[package]]
 name = "glyphweave-app"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bevy",
  "bevy_ecs_tilemap",
@@ -2572,7 +2572,7 @@ dependencies = [
 
 [[package]]
 name = "glyphweave-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "glyphweave-core",
  "serde_json",
@@ -2580,7 +2580,7 @@ dependencies = [
 
 [[package]]
 name = "glyphweave-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "blake3",
  "serde",

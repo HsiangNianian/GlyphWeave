@@ -482,6 +482,7 @@ pub struct FloodFortressState {
     pub breach_tick: u64,
     pub old_dams: Vec<OldDam>,
     pub water_sources: Vec<WaterSource>,
+    #[serde(with = "crate::gameplay::snapshot::coord_map")]
     pub water_levels: HashMap<TileCoord, u8>,
     pub core_flood_ticks: u32,
     pub stats: FloodStats,
@@ -577,7 +578,9 @@ impl GameTime {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FogMemory {
     pub reveal_radius: i32,
+    #[serde(with = "crate::gameplay::snapshot::coord_set")]
     pub explored: HashSet<TileCoord>,
+    #[serde(with = "crate::gameplay::snapshot::coord_set")]
     pub visible: HashSet<TileCoord>,
 }
 
@@ -618,7 +621,7 @@ pub struct GameEvent {
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GameState {
     pub next_id: EntityId,
     pub workers: HashMap<EntityId, Worker>,
@@ -627,6 +630,7 @@ pub struct GameState {
     pub stockpiles: Vec<Stockpile>,
     pub core_storehouse: Option<CoreStorehouse>,
     pub safe_zone: Option<SafeZone>,
+    #[serde(with = "crate::gameplay::snapshot::coord_map")]
     pub item_piles: HashMap<TileCoord, ItemPile>,
     pub inventory: Inventory,
     pub time: GameTime,

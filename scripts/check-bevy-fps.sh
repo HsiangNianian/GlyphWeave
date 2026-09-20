@@ -29,6 +29,25 @@ run_perf_check() {
   )
 }
 
+# Tile/voxel count for the minimum-size gate. v3 maps are ZIP archives and are
+# counted through the CLI inspector; legacy JSON maps keep the jq path.
+count_tiles() {
+  local map="$1"
+  if unzip -t "$map" >/dev/null 2>&1; then
+    (
+      cd "$ROOT_DIR/bevy"
+      # awk consumes the full stream so the upstream cargo never sees SIGPIPE
+      # (which would trip pipefail and abort the script).
+      cargo run --release -p glyphweave-cli --quiet -- inspect "$map" 2>/dev/null |
+        awk '/^voxels:/{value=$2} END{if (value != "") print value}' || true
+    )
+  elif jq empty "$map" >/dev/null 2>&1; then
+    jq '((.tiles // {}) | length) + (((.layerTiles // {}) | to_entries | map(.value | length) | add) // 0)' "$map"
+  else
+    echo ""
+  fi
+}
+
 shopt -s nullglob
 maps=("$ROOT_DIR"/examples/*.gemap)
 if [[ "${#maps[@]}" -eq 0 ]]; then
@@ -37,14 +56,12 @@ if [[ "${#maps[@]}" -eq 0 ]]; then
 fi
 
 for map in "${maps[@]}"; do
-  if ! jq empty "$map" >/dev/null 2>&1; then
-    echo "==> FPS budget: $(basename "$map") skipped (invalid JSON)"
+  tile_count="$(count_tiles "$map")"
+  if [[ -z "$tile_count" ]]; then
+    echo "==> FPS budget: $(basename "$map") skipped (unreadable map)"
     continue
   fi
 
-  tile_count="$(
-    jq '((.tiles // {}) | length) + (((.layerTiles // {}) | to_entries | map(.value | length) | add) // 0)' "$map"
-  )"
   if [[ "$tile_count" -lt "$MIN_TILES" ]]; then
     echo "==> FPS budget: $(basename "$map") skipped ($tile_count tiles < $MIN_TILES)"
     continue
