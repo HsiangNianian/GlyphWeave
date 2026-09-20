@@ -17,6 +17,20 @@ export const ANCHOR_GAP = 2
 /** How far to search, in tiles, for a flood-fill seed near an empty anchor. */
 export const MAX_SEED_SEARCH = 96
 
+/** Safety cap on the number of tiles a generated draw may stamp in one go. */
+export const MAX_DRAW_TILES = 4096
+
+/** Named draw lengths, in tiles. Mirrors the server's option labels. */
+export const DRAW_LENGTHS: Record<string, number> = { short: 5, medium: 10, long: 20 }
+
+export type GenUiDirection = 'north' | 'south' | 'east' | 'west'
+
+export interface TileEntry {
+  x: number
+  y: number
+  tileId: string
+}
+
 export interface PlanBounds {
   minX: number
   minY: number
@@ -49,6 +63,7 @@ export type GenUiAction =
   | { kind: 'tool'; tool: 'placePreset'; args: { presetId: string; x: number; y: number }; label: string }
   | { kind: 'tool'; tool: 'placeTile'; args: { x: number; y: number; tileId: string }; label: string }
   | { kind: 'tool'; tool: 'fillArea'; args: { x: number; y: number; tileId: string }; label: string }
+  | { kind: 'tool'; tool: 'placeMultipleTiles'; args: { tiles: TileEntry[] }; label: string }
   | { kind: 'ui'; action: GenUiViewAction; label: string }
 
 const VALID_VIEW_ACTIONS: readonly GenUiViewAction[] = [
@@ -62,9 +77,17 @@ const VALID_VIEW_ACTIONS: readonly GenUiViewAction[] = [
 /** Fields that apply to the plan's chosen intent, in display order. */
 export function visibleFields(plan: GenUiPlan): GenUiField[] {
   const intent = plan.intent
-  return plan.fields.filter(
-    (field) => field.visibleFor === null || (intent !== null && field.visibleFor.includes(intent)),
-  )
+  return plan.fields.filter((field) => {
+    const intentMatches =
+      field.visibleFor === null || (intent !== null && field.visibleFor.includes(intent))
+    if (!intentMatches) return false
+    if (!field.visibleWhen) return true
+    const dependency = plan.fields.find((f) => f.id === field.visibleWhen?.field)
+    return (
+      typeof dependency?.value === 'string' &&
+      field.visibleWhen.values.includes(dependency.value)
+    )
+  })
 }
 
 /** Read a field's string value (choice), or null when absent. */
@@ -169,6 +192,52 @@ function presetFootprint(presetId: string): Footprint | null {
   return { w: preset.grid[0]?.length ?? 1, h: preset.grid.length }
 }
 
+/** Expand a straight line from `anchor`, extending in `direction`. */
+export function expandLine(
+  anchor: { x: number; y: number },
+  direction: GenUiDirection,
+  lengthTiles: number,
+  widthTiles: number,
+  tileId: string,
+): TileEntry[] {
+  const entries: TileEntry[] = []
+  const half = Math.floor((Math.max(1, widthTiles) - 1) / 2)
+  const alongX = direction === 'east' || direction === 'west'
+  const sign = direction === 'east' || direction === 'south' ? 1 : -1
+
+  for (let i = 0; i < lengthTiles && entries.length < MAX_DRAW_TILES; i++) {
+    for (let w = -half; w <= half && entries.length < MAX_DRAW_TILES; w++) {
+      entries.push(
+        alongX
+          ? { x: anchor.x + sign * i, y: anchor.y + w, tileId }
+          : { x: anchor.x + w, y: anchor.y + sign * i, tileId },
+      )
+    }
+  }
+  return entries
+}
+
+/** Expand a solid rectangle with `anchor` as its top-left corner. */
+export function expandRectangle(
+  anchor: { x: number; y: number },
+  widthTiles: number,
+  heightTiles: number,
+  tileId: string,
+): TileEntry[] {
+  const entries: TileEntry[] = []
+  for (let dy = 0; dy < heightTiles && entries.length < MAX_DRAW_TILES; dy++) {
+    for (let dx = 0; dx < widthTiles && entries.length < MAX_DRAW_TILES; dx++) {
+      entries.push({ x: anchor.x + dx, y: anchor.y + dy, tileId })
+    }
+  }
+  return entries
+}
+
+function drawLength(plan: GenUiPlan, id: string, fallback = 10): number {
+  const key = fieldString(plan, id)
+  return (key && DRAW_LENGTHS[key]) || fallback
+}
+
 /**
  * Map a plan to editor actions. Returns an empty list when the plan is
  * incomplete, references unknown catalog entries, or cannot be placed —
@@ -209,7 +278,9 @@ export function planToActions(plan: GenUiPlan, context: PlanContext): GenUiActio
       { w: 1, h: 1 },
       viewportCenter,
     )
-    if (fieldString(plan, 'paint_shape') === 'flood_fill') {
+    const shape = fieldString(plan, 'paint_shape')
+
+    if (shape === 'flood_fill') {
       const seed = findFillableSeed(anchor, context.tiles)
       if (!seed) return []
       return [
@@ -221,6 +292,38 @@ export function planToActions(plan: GenUiPlan, context: PlanContext): GenUiActio
         },
       ]
     }
+
+    if (shape === 'line') {
+      const direction = (fieldString(plan, 'draw_direction') ?? 'east') as GenUiDirection
+      const length = drawLength(plan, 'draw_length')
+      const width = Number(fieldString(plan, 'draw_width') ?? '1') || 1
+      const tiles = expandLine(anchor, direction, length, width, tileId)
+      if (tiles.length === 0) return []
+      return [
+        {
+          kind: 'tool',
+          tool: 'placeMultipleTiles',
+          args: { tiles },
+          label: `draw ${tiles.length} × ${tileId} ${direction} from (${anchor.x}, ${anchor.y})`,
+        },
+      ]
+    }
+
+    if (shape === 'rectangle') {
+      const width = drawLength(plan, 'draw_length')
+      const height = drawLength(plan, 'draw_height', width)
+      const tiles = expandRectangle(anchor, width, height, tileId)
+      if (tiles.length === 0) return []
+      return [
+        {
+          kind: 'tool',
+          tool: 'placeMultipleTiles',
+          args: { tiles },
+          label: `rectangle ${width}×${height} × ${tileId} @ (${anchor.x}, ${anchor.y})`,
+        },
+      ]
+    }
+
     return [
       {
         kind: 'tool',

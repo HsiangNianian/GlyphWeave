@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import type { GenUiField, GenUiPlan } from '@/types'
 import {
   ANCHOR_GAP,
+  expandLine,
+  expandRectangle,
   fieldNumber,
   fieldString,
   findFillableSeed,
@@ -87,6 +89,64 @@ describe('visibleFields', () => {
       ],
     })
     expect(visibleFields(p).map((f) => f.id)).toEqual(['intent', 'preset_id'])
+  })
+
+  it('applies visibleWhen on top of visibleFor', () => {
+    const fields = [
+      field({ id: 'intent', type: 'choice', value: 'paint_tiles' }),
+      field({ id: 'paint_shape', type: 'choice', value: 'line', visibleFor: ['paint_tiles'] }),
+      field({
+        id: 'draw_direction',
+        type: 'choice',
+        value: 'east',
+        visibleFor: ['paint_tiles'],
+        visibleWhen: { field: 'paint_shape', values: ['line'] },
+      }),
+      field({
+        id: 'draw_height',
+        type: 'choice',
+        value: 'medium',
+        visibleFor: ['paint_tiles'],
+        visibleWhen: { field: 'paint_shape', values: ['rectangle'] },
+      }),
+    ]
+    const line = plan({ intent: 'paint_tiles', fields })
+    expect(visibleFields(line).map((f) => f.id)).toEqual(['intent', 'paint_shape', 'draw_direction'])
+
+    const rectangle = withFieldValue(line, 'paint_shape', 'rectangle')
+    expect(visibleFields(rectangle).map((f) => f.id)).toEqual(['intent', 'paint_shape', 'draw_height'])
+  })
+})
+
+describe('geometry expansion', () => {
+  it('expands a horizontal line with thickness', () => {
+    expect(expandLine({ x: 0, y: 0 }, 'east', 3, 1, 'floor')).toEqual([
+      { x: 0, y: 0, tileId: 'floor' },
+      { x: 1, y: 0, tileId: 'floor' },
+      { x: 2, y: 0, tileId: 'floor' },
+    ])
+    expect(expandLine({ x: 0, y: 0 }, 'east', 2, 3, 'floor')).toHaveLength(6)
+  })
+
+  it('expands lines into negative directions', () => {
+    expect(expandLine({ x: 0, y: 0 }, 'west', 2, 1, 'wall')).toEqual([
+      { x: 0, y: 0, tileId: 'wall' },
+      { x: -1, y: 0, tileId: 'wall' },
+    ])
+    expect(expandLine({ x: 0, y: 0 }, 'north', 2, 1, 'wall')[1]).toEqual({
+      x: 0,
+      y: -1,
+      tileId: 'wall',
+    })
+  })
+
+  it('expands a filled rectangle from its top-left corner', () => {
+    expect(expandRectangle({ x: 1, y: 2 }, 2, 2, 'water')).toEqual([
+      { x: 1, y: 2, tileId: 'water' },
+      { x: 2, y: 2, tileId: 'water' },
+      { x: 1, y: 3, tileId: 'water' },
+      { x: 2, y: 3, tileId: 'water' },
+    ])
   })
 })
 
@@ -186,6 +246,40 @@ describe('planToActions', () => {
 
     // Nothing painted yet: no seed, so no action.
     expect(planToActions(flood, { bounds: BOUNDS, tiles: {} })).toEqual([])
+  })
+
+  it('maps line and rectangle shapes to placeMultipleTiles', () => {
+    const paint = (shape: string, extra: GenUiField[]) =>
+      plan({
+        intent: 'paint_tiles',
+        fields: [
+          field({ id: 'intent', type: 'choice', value: 'paint_tiles' }),
+          field({ id: 'tile_id', type: 'choice', value: 'floor', visibleFor: ['paint_tiles'] }),
+          field({ id: 'placement_anchor', type: 'choice', value: 'map_origin', visibleFor: ['paint_tiles'] }),
+          field({ id: 'paint_shape', type: 'choice', value: shape, visibleFor: ['paint_tiles'] }),
+          ...extra,
+        ],
+      })
+
+    const line = planToActions(
+      paint('line', [
+        field({ id: 'draw_direction', type: 'choice', value: 'east' }),
+        field({ id: 'draw_length', type: 'choice', value: 'short' }),
+        field({ id: 'draw_width', type: 'choice', value: '1' }),
+      ]),
+      CONTEXT,
+    )
+    expect(line[0]).toMatchObject({ tool: 'placeMultipleTiles' })
+    expect((line[0] as { args: { tiles: unknown[] } }).args.tiles).toHaveLength(5)
+
+    const rect = planToActions(
+      paint('rectangle', [
+        field({ id: 'draw_length', type: 'choice', value: 'short' }),
+        field({ id: 'draw_height', type: 'choice', value: 'short' }),
+      ]),
+      CONTEXT,
+    )
+    expect((rect[0] as { args: { tiles: unknown[] } }).args.tiles).toHaveLength(25)
   })
 
   it('maps adjust_view to a ui action', () => {

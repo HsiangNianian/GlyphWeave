@@ -4,10 +4,16 @@ import {
   GEN_UI_INTENTS,
   GEN_UI_OPTIONS,
   MAX_GOAL_LENGTH,
+  buildDungeonPlanQuestions,
+  buildDungeonStepQuestions,
+  buildDungeonStepState,
   buildGenUiQuestions,
   buildGenUiState,
   callTypeSafe,
   handleGenUi,
+  handleGenUiBuild,
+  normalizeDungeonPlan,
+  normalizeDungeonStep,
   normalizeGenUiPlan,
   validateGenUiRequest,
 } from './gen-ui.mjs'
@@ -194,6 +200,118 @@ describe('callTypeSafe', () => {
     await expect(
       callTypeSafe({ state: {}, questions: {}, apiKey: 'k', fetchImpl }),
     ).rejects.toMatchObject({ status: 422 })
+  })
+})
+
+describe('dungeon builder', () => {
+  it('asks for a bounded plan then one decision per step', () => {
+    const planQ = buildDungeonPlanQuestions()
+    expect(planQ.room_count.type).toBe('choice')
+    expect(planQ.connect_rooms.type).toBe('noul')
+
+    const stepQ = buildDungeonStepQuestions()
+    expect(stepQ.next_preset.type).toBe('choice')
+    expect(stepQ.next_direction.type).toBe('choice')
+    expect(stepQ.should_continue.type).toBe('noul')
+    expect(Object.keys(stepQ.next_preset.criteria)).toEqual(
+      GEN_UI_OPTIONS.preset_id.map((o) => o.value),
+    )
+  })
+
+  it('maps the room-count bucket to a concrete target', () => {
+    expect(normalizeDungeonPlan({ room_count: CHOICE('small', 0.9) }).targetRooms).toBe(3)
+    expect(normalizeDungeonPlan({ room_count: CHOICE('large', 0.9) }).targetRooms).toBe(8)
+    expect(normalizeDungeonPlan({}).targetRooms).toBe(5)
+    expect(normalizeDungeonPlan({ connect_rooms: NOUL(0.2) }).connect).toBe(false)
+  })
+
+  it('normalizes a step decision with a safe direction fallback', () => {
+    const step = normalizeDungeonStep({
+      should_continue: NOUL(0.81),
+      next_preset: CHOICE('prison', 0.9),
+      next_direction: CHOICE('south', 0.8),
+    })
+    expect(step).toMatchObject({ shouldContinue: true, presetId: 'prison', direction: 'south' })
+
+    const bad = normalizeDungeonStep({
+      should_continue: NOUL(0.4),
+      next_preset: CHOICE('vault', 0.5),
+      next_direction: CHOICE('sideways', 0.5),
+    })
+    expect(bad.shouldContinue).toBe(false)
+    expect(bad.direction).toBe('east')
+  })
+
+  it('flags a continue decision that forgot to pick a preset', () => {
+    const step = normalizeDungeonStep({ should_continue: NOUL(0.9) })
+    expect(step.warningCodes).toContain('missing_preset')
+  })
+
+  it('computes roomsRemaining and clamps the step state', () => {
+    const state = buildDungeonStepState({
+      goal: 'a crypt',
+      targetRooms: 5,
+      step: 99,
+      rooms: [{ presetId: 'vault', x: 0, y: 0, w: 5, h: 5 }],
+    })
+    expect(state.roomsRemaining).toBe(4)
+    expect(state.rooms).toHaveLength(1)
+    expect(state.step).toBeLessThanOrEqual(16)
+  })
+})
+
+describe('handleGenUiBuild', () => {
+  it('returns a plan for the plan phase', async () => {
+    vi.stubEnv('TYPESAFE_API_KEY', 'test-key')
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          model: 'jev-latest',
+          answers: { room_count: CHOICE('medium', 0.9), connect_rooms: NOUL(0.9) },
+        }),
+    }))
+    const res = mockRes()
+    await handleGenUiBuild(mockReq({ body: { phase: 'plan', goal: 'a crypt' } }), res, { fetchImpl })
+    expect(res.status).toBe(200)
+    const plan = JSON.parse(res.payload)
+    expect(plan.phase).toBe('plan')
+    expect(plan.targetRooms).toBe(5)
+    expect(plan.connect).toBe(true)
+  })
+
+  it('requires a rooms array for the step phase', async () => {
+    vi.stubEnv('TYPESAFE_API_KEY', 'test-key')
+    const res = mockRes()
+    await handleGenUiBuild(mockReq({ body: { phase: 'step', goal: 'a crypt' } }), res)
+    expect(res.status).toBe(400)
+  })
+
+  it('returns a step decision for the step phase', async () => {
+    vi.stubEnv('TYPESAFE_API_KEY', 'test-key')
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          model: 'jev-latest',
+          answers: {
+            should_continue: NOUL(0.8),
+            next_preset: CHOICE('medium-room', 0.9),
+            next_direction: CHOICE('east', 0.8),
+          },
+        }),
+    }))
+    const res = mockRes()
+    await handleGenUiBuild(
+      mockReq({ body: { phase: 'step', goal: 'a crypt', rooms: [], step: 0, targetRooms: 5 } }),
+      res,
+      { fetchImpl },
+    )
+    expect(res.status).toBe(200)
+    const step = JSON.parse(res.payload)
+    expect(step).toMatchObject({ phase: 'step', shouldContinue: true, presetId: 'medium-room' })
   })
 })
 

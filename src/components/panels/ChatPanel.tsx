@@ -9,10 +9,18 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { X, Send, MessageCircle, Wrench } from 'lucide-react'
 import { TOOL_EXECUTORS } from '@/lib/map-tools'
 
+/**
+ * Maximum tool-call rounds per user message. The assistant loop is
+ * client-driven, so this is the hard stop that guarantees termination.
+ */
+const MAX_TOOL_ROUNDS = 8
+
 export function ChatPanel() {
   const { t } = useTranslation()
   const chatOpen = useUiStore((s) => s.chatOpen)
   const setChatOpen = useUiStore((s) => s.setChatOpen)
+  const toolRoundsRef = useRef(0)
+  const [stepCapped, setStepCapped] = useState(false)
 
   const {
     messages,
@@ -22,11 +30,20 @@ export function ChatPanel() {
     addToolOutput,
   } = useChat({
     transport: new DefaultChatTransport({ api: '/api/chat' }),
-    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
+    // Hard end signal: stop auto-continuing the tool loop after MAX_TOOL_ROUNDS,
+    // so a model that keeps calling tools cannot spin forever.
+    sendAutomaticallyWhen: ({ messages: msgs }) => {
+      if (toolRoundsRef.current >= MAX_TOOL_ROUNDS) {
+        setStepCapped(true)
+        return false
+      }
+      return lastAssistantMessageIsCompleteWithToolCalls({ messages: msgs })
+    },
     onError(err) {
       console.error('[ChatPanel] onError:', err)
     },
     async onToolCall({ toolCall }) {
+      toolRoundsRef.current += 1
       const rawInput = toolCall.input
       console.log('[ChatPanel] onToolCall:', toolCall.toolName, 'rawInput:', JSON.stringify(rawInput))
       const exec = TOOL_EXECUTORS[toolCall.toolName]
@@ -88,6 +105,8 @@ export function ChatPanel() {
   const handleSend = () => {
     const text = input.trim()
     if (!text || isLoading) return
+    toolRoundsRef.current = 0
+    setStepCapped(false)
     sendMessage({ text })
     setInput('')
   }
@@ -154,6 +173,13 @@ export function ChatPanel() {
           {error && (
             <div className="shrink-0 px-5 py-2 bg-red-950/30 border-b border-red-900/30 text-xs text-red-400">
               {error.message || String(error)}
+            </div>
+          )}
+
+          {/* Tool-loop cap notice */}
+          {stepCapped && (
+            <div className="shrink-0 px-5 py-2 bg-amber-950/30 border-b border-amber-900/30 text-xs text-amber-400">
+              {t('chat.stepCapped', 'Stopped after several tool steps to avoid a loop. Send a new message to continue.')}
             </div>
           )}
 

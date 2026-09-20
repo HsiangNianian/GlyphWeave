@@ -15,9 +15,10 @@ import { SettingsPanel } from '@/components/panels/SettingsPanel'
 import { ExportPanel } from '@/components/panels/ExportPanel'
 import { ChatPanel } from '@/components/panels/ChatPanel'
 import { GenUiPanel } from '@/components/panels/GenUiPanel'
+import { DungeonPanel } from '@/components/panels/DungeonPanel'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { Download, Layers, MessageCircle, Minus, PanelRightClose, PanelRightOpen, Plus, Settings, Sparkles } from 'lucide-react'
+import { Download, Hammer, Layers, MessageCircle, Minus, PanelRightClose, PanelRightOpen, Plus, Settings, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { zoomAtPoint } from '@/lib/viewport'
 
@@ -33,6 +34,7 @@ export function EditorPage({ worldConfig }: EditorPageProps) {
   const toggleSidePanel = useUiStore((s) => s.toggleSidePanel)
   const toggleChat = useUiStore((s) => s.toggleChat)
   const toggleGenUi = useUiStore((s) => s.toggleGenUi)
+  const toggleDungeon = useUiStore((s) => s.toggleDungeon)
   const sidePanelTab = useUiStore((s) => s.sidePanelTab)
   const setSidePanelTab = useUiStore((s) => s.setSidePanelTab)
   const showMinimap = useUiStore((s) => s.showMinimap)
@@ -183,6 +185,15 @@ export function EditorPage({ worldConfig }: EditorPageProps) {
               variant="ghost"
               size="icon"
               className="w-7 h-7 bg-black/60 backdrop-blur-sm border border-zinc-800"
+              title={t('dungeon.trigger', 'Build dungeon')}
+              onClick={toggleDungeon}
+            >
+              <Hammer className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-7 h-7 bg-black/60 backdrop-blur-sm border border-zinc-800"
               title={t('genUi.trigger', 'Generate action')}
               onClick={toggleGenUi}
             >
@@ -252,6 +263,7 @@ export function EditorPage({ worldConfig }: EditorPageProps) {
 
       <ChatPanel />
       <GenUiPanel containerSize={canvasSize} />
+      <DungeonPanel />
     </div>
   )
 }

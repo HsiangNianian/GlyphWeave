@@ -43,7 +43,16 @@ export const GEN_UI_ANCHORS = [
 ]
 
 /** Paint shapes, mapped to editor tools in code. */
-export const GEN_UI_PAINT_SHAPES = ['single_tile', 'flood_fill']
+export const GEN_UI_PAINT_SHAPES = ['single_tile', 'line', 'rectangle', 'flood_fill']
+
+/** Draw directions for a line, expanded to coordinates in code. */
+export const GEN_UI_DIRECTIONS = ['north', 'south', 'east', 'west']
+
+/** Named lengths, expanded to tile counts in code. */
+export const GEN_UI_LENGTHS = ['short', 'medium', 'long']
+
+/** Line thicknesses, in tiles. */
+export const GEN_UI_WIDTHS = ['1', '2', '3']
 
 /** View actions, mapped to ui-store actions in code. */
 export const GEN_UI_VIEW_ACTIONS = [
@@ -75,7 +84,28 @@ const ANCHOR_LABELS = {
 
 const PAINT_SHAPE_LABELS = {
   single_tile: 'Single tile',
+  line: 'Line or corridor',
+  rectangle: 'Filled rectangle',
   flood_fill: 'Flood fill region',
+}
+
+const DIRECTION_LABELS = {
+  north: 'North (up)',
+  south: 'South (down)',
+  east: 'East (right)',
+  west: 'West (left)',
+}
+
+const LENGTH_LABELS = {
+  short: 'Short (5 tiles)',
+  medium: 'Medium (10 tiles)',
+  long: 'Long (20 tiles)',
+}
+
+const WIDTH_LABELS = {
+  '1': '1 tile thick',
+  '2': '2 tiles thick',
+  '3': '3 tiles thick',
 }
 
 const VIEW_ACTION_LABELS = {
@@ -107,6 +137,10 @@ export const GEN_UI_OPTIONS = {
   tile_id: PLACEABLE_TILES.map((tile) => option(tile.id, tile.name, tile.category)),
   placement_anchor: GEN_UI_ANCHORS.map((id) => option(id, ANCHOR_LABELS[id], '')),
   paint_shape: GEN_UI_PAINT_SHAPES.map((id) => option(id, PAINT_SHAPE_LABELS[id], '')),
+  draw_direction: GEN_UI_DIRECTIONS.map((id) => option(id, DIRECTION_LABELS[id], '')),
+  draw_length: GEN_UI_LENGTHS.map((id) => option(id, LENGTH_LABELS[id], '')),
+  draw_width: GEN_UI_WIDTHS.map((id) => option(id, WIDTH_LABELS[id], '')),
+  draw_height: GEN_UI_LENGTHS.map((id) => option(id, LENGTH_LABELS[id], '')),
   view_action: GEN_UI_VIEW_ACTIONS.map((id) => option(id, VIEW_ACTION_LABELS[id], '')),
 }
 
@@ -124,6 +158,30 @@ export const GEN_UI_FIELD_SPECS = [
   },
   { id: 'tile_id', labelKey: 'genUi.field.tileId', visibleFor: ['paint_tiles'] },
   { id: 'paint_shape', labelKey: 'genUi.field.paintShape', visibleFor: ['paint_tiles'] },
+  {
+    id: 'draw_direction',
+    labelKey: 'genUi.field.drawDirection',
+    visibleFor: ['paint_tiles'],
+    visibleWhen: { field: 'paint_shape', values: ['line'] },
+  },
+  {
+    id: 'draw_length',
+    labelKey: 'genUi.field.drawLength',
+    visibleFor: ['paint_tiles'],
+    visibleWhen: { field: 'paint_shape', values: ['line', 'rectangle'] },
+  },
+  {
+    id: 'draw_width',
+    labelKey: 'genUi.field.drawWidth',
+    visibleFor: ['paint_tiles'],
+    visibleWhen: { field: 'paint_shape', values: ['line'] },
+  },
+  {
+    id: 'draw_height',
+    labelKey: 'genUi.field.drawHeight',
+    visibleFor: ['paint_tiles'],
+    visibleWhen: { field: 'paint_shape', values: ['rectangle'] },
+  },
   {
     id: 'overwrites_existing',
     labelKey: 'genUi.field.overwritesExisting',
@@ -154,7 +212,7 @@ export function buildGenUiQuestions() {
         place_preset:
           'Stamp a ready-made structure (room, corridor, feature, dungeon room, or trap) from the preset catalog.',
         paint_tiles:
-          'Paint terrain with one tile type, either a single tile or a flood fill of an enclosed area.',
+          'Paint terrain with one tile type: a single tile, a line or corridor, a filled rectangle, or a flood fill of an enclosed area.',
         adjust_view: 'Change only the view or editor display, without editing the map.',
         unsupported:
           'The goal asks for something the editor cannot do: changing the color theme, editing files, exporting, or anything outside painting tiles, stamping presets, and view controls. Prefer this over guessing a near-miss action.',
@@ -180,13 +238,45 @@ export function buildGenUiQuestions() {
     paint_shape: {
       type: 'choice',
       instructions: {
-        question: 'Should painting use a single tile or a flood fill of an enclosed area?',
+        question: 'Which paint shape does `goal` describe?',
+        focus:
+          'Use `line` for corridors, walls, rivers, or paths. Use `rectangle` for a solid block or pool. Use `flood_fill` when the goal fills an existing enclosed room.',
       },
       criteria: {
         single_tile: 'Place one tile at the target location.',
+        line: 'Draw a straight line of tiles in one direction, with an optional thickness.',
+        rectangle: 'Fill a solid rectangular block of tiles.',
         flood_fill:
           'Fill the whole enclosed region around the target with the tile, overwriting its contents.',
       },
+    },
+    draw_direction: {
+      type: 'choice',
+      instructions: {
+        question: 'Which direction should the line extend from the placement point?',
+      },
+      criteria: criteriaFromOptions(GEN_UI_OPTIONS.draw_direction),
+    },
+    draw_length: {
+      type: 'choice',
+      instructions: {
+        question: 'How long should the line or rectangle side be?',
+      },
+      criteria: criteriaFromOptions(GEN_UI_OPTIONS.draw_length),
+    },
+    draw_width: {
+      type: 'choice',
+      instructions: {
+        question: 'How thick should the line be, in tiles?',
+      },
+      criteria: criteriaFromOptions(GEN_UI_OPTIONS.draw_width),
+    },
+    draw_height: {
+      type: 'choice',
+      instructions: {
+        question: 'How tall should the rectangle be, from top to bottom?',
+      },
+      criteria: criteriaFromOptions(GEN_UI_OPTIONS.draw_height),
     },
     placement_anchor: {
       type: 'choice',
@@ -264,6 +354,7 @@ function buildField(spec, answer) {
     type,
     labelKey: spec.labelKey,
     visibleFor: spec.visibleFor,
+    visibleWhen: spec.visibleWhen ?? null,
   }
 
   if (type === 'choice') {
@@ -388,20 +479,20 @@ function sendJson(res, status, data) {
   res.end(JSON.stringify(data))
 }
 
-/** Main handler — called from the Vite plugin middleware and server/index.mjs. */
-export async function handleGenUi(req, res, { fetchImpl } = {}) {
+/** Shared CORS + method + API key guard for both gen-ui handlers. */
+function prepareGenUiRequest(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204)
     res.end()
-    return
+    return null
   }
 
   if (req.method !== 'POST') {
     sendJson(res, 405, { error: 'Method not allowed' })
-    return
+    return null
   }
 
   const apiKey = process.env.TYPESAFE_API_KEY
@@ -410,8 +501,15 @@ export async function handleGenUi(req, res, { fetchImpl } = {}) {
       error:
         'TYPESAFE_API_KEY is not set. Add it to your .env file or environment to use AI-generated actions.',
     })
-    return
+    return null
   }
+  return { apiKey }
+}
+
+/** Main handler — called from the Vite plugin middleware and server/index.mjs. */
+export async function handleGenUi(req, res, { fetchImpl } = {}) {
+  const guard = prepareGenUiRequest(req, res)
+  if (!guard) return
 
   try {
     const body = await readBody(req)
@@ -426,7 +524,7 @@ export async function handleGenUi(req, res, { fetchImpl } = {}) {
     const result = await callTypeSafe({
       state,
       questions,
-      apiKey,
+      apiKey: guard.apiKey,
       model: process.env.TYPESAFE_MODEL || TYPESAFE_MODEL,
       fetchImpl,
     })
@@ -440,6 +538,226 @@ export async function handleGenUi(req, res, { fetchImpl } = {}) {
     const status = typeof err?.status === 'number' && err.status >= 400 ? err.status : 502
     const message = err instanceof Error ? err.message : String(err)
     console.error('[gen-ui] handler error:', err)
+    sendJson(res, status, { error: message })
+  }
+}
+
+// ── Multi-step dungeon builder ─────────────────────────────────────────
+//
+// The loop lives in code. Each iteration asks Jev for exactly one bounded
+// decision (next preset, next direction, and whether to continue), then the
+// client places it and asks again with the updated state. Termination is
+// code-owned: the model's `should_continue`, the target room count from the
+// initial plan, and a hard step cap all stop the loop.
+
+/** Room-count buckets: the model picks the bucket, code owns the numbers. */
+export const DUNGEON_ROOM_COUNTS = { small: 3, medium: 5, large: 8 }
+
+/** Hard caps so a runaway loop can never flood the editor. */
+export const MAX_DUNGEON_ROOMS = 12
+export const MAX_DUNGEON_STEPS = 16
+
+/** Directions are relative to the previously placed room. */
+export const DUNGEON_DIRECTIONS = ['north', 'south', 'east', 'west']
+
+const ROOM_COUNT_OPTIONS = [
+  option('small', 'Small (3 rooms)', ''),
+  option('medium', 'Medium (5 rooms)', ''),
+  option('large', 'Large (8 rooms)', ''),
+]
+
+const DUNGEON_DIRECTION_OPTIONS = [
+  option('north', 'North (up)', ''),
+  option('south', 'South (down)', ''),
+  option('east', 'East (right)', ''),
+  option('west', 'West (left)', ''),
+]
+
+/** Initial plan: interpret the goal into a bounded spec. One call. */
+export function buildDungeonPlanQuestions() {
+  return {
+    room_count: {
+      type: 'choice',
+      instructions: {
+        question: 'How many rooms should `goal` produce?',
+        focus: 'Scale to the described size. Default to medium when unspecified.',
+      },
+      criteria: criteriaFromOptions(ROOM_COUNT_OPTIONS),
+    },
+    connect_rooms: {
+      type: 'noul',
+      instructions: {
+        question: 'Should the generated rooms be connected by corridors?',
+        focus: 'Default to yes unless the goal asks for isolated rooms.',
+      },
+      criteria: {
+        true: 'Rooms should be reachable from one another.',
+        false: 'Rooms may remain separate.',
+      },
+    },
+  }
+}
+
+/** Per-step questions: one bounded decision for the next room. */
+export function buildDungeonStepQuestions() {
+  return {
+    next_preset: {
+      type: 'choice',
+      instructions: {
+        goal: '`goal`',
+        rooms: '`rooms`',
+        question: 'Which preset should the next room be, given the rooms already placed?',
+        focus:
+          'Vary sensibly and honor any structure the goal names. Avoid repeating a unique room such as a throne room or vault.',
+      },
+      criteria: criteriaFromOptions(GEN_UI_OPTIONS.preset_id),
+    },
+    next_direction: {
+      type: 'choice',
+      instructions: {
+        question: 'In which direction from the previous room should the next room be placed?',
+      },
+      criteria: criteriaFromOptions(DUNGEON_DIRECTION_OPTIONS),
+    },
+    should_continue: {
+      type: 'noul',
+      instructions: {
+        goal: '`goal`',
+        rooms: '`rooms`',
+        remaining: '`roomsRemaining`',
+        question: 'Should another room still be added to satisfy `goal`?',
+        focus: 'Answer no once the goal is satisfied or no useful room remains.',
+      },
+      criteria: {
+        true: 'Another room would still improve the result.',
+        false: 'The goal is satisfied or no useful room remains.',
+      },
+    },
+  }
+}
+
+function normalizeRooms(rawRooms) {
+  if (!Array.isArray(rawRooms)) return []
+  return rawRooms.slice(0, MAX_DUNGEON_ROOMS).map((room) => {
+    const r = room && typeof room === 'object' ? room : {}
+    return {
+      presetId: typeof r.presetId === 'string' ? r.presetId : null,
+      x: clampInt(r.x, 0, -100000, 100000),
+      y: clampInt(r.y, 0, -100000, 100000),
+      w: clampInt(r.w, 1, 1, 1000),
+      h: clampInt(r.h, 1, 1, 1000),
+    }
+  })
+}
+
+export function buildDungeonStepState(input = {}) {
+  const base = buildGenUiState(input)
+  const rooms = normalizeRooms(input.rooms)
+  const step = clampInt(input.step, 0, 0, MAX_DUNGEON_STEPS)
+  const targetRooms = clampInt(input.targetRooms, DUNGEON_ROOM_COUNTS.medium, 1, MAX_DUNGEON_ROOMS)
+  return {
+    goal: base.goal,
+    editor: base.editor,
+    step,
+    roomsRemaining: Math.max(0, targetRooms - rooms.length),
+    rooms: rooms.map((room) => ({
+      presetId: room.presetId,
+      x: room.x,
+      y: room.y,
+      w: room.w,
+      h: room.h,
+    })),
+  }
+}
+
+export function normalizeDungeonPlan(answers, { model = TYPESAFE_MODEL, usage } = {}) {
+  const safe = answers && typeof answers === 'object' ? answers : {}
+  const roomCountKey = safe.room_count?.choice ?? null
+  const targetRooms = DUNGEON_ROOM_COUNTS[roomCountKey] ?? DUNGEON_ROOM_COUNTS.medium
+  const connect = (safe.connect_rooms?.noul ?? 0.8) >= 0.5
+  const confidence =
+    typeof safe.room_count?.confidence === 'number' ? safe.room_count.confidence : null
+
+  return {
+    model,
+    phase: 'plan',
+    roomCountKey,
+    targetRooms,
+    connect,
+    confidence,
+    usage: usage ?? null,
+  }
+}
+
+export function normalizeDungeonStep(answers, { model = TYPESAFE_MODEL, usage } = {}) {
+  const safe = answers && typeof answers === 'object' ? answers : {}
+  const shouldContinue = (safe.should_continue?.noul ?? 0) >= 0.5
+  const presetId = safe.next_preset?.choice ?? null
+  const rawDirection = safe.next_direction?.choice
+  const direction = DUNGEON_DIRECTIONS.includes(rawDirection) ? rawDirection : 'east'
+  const confidence =
+    typeof safe.next_preset?.confidence === 'number' ? safe.next_preset.confidence : null
+  const warningCodes = shouldContinue && !presetId ? ['missing_preset'] : []
+
+  return {
+    model,
+    phase: 'step',
+    shouldContinue,
+    presetId,
+    direction,
+    confidence,
+    warningCodes,
+    usage: usage ?? null,
+  }
+}
+
+/** Handler for POST /api/gen-ui/build — dispatches on `phase`. */
+export async function handleGenUiBuild(req, res, { fetchImpl } = {}) {
+  const guard = prepareGenUiRequest(req, res)
+  if (!guard) return
+
+  try {
+    const body = await readBody(req)
+    const invalid = validateGenUiRequest(body)
+    if (invalid) {
+      sendJson(res, 400, { error: invalid })
+      return
+    }
+
+    const model = process.env.TYPESAFE_MODEL || TYPESAFE_MODEL
+    const phase = body.phase === 'step' ? 'step' : 'plan'
+
+    if (phase === 'plan') {
+      const state = buildGenUiState(body)
+      const result = await callTypeSafe({
+        state,
+        questions: buildDungeonPlanQuestions(),
+        apiKey: guard.apiKey,
+        model,
+        fetchImpl,
+      })
+      sendJson(res, 200, normalizeDungeonPlan(result.answers, result))
+      return
+    }
+
+    if (!Array.isArray(body.rooms)) {
+      sendJson(res, 400, { error: '"rooms" must be an array for the step phase.' })
+      return
+    }
+
+    const state = buildDungeonStepState(body)
+    const result = await callTypeSafe({
+      state,
+      questions: buildDungeonStepQuestions(),
+      apiKey: guard.apiKey,
+      model,
+      fetchImpl,
+    })
+    sendJson(res, 200, normalizeDungeonStep(result.answers, result))
+  } catch (err) {
+    const status = typeof err?.status === 'number' && err.status >= 400 ? err.status : 502
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[gen-ui] build handler error:', err)
     sendJson(res, status, { error: message })
   }
 }

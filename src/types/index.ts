@@ -73,6 +73,8 @@ export interface GenUiField {
   type: GenUiFieldType
   labelKey: string
   visibleFor: string[] | null
+  /** Extra condition: only visible when another field's value is in `values`. */
+  visibleWhen?: { field: string; values: string[] } | null
   value: string | number
   confidence: number | null
   options: GenUiOption[] | null
@@ -86,5 +88,48 @@ export interface GenUiPlan {
   warningCodes: string[]
   fields: GenUiField[]
   usage: { input_tokens?: number; output_tokens?: number } | null
+}
+
+// ── Multi-step dungeon builder ──────────────────────────────────────────
+
+export interface DungeonRoom {
+  presetId: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export type DungeonDirection = 'north' | 'south' | 'east' | 'west'
+
+export interface DungeonPlan {
+  model: string
+  phase: 'plan'
+  roomCountKey: string | null
+  targetRooms: number
+  connect: boolean
+  confidence: number | null
+  usage: { input_tokens?: number; output_tokens?: number } | null
+}
+
+export interface DungeonStep {
+  model: string
+  phase: 'step'
+  shouldContinue: boolean
+  presetId: string | null
+  direction: DungeonDirection
+  confidence: number | null
+  warningCodes: string[]
+  usage: { input_tokens?: number; output_tokens?: number } | null
+}
+
+export interface DungeonProgress {
+  step: number
+  targetRooms: number
+  roomCount: number
+  done: boolean
+  aborted: boolean
+  lastRoom?: string
+  warning?: string
 }
 

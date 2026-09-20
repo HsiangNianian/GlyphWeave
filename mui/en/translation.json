@@ -162,7 +162,8 @@
     "title": "Assistant",
     "empty": "Ask me anything about your map.",
     "inputPlaceholder": "Type a message…",
-    "placeholder": "This is a placeholder response. Chat integration coming soon."
+    "placeholder": "This is a placeholder response. Chat integration coming soon.",
+    "stepCapped": "Stopped after several tool steps to avoid a loop. Send a new message to continue."
   },
   "genUi": {
     "trigger": "Generate action",
@@ -188,6 +189,10 @@
       "placementAnchor": "Placement",
       "tileId": "Tile",
       "paintShape": "Paint mode",
+      "drawDirection": "Direction",
+      "drawLength": "Length",
+      "drawWidth": "Thickness",
+      "drawHeight": "Height",
       "overwritesExisting": "Overwrites content",
       "viewAction": "View change"
     },
@@ -195,5 +200,21 @@
       "destructive": "This flood fill overwrites existing tiles.",
       "no_actions": "Nothing to apply — pick valid values above."
     }
+  },
+  "dungeon": {
+    "trigger": "Build dungeon",
+    "title": "Build a dungeon",
+    "description": "Describe a dungeon. The editor asks Jev for one room at a time, places it, then connects the rooms. You can stop at any point.",
+    "goalLabel": "Describe the dungeon",
+    "goalPlaceholder": "e.g. a small crypt with a prison and a treasure vault",
+    "start": "Build",
+    "stop": "Stop",
+    "progress": "Rooms placed",
+    "lastRoom": "Last room",
+    "done": "Dungeon built and rooms connected.",
+    "aborted": "Stopped. Placed rooms were kept.",
+    "connected": "Validation: all walkable areas are connected.",
+    "disconnected": "Validation: {{count}} disconnected area(s) — see the map validator.",
+    "empty": "Rooms are added one Jev decision at a time, then connected with corridors."
   }
 }
