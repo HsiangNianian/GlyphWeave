@@ -9,6 +9,7 @@ export interface UiStore {
   sidePanelTab: string
   sidePanelOpen: boolean
   chatOpen: boolean
+  genUiOpen: boolean
   showGrid: boolean
   showMinimap: boolean
   viewDistance: number
@@ -21,6 +22,8 @@ export interface UiStore {
   toggleSidePanel: () => void
   setChatOpen: (open: boolean) => void
   toggleChat: () => void
+  setGenUiOpen: (open: boolean) => void
+  toggleGenUi: () => void
   setShowGrid: (show: boolean) => void
   setShowMinimap: (show: boolean) => void
   setViewDistance: (d: number) => void
@@ -38,6 +41,7 @@ export const useUiStore = create<UiStore>()(
     sidePanelTab: 'tiles',
     sidePanelOpen: true,
     chatOpen: false,
+    genUiOpen: false,
     showGrid: true,
     showMinimap: true,
     viewDistance: 5,
@@ -50,6 +54,8 @@ export const useUiStore = create<UiStore>()(
     toggleSidePanel: () => set((draft) => { draft.sidePanelOpen = !draft.sidePanelOpen }),
     setChatOpen: (open) => set((draft) => { draft.chatOpen = open }),
     toggleChat: () => set((draft) => { draft.chatOpen = !draft.chatOpen }),
+    setGenUiOpen: (open) => set((draft) => { draft.genUiOpen = open }),
+    toggleGenUi: () => set((draft) => { draft.genUiOpen = !draft.genUiOpen }),
     setShowGrid: (show) => set((draft) => { draft.showGrid = show }),
     setShowMinimap: (show) => set((draft) => { draft.showMinimap = show }),
     setViewDistance: (d) => set((draft) => { draft.viewDistance = Math.max(1, Math.min(100, d)) }),

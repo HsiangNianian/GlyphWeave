@@ -53,3 +53,38 @@ export interface Layer {
   visible: boolean
   locked: boolean
 }
+
+// ── Generative UI (TypeSafe / Jev) ──────────────────────────────────────
+
+/** Editor action branch the generated plan dispatches on. */
+export type GenUiIntent = 'place_preset' | 'paint_tiles' | 'adjust_view' | 'unsupported'
+
+export type GenUiFieldType = 'choice' | 'noul'
+
+export interface GenUiOption {
+  value: string
+  label: string
+  description: string
+}
+
+/** One generated control. `visibleFor: null` means it always applies. */
+export interface GenUiField {
+  id: string
+  type: GenUiFieldType
+  labelKey: string
+  visibleFor: string[] | null
+  value: string | number
+  confidence: number | null
+  options: GenUiOption[] | null
+}
+
+export interface GenUiPlan {
+  model: string
+  intent: GenUiIntent | null
+  confidence: number | null
+  destructive: boolean
+  warningCodes: string[]
+  fields: GenUiField[]
+  usage: { input_tokens?: number; output_tokens?: number } | null
+}
+

@@ -14,9 +14,10 @@ import { LayersPanel } from '@/components/panels/LayersPanel'
 import { SettingsPanel } from '@/components/panels/SettingsPanel'
 import { ExportPanel } from '@/components/panels/ExportPanel'
 import { ChatPanel } from '@/components/panels/ChatPanel'
+import { GenUiPanel } from '@/components/panels/GenUiPanel'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
-import { Download, Layers, MessageCircle, Minus, PanelRightClose, PanelRightOpen, Plus, Settings } from 'lucide-react'
+import { Download, Layers, MessageCircle, Minus, PanelRightClose, PanelRightOpen, Plus, Settings, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { zoomAtPoint } from '@/lib/viewport'
 
@@ -31,6 +32,7 @@ export function EditorPage({ worldConfig }: EditorPageProps) {
   const sidePanelOpen = useUiStore((s) => s.sidePanelOpen)
   const toggleSidePanel = useUiStore((s) => s.toggleSidePanel)
   const toggleChat = useUiStore((s) => s.toggleChat)
+  const toggleGenUi = useUiStore((s) => s.toggleGenUi)
   const sidePanelTab = useUiStore((s) => s.sidePanelTab)
   const setSidePanelTab = useUiStore((s) => s.setSidePanelTab)
   const showMinimap = useUiStore((s) => s.showMinimap)
@@ -45,6 +47,7 @@ export function EditorPage({ worldConfig }: EditorPageProps) {
   useKeyboard()
 
   const [panelWidth, setPanelWidth] = useState(320)
+  const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 })
   const draggingRef = useRef(false)
   const pendingWidthRef = useRef(320)
   const rafRef = useRef(0)
@@ -109,6 +112,16 @@ export function EditorPage({ worldConfig }: EditorPageProps) {
     initWorld(worldConfig)
   }, [initWorld, worldConfig])
 
+  useEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    const update = () => setCanvasSize({ w: el.clientWidth, h: el.clientHeight })
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
   return (
     <div className="w-full h-full flex bg-black">
       <Toolbar />
@@ -166,6 +179,15 @@ export function EditorPage({ worldConfig }: EditorPageProps) {
 
         <div className="absolute bottom-3 right-3 pointer-events-none">
           <div className="pointer-events-auto flex items-center gap-1.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="w-7 h-7 bg-black/60 backdrop-blur-sm border border-zinc-800"
+              title={t('genUi.trigger', 'Generate action')}
+              onClick={toggleGenUi}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -229,6 +251,7 @@ export function EditorPage({ worldConfig }: EditorPageProps) {
       )}
 
       <ChatPanel />
+      <GenUiPanel containerSize={canvasSize} />
     </div>
   )
 }

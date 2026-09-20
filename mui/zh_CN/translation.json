@@ -163,5 +163,37 @@
     "empty": "有什么关于地图的问题可以问我。",
     "inputPlaceholder": "输入消息…",
     "placeholder": "这是一个占位回复，聊天功能即将集成。"
+  },
+  "genUi": {
+    "trigger": "生成操作",
+    "title": "生成操作",
+    "description": "用自然语言描述一次编辑，Jev 会把它转成可复核的类型化控件，确认后再执行。",
+    "goalLabel": "你想做什么？",
+    "goalPlaceholder": "例如：在地图东侧加一个宝藏密室",
+    "generate": "生成",
+    "regenerate": "重新生成",
+    "apply": "应用",
+    "empty": "描述一个编辑，我会把它转成可复核的操作。",
+    "unsupported": "暂不支持这种编辑。可以尝试涂抹格子、放置预设，或调整视图。",
+    "generatedControls": "生成的控件",
+    "confidence": "置信度",
+    "overallConfidence": "意图置信度",
+    "preview": "将执行",
+    "noulTrue": "是",
+    "noulFalse": "否",
+    "confirmDestructive": "我明白，覆盖现有格子",
+    "field": {
+      "intent": "操作",
+      "presetId": "预设",
+      "placementAnchor": "放置位置",
+      "tileId": "格子",
+      "paintShape": "涂抹方式",
+      "overwritesExisting": "是否覆盖内容",
+      "viewAction": "视图变更"
+    },
+    "warning": {
+      "destructive": "该填充会覆盖现有格子。",
+      "no_actions": "没有可执行的操作——请在上方选择有效值。"
+    }
   }
 }
