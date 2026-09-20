@@ -10,6 +10,7 @@ export interface UiStore {
   sidePanelOpen: boolean
   chatOpen: boolean
   genUiOpen: boolean
+  dungeonOpen: boolean
   showGrid: boolean
   showMinimap: boolean
   viewDistance: number
@@ -24,6 +25,8 @@ export interface UiStore {
   toggleChat: () => void
   setGenUiOpen: (open: boolean) => void
   toggleGenUi: () => void
+  setDungeonOpen: (open: boolean) => void
+  toggleDungeon: () => void
   setShowGrid: (show: boolean) => void
   setShowMinimap: (show: boolean) => void
   setViewDistance: (d: number) => void
@@ -42,6 +45,7 @@ export const useUiStore = create<UiStore>()(
     sidePanelOpen: true,
     chatOpen: false,
     genUiOpen: false,
+    dungeonOpen: false,
     showGrid: true,
     showMinimap: true,
     viewDistance: 5,
@@ -56,6 +60,8 @@ export const useUiStore = create<UiStore>()(
     toggleChat: () => set((draft) => { draft.chatOpen = !draft.chatOpen }),
     setGenUiOpen: (open) => set((draft) => { draft.genUiOpen = open }),
     toggleGenUi: () => set((draft) => { draft.genUiOpen = !draft.genUiOpen }),
+    setDungeonOpen: (open) => set((draft) => { draft.dungeonOpen = open }),
+    toggleDungeon: () => set((draft) => { draft.dungeonOpen = !draft.dungeonOpen }),
     setShowGrid: (show) => set((draft) => { draft.showGrid = show }),
     setShowMinimap: (show) => set((draft) => { draft.showMinimap = show }),
     setViewDistance: (d) => set((draft) => { draft.viewDistance = Math.max(1, Math.min(100, d)) }),

@@ -162,7 +162,8 @@
     "title": "AI 助手",
     "empty": "有什么关于地图的问题可以问我。",
     "inputPlaceholder": "输入消息…",
-    "placeholder": "这是一个占位回复，聊天功能即将集成。"
+    "placeholder": "这是一个占位回复，聊天功能即将集成。",
+    "stepCapped": "为避免死循环，工具调用已停止。发送新消息可继续。"
   },
   "genUi": {
     "trigger": "生成操作",
@@ -188,6 +189,10 @@
       "placementAnchor": "放置位置",
       "tileId": "格子",
       "paintShape": "涂抹方式",
+      "drawDirection": "方向",
+      "drawLength": "长度",
+      "drawWidth": "厚度",
+      "drawHeight": "高度",
       "overwritesExisting": "是否覆盖内容",
       "viewAction": "视图变更"
     },
@@ -195,5 +200,21 @@
       "destructive": "该填充会覆盖现有格子。",
       "no_actions": "没有可执行的操作——请在上方选择有效值。"
     }
+  },
+  "dungeon": {
+    "trigger": "生成地牢",
+    "title": "生成地牢",
+    "description": "描述一个地牢。编辑器会逐步让 Jev 决定下一个房间、放置它，最后用走廊连接。你随时可以停止。",
+    "goalLabel": "描述地牢",
+    "goalPlaceholder": "例如：一个小型墓穴，带监狱和宝藏密室",
+    "start": "开始生成",
+    "stop": "停止",
+    "progress": "已放置房间",
+    "lastRoom": "最近房间",
+    "done": "地牢已生成并连通。",
+    "aborted": "已停止，已放置的房间会保留。",
+    "connected": "校验：所有可行走区域均已连通。",
+    "disconnected": "校验：有 {{count}} 处不连通区域——请查看地图校验器。",
+    "empty": "房间按 Jev 的逐次决策加入，随后用走廊连接。"
   }
 }

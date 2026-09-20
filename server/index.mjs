@@ -8,7 +8,7 @@ import { renderMap } from './map-render.mjs'
 import { renderMapSVG } from './map-render-svg.mjs'
 import { convertImageToMap, parseConvertRequest } from './map-convert.mjs'
 import { apiDocPage } from './api-doc.mjs'
-import { handleGenUi } from './gen-ui.mjs'
+import { handleGenUi, handleGenUiBuild } from './gen-ui.mjs'
 import {
   ApiHttpError,
   MAX_API_BODY_BYTES,
@@ -262,6 +262,12 @@ const server = http.createServer(async (req, res) => {
   // ── API: Generative UI action plan ──
   if (url.pathname === '/api/gen-ui') {
     await handleGenUi(req, res)
+    return
+  }
+
+  // ── API: Multi-step dungeon builder ──
+  if (url.pathname === '/api/gen-ui/build') {
+    await handleGenUiBuild(req, res)
     return
   }
 
