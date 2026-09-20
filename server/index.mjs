@@ -8,6 +8,7 @@ import { renderMap } from './map-render.mjs'
 import { renderMapSVG } from './map-render-svg.mjs'
 import { convertImageToMap, parseConvertRequest } from './map-convert.mjs'
 import { apiDocPage } from './api-doc.mjs'
+import { handleGenUi } from './gen-ui.mjs'
 import {
   ApiHttpError,
   MAX_API_BODY_BYTES,
@@ -255,6 +256,12 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       sendError(res, err instanceof ApiHttpError ? err.status : 400, `Error: ${err.message}`)
     }
+    return
+  }
+
+  // ── API: Generative UI action plan ──
+  if (url.pathname === '/api/gen-ui') {
+    await handleGenUi(req, res)
     return
   }
 

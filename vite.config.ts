@@ -25,6 +25,7 @@ import {
 } from './server/gemap-api.mjs'
 import type { GemapRuntime } from './server/gemap-api.mjs'
 import { handleChat } from './server/chat.mjs'
+import { handleGenUi } from './server/gen-ui.mjs'
 
 type RenderFormat = 'png' | 'svg'
 type RenderPayload = Record<string, unknown>
@@ -191,6 +192,10 @@ function apiPlugin(): Plugin {
 
       server.middlewares.use('/api/chat', async (req, res) => {
         await handleChat(req, res)
+      })
+
+      server.middlewares.use('/api/gen-ui', async (req, res) => {
+        await handleGenUi(req, res)
       })
 
       server.middlewares.use('/api', (req, res, next) => {

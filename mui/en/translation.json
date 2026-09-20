@@ -163,5 +163,37 @@
     "empty": "Ask me anything about your map.",
     "inputPlaceholder": "Type a message…",
     "placeholder": "This is a placeholder response. Chat integration coming soon."
+  },
+  "genUi": {
+    "trigger": "Generate action",
+    "title": "Generate an action",
+    "description": "Describe an edit in plain language. Jev turns it into typed controls you can review before applying.",
+    "goalLabel": "What do you want to do?",
+    "goalPlaceholder": "e.g. add a treasure vault east of the map",
+    "generate": "Generate",
+    "regenerate": "Regenerate",
+    "apply": "Apply",
+    "empty": "Describe an edit and I will turn it into a reviewable action.",
+    "unsupported": "This edit is not supported yet. Try painting tiles, stamping a preset, or changing the view.",
+    "generatedControls": "Generated controls",
+    "confidence": "confidence",
+    "overallConfidence": "intent confidence",
+    "preview": "This will run",
+    "noulTrue": "Yes",
+    "noulFalse": "No",
+    "confirmDestructive": "I understand, overwrite existing tiles",
+    "field": {
+      "intent": "Action",
+      "presetId": "Preset",
+      "placementAnchor": "Placement",
+      "tileId": "Tile",
+      "paintShape": "Paint mode",
+      "overwritesExisting": "Overwrites content",
+      "viewAction": "View change"
+    },
+    "warning": {
+      "destructive": "This flood fill overwrites existing tiles.",
+      "no_actions": "Nothing to apply — pick valid values above."
+    }
   }
 }
